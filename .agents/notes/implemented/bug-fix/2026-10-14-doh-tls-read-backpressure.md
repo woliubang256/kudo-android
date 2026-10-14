@@ -30,8 +30,18 @@ TCP 读取继续释放 TLS 状态锁，TLS 响应记录的发送仍沿现有写�
 
 `repeated_tls_responses_keep_every_byte_with_varying_read_sizes` 在同一 TLS 会话连续读取 32 组大小记录，共 805664 字节，调用者缓冲分别为 1、257、4096、32768 字节。分片测试覆盖 TLS 1.2/1.3 的 8 个头部/正文边界及 127 字节读取；另覆盖截断、损坏、正常结束和 TLS 读取等待时独立写入。完整原生库 19 项测试通过，既有超时、关闭、大响应及 JNI 安全码测试同批通过。
 
+`ImageNetworkDeviceTest.repeatedParallelImagesReuseOneNativeHttp2ConnectionWithoutLosingDownloadPermits` 在 RMX2202 / Android 13 真机的真实 JNI Socket 与 Coil 路径关闭图片缓存，先加载一张 128×128、超过 32 KiB 的 PNG，再分四轮并发各加载八张。33 次请求全部解码成功，服务端请求数恰为 33，所有波次复用一个原生 HTTP/2 连接。此夹具使用 HTTP/2 明文回环，只验证 JNI、并发许可、图片完整下载及连接复用；TLS 分片根因由前述原生 TLS 夹具覆盖。
+
+ImageNetworkDeviceTest 与 DohTransportDeviceTest 的离线真机批次为 12 项通过、2 项线上 opt-in 跳过（`artifacts/doh-tls-backpressure-device.txt`），包括限流、失败地址切换、读写并发、取消、证书拒绝、gzip/chunked、连接复用及写入不重放。Debug、AndroidTest 和 arm64 原生 Release 库构建通过，16 KiB ELF 对齐通过（`artifacts/doh-tls-backpressure-build.txt`）；未修改 JVM 策略，26 项相关单测结果由 Gradle 复用。
+
+显式启用 `imageDohLiveProbe=true` 后，生产 SingletonImageLoader 使用手机已有启用的 DoH 配置加载此前第三楼的动态 WebP，关闭内存/磁盘缓存，确认数据来源为 NETWORK、尺寸 300×370，独立线上用例通过（`artifacts/doh-tls-backpressure-live-fixed.txt`、`artifacts/doh-tls-backpressure-live-result.json`）。没有更改用户节点或 VPN 策略，没有向第三方发送社区 Cookie。线上用例默认跳过，只有显式 opt-in 才访问该已知公开图片。
+
+探测首轮的 `networkCachePolicy(DISABLED)` 会禁止网络读取，产生客户端 504；移除这一错误的测试配置后才进行了实际下载。关闭图片缓存与禁用网络读取不是同一件事，后续探测继续以 NETWORK 来源断言保证真正走网络。
+
+覆盖前读取已安装 2005 / 0.2.3，与新构建证书 SHA256 一致；构建显式传入同版本参数，使用 `adb install -r` 与 `install -r -t`，未卸载、未清数据。最终真机开发版仍为 2005 / 0.2.3，更新时间 2026-10-14 23:45:39。没有构建新正式版本或发布 Tag。
+
 ## Consequences
 
 每个原生连接固定增加 16 KiB 的持久密文空间，替代原本每次读取的栈缓冲；空间不会随图片数量或流量增长。明文交付更早，剩余密文有序保留。循环可能增加空的 TLS 发送检查，但不会增加网络请求或重放响应正文。
 
-预置密文的测试只控制分片边界，不复现真实站点的全部服务行为。即使复现并修复同一错误码，也不能保证用户所有偶发图片失败都属于此原因；JNI 真机集成及覆盖安装的结果另在本篇同步记录。
+预置密文的测试只控制分片边界，不复现真实站点的全部服务行为。已通过真机 JNI 连续并发及一次生产 DoH 原图加载，但这不能保证用户所有偶发图片失败都属于此原因；持续快刷的线上使用仍需观察是否出现其他错误码。
