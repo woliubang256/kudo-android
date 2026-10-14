@@ -14,6 +14,8 @@ Status: implemented
 
 ## Related decisions
 
+[剧透图片操作调整](../bug-fix/2026-10-14-spoiler-image-actions.md)部分取代图片揭示后的点击行为：清晰图片点击预览，右上角按钮隐藏。此处原决定的隐藏态、纯文字显隐、旧系统遮罩和普通相册隔离仍有效。
+
 检索剧透、spoiler、正文解析、引用和相册。没有既有同主题笔记。[引用分组](../../implemented/bug-fix/2026-10-10-discourse-quotes.md)和[行内表情](../../implemented/bug-fix/2026-10-09-inline-emoji-images.md)部分重叠，保留嵌套结构和表情图片；[相册](../../implemented/feature/2026-10-09-image-gallery-and-transitions.md)保留普通图片索引和来源定位；[签名](../../implemented/feature/2026-10-10-user-decoration.md)保留默认开关和图片失败隐藏。无完全取代或需要归档的决定。
 
 ## Alternatives considered

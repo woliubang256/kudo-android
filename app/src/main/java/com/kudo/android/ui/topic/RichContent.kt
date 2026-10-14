@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Help
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -390,7 +391,7 @@ private fun spoilerFragments(node: Node): List<SpoilerFragment> {
 
 private data class ArticleImageLocation(val image: ArticleBlock.Image, val path: String, val quotes: List<String>)
 
-private fun articleImageLocations(blocks: List<ArticleBlock>): List<ArticleImageLocation> = buildList {
+private fun articleImageLocations(blocks: List<ArticleBlock>, includeSpoilers: Boolean = false): List<ArticleImageLocation> = buildList {
     fun visit(items: List<ArticleBlock>, parent: String, quotes: List<String>) {
         items.forEachIndexed { index, block ->
             val path = "$parent-$index"
@@ -399,6 +400,7 @@ private fun articleImageLocations(blocks: List<ArticleBlock>): List<ArticleImage
                 is ArticleBlock.Quote -> visit(block.blocks, path, quotes + path)
                 is ArticleBlock.Callout -> visit(block.blocks, path, quotes + path)
                 is ArticleBlock.Details -> visit(block.blocks, path, quotes + path)
+                is ArticleBlock.Spoiler -> if (includeSpoilers) visit(block.blocks, path, quotes)
                 is ArticleBlock.ListBlock -> block.items.forEachIndexed { item, value -> visit(value.blocks, "$path-item$item", quotes) }
                 else -> Unit
             }
@@ -556,7 +558,7 @@ fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Uni
     CompositionLocalProvider(LocalArticleFootnoteReference provides onFootnote) {
     ArticleBlocks(blocks, "root", collapsed, { path ->
         collapsed = if (path in collapsed) collapsed - path else collapsed + path
-    }, onLink, linkHandler, poll) { block, path ->
+    }, onLink, linkHandler, poll, onImage) { block, path ->
         val index = imageIndices.getValue(path)
         ArticleImage(block, anchors[index], "article-image-$galleryKey-$index") {
             if (gallery == null) onImage(block.originalUrl)
@@ -568,7 +570,7 @@ fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Uni
 
 @Composable
 private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed: List<String>, toggle: (String) -> Unit,
-    onLink: (String) -> Unit, linkHandler: UriHandler, poll: @Composable (String) -> Unit,
+    onLink: (String) -> Unit, linkHandler: UriHandler, poll: @Composable (String) -> Unit, onImage: (String) -> Unit,
     firstLineIndent: TextUnit = TextUnit.Unspecified,
     image: @Composable (ArticleBlock.Image, String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -588,7 +590,7 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                     Text(summary, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 }
                 if (!hidden) Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-                    ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll, image = image)
+                    ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll, onImage, image = image)
                 }
             }
             is ArticleBlock.Callout -> {
@@ -606,7 +608,7 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                             Modifier.size(18.dp), tint = accent)
                     }
                     if (!hidden) Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-                        ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll, image = image)
+                        ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll, onImage, image = image)
                     }
                 }
             }
@@ -639,7 +641,7 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                                 style = MaterialTheme.typography.displayMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = .28f))
                         }
-                        ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll,
+                        ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll, onImage,
                             firstLineIndent = if (block.source == null) 48.sp else TextUnit.Unspecified,
                             image = image)
                     }
@@ -666,10 +668,15 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                         modifier = headingRequester?.let { Modifier.bringIntoViewRequester(it) } ?: Modifier)
                 }
             }
-            is ArticleBlock.Spoiler -> SpoilerRegion(block, "article-spoiler-$path") { toggleSpoiler ->
-                val spoilerLinkHandler = object : UriHandler { override fun openUri(uri: String) = toggleSpoiler() }
-                ArticleBlocks(block.blocks, path, collapsed, toggle, { toggleSpoiler() }, spoilerLinkHandler, poll) { secret, secretPath ->
-                    ArticleImage(secret, remember(secret) { GalleryThumbnailAnchor() }, "spoiler-image-$secretPath", toggleSpoiler)
+            is ArticleBlock.Spoiler -> {
+                val hasImages = remember(block) { articleImageLocations(block.blocks, includeSpoilers = true).isNotEmpty() }
+                SpoilerRegion(block, "article-spoiler-$path", hideOnContentClick = !hasImages) { revealed, toggleSpoiler ->
+                    val spoilerLinkHandler = if (hasImages && revealed) linkHandler else
+                        object : UriHandler { override fun openUri(uri: String) = toggleSpoiler() }
+                    ArticleBlocks(block.blocks, path, collapsed, toggle,
+                        if (hasImages && revealed) onLink else ({ toggleSpoiler() }), spoilerLinkHandler, poll, onImage) { secret, secretPath ->
+                        SpoilerArticleImage(secret, "spoiler-image-$secretPath", revealed, toggleSpoiler, onImage)
+                    }
                 }
             }
             is ArticleBlock.Code -> CodeBlock(block.text)
@@ -686,7 +693,7 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                             tint = if (item.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                         else Text(item.marker, Modifier.widthIn(min = 18.dp), style = MaterialTheme.typography.bodyLarge)
                         Box(Modifier.weight(1f)) {
-                            ArticleBlocks(item.blocks, itemPath, collapsed, toggle, onLink, linkHandler, poll, image = image)
+                        ArticleBlocks(item.blocks, itemPath, collapsed, toggle, onLink, linkHandler, poll, onImage, image = image)
                         }
                     }
                 }
@@ -774,7 +781,27 @@ private fun CodeBlock(code: String) {
 }
 
 @Composable
-private fun ArticleImage(image: ArticleBlock.Image, anchor: GalleryThumbnailAnchor, tag: String, open: () -> Unit) {
+private fun SpoilerArticleImage(image: ArticleBlock.Image, tag: String, revealed: Boolean, toggle: () -> Unit, onImage: (String) -> Unit) {
+    val gallery = LocalImageGallery.current
+    val anchor = remember(image) { GalleryThumbnailAnchor() }
+    val origin = rememberSaveable(image) { UUID.randomUUID().toString() }
+    RegisterGalleryOrigin(origin) { current, _ ->
+        if (!sameGalleryImage(current, image)) null else {
+            anchor.requester.bringIntoView()
+            withFrameNanos { }
+            anchor
+        }
+    }
+    ArticleImage(image, anchor, tag, hideSpoiler = if (revealed) toggle else null) {
+        if (!revealed) toggle()
+        else if (gallery == null) onImage(image.originalUrl)
+        else gallery.open(listOf(image), 0, origin, anchor)
+    }
+}
+
+@Composable
+private fun ArticleImage(image: ArticleBlock.Image, anchor: GalleryThumbnailAnchor, tag: String,
+    hideSpoiler: (() -> Unit)? = null, open: () -> Unit) {
     val gallery = LocalImageGallery.current
     val resources = LocalResources.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -816,5 +843,14 @@ private fun ArticleImage(image: ArticleBlock.Image, anchor: GalleryThumbnailAnch
         if (failed) Text("加载失败，点击重试", Modifier.align(Alignment.Center),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         ImageAspectBadge(decodedRatio ?: image.ratio)
+        hideSpoiler?.let { hide ->
+            Box(Modifier.align(Alignment.TopEnd).size(48.dp).clip(RoundedCornerShape(50))
+                .clickable(role = Role.Button, onClick = hide)
+                .semantics { contentDescription = "隐藏剧透图片" }.testTag("$tag-hide-spoiler"),
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.VisibilityOff, null, Modifier.size(32.dp).clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = .6f)).padding(6.dp), tint = Color.White)
+            }
+        }
     }
 }

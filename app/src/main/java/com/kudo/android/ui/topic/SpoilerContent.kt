@@ -34,17 +34,23 @@ import androidx.compose.ui.unit.em
 @Composable
 internal fun SpoilerRegion(contentKey: Any, tag: String, blurSupported: Boolean = Build.VERSION.SDK_INT >= 31,
     content: @Composable (() -> Unit) -> Unit) {
+    SpoilerRegion(contentKey, tag, blurSupported, hideOnContentClick = true) { _, toggle -> content(toggle) }
+}
+
+@Composable
+internal fun SpoilerRegion(contentKey: Any, tag: String, blurSupported: Boolean = Build.VERSION.SDK_INT >= 31,
+    hideOnContentClick: Boolean, content: @Composable (Boolean, () -> Unit) -> Unit) {
     var revealed by rememberSaveable(contentKey) { mutableStateOf(false) }
     val semantics: SemanticsPropertyReceiver.() -> Unit = {
         contentDescription = "剧透内容"
         stateDescription = if (revealed) "剧透已显示" else "剧透已隐藏"
-        onClick(if (revealed) "隐藏剧透" else "显示剧透") { revealed = !revealed; true }
+        if (!revealed || hideOnContentClick) onClick(if (revealed) "隐藏剧透" else "显示剧透") { revealed = !revealed; true }
     }
-    Box(Modifier.fillMaxWidth().testTag(tag).then(if (revealed) Modifier.semantics(mergeDescendants = true, properties = semantics)
+    Box(Modifier.fillMaxWidth().testTag(tag).then(if (revealed) Modifier.semantics(mergeDescendants = hideOnContentClick, properties = semantics)
         else Modifier.clearAndSetSemantics(semantics))
-        .pointerInput(revealed) { if (revealed) detectTapGestures { revealed = false } }) {
+        .pointerInput(revealed, hideOnContentClick) { if (revealed && hideOnContentClick) detectTapGestures { revealed = false } }) {
         Box(Modifier.fillMaxWidth().then(if (!revealed && blurSupported) Modifier.blur(8.dp, BlurredEdgeTreatment.Rectangle) else Modifier)) {
-            content { revealed = !revealed }
+            content(revealed) { revealed = !revealed }
         }
         if (!revealed) Box(Modifier.matchParentSize()
             .then(if (!revealed && !blurSupported) Modifier.background(MaterialTheme.colorScheme.surfaceVariant) else Modifier)
