@@ -94,6 +94,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
+        val appLinks = remember(context) { ExternalAppLinkLauncher(context) }
         fun showMessage(text: String) { showKudoToast(context, text) }
         var refreshEpoch by rememberSaveable { mutableIntStateOf(0) }
         var readingEpoch by rememberSaveable { mutableIntStateOf(0) }
@@ -127,7 +128,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                 app.downloads.enqueue(url)?.let { showMessage("已加入下载队列") }
                 return
             }
-            nav.openContentLink(url, { selected = 0 }, ::invalidLink)
+            if (appLinks.open(url)) return
+            val fallback = ExternalAppLinkPolicy.fallbackUrl(url) ?: return invalidLink()
+            nav.openContentLink(fallback, { selected = 0 }, ::invalidLink)
         }
         fun editor(id: Int? = null, number: Int? = null, categoryId: Int? = null) { authenticated { nav.navigate("compose?topic=${id ?: 0}&reply=${number ?: 0}&category=${categoryId ?: 0}") } }
         LaunchedEffect(account) { account.events.collect { showMessage(it) } }

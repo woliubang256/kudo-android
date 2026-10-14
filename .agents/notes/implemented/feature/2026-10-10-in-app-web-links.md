@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+原生第三方分享链接的 App 优先分流由[第三方 App 链接](2026-10-14-external-app-links.md)部分接管；本篇保留普通网页回退、站内网页连续历史与显式浏览器入口。
+
 应用内点击先解析受支持的 Linux.do 原生目标：帖子保留楼层，用户子路径进入个人主页，分类支持 /c/id、/c/slug/id 以及带层级 slug 的分类路径。其他站内页面和外站 HTTP(S) 网页进入应用内 WebView；保留显式外部浏览器入口。来自系统的未知 Linux.do 深链保留原有首页回退约定，分类为本次新增原生目标。用户批准时明确修正：进入网页后的点击和重定向都留在 WebView，不再次切回原生页，以维持连续浏览体验。
 
 WebView 使用 CookieManager 默认存储，与 LoginScreen 和 AndroidSessionCookies 相同，不复制登录 Cookie 到 URL、手工请求头或外站。Cookie 发送遵循 WebView 域、路径和 Secure 规则；应用内登录态可共用，系统 Chrome 的存储不属于本应用。页面具备标题、加载进度、刷新、错误重试和返回，网页历史优先返回，无历史返回原生来源；释放时停止加载并销毁实例。沿用关闭文件/内容访问和第三方 Cookie 的设置，不引入 JS 原生桥。网页阅读允许 HTTP，Manifest 放开明文流量；社区 API 和图片请求仍由各自既有同源 HTTPS 校验约束，不手工向明文网页附加社区会话。
