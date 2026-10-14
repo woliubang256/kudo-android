@@ -70,16 +70,17 @@ fun CategoriesScreen(categories: List<Category>, loading: Boolean, error: Throwa
 fun ProfileScreen(user: Member?, login: () -> Unit, settings: () -> Unit, bookmarks: () -> Unit, profile: () -> Unit,
     repository: CommunityRepository? = null, about: () -> Unit = settings,
     destination: (AccountDestination) -> Unit = { if (it == AccountDestination.BOOKMARKS) bookmarks() },
+    downloads: () -> Unit = {},
     statusBarStyle: (Boolean?) -> Unit = {}) {
     if (user == null) {
-        GuestProfileScreen(login, settings, about)
+        GuestProfileScreen(login, settings, about, downloads)
         return
     }
-    key(user.id, user.username) { MemberProfileScreen(user, repository, settings, about, profile, destination, statusBarStyle) }
+    key(user.id, user.username) { MemberProfileScreen(user, repository, settings, about, profile, destination, downloads, statusBarStyle) }
 }
 
 @Composable
-private fun GuestProfileScreen(login: () -> Unit, settings: () -> Unit, about: () -> Unit) {
+private fun GuestProfileScreen(login: () -> Unit, settings: () -> Unit, about: () -> Unit, downloads: () -> Unit) {
     val scroll = rememberLazyListState()
     Column(Modifier.fillMaxSize().statusBarsPadding().semantics { paneTitle = "我的" }.testTag("guest-profile")) {
         LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 112.dp),
@@ -88,6 +89,8 @@ private fun GuestProfileScreen(login: () -> Unit, settings: () -> Unit, about: (
             item {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)) {
                     GuestMenuRow(Icons.Rounded.Palette, "设置", "主题、字号与液态玻璃", settings)
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    GuestMenuRow(Icons.Rounded.Download, "下载管理", "查看文件下载进度和历史", downloads)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     GuestMenuRow(Icons.Rounded.Info, "关于酷DO", "一个用心的 Linux.do 原生客户端", about, value = BuildConfig.VERSION_NAME)
                 }

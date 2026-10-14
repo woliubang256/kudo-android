@@ -118,10 +118,22 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         fun invalidLink() { showMessage("无法打开此链接") }
         fun openWebPage(url: String) { nav.openWebPage(url, ::invalidLink) }
         fun openLink(url: String) {
+            if (app.downloads.isLikelyDownload(url)) {
+                app.downloads.enqueue(url)?.let { showMessage("已加入下载队列") }
+                return
+            }
             nav.openContentLink(url, { selected = 0 }, ::invalidLink)
         }
         fun editor(id: Int? = null, number: Int? = null, categoryId: Int? = null) { authenticated { nav.navigate("compose?topic=${id ?: 0}&reply=${number ?: 0}&category=${categoryId ?: 0}") } }
         LaunchedEffect(account) { account.events.collect { showMessage(it) } }
+        LaunchedEffect(app.downloads) {
+            app.downloads.events.collect { event ->
+                showMessage(when (event) {
+                    is com.kudo.android.media.DownloadEvent.Completed -> "${event.fileName} 下载完成"
+                    is com.kudo.android.media.DownloadEvent.Failed -> "${event.fileName} 下载失败"
+                })
+            }
+        }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { account.checkSession() } }
         IncomingLinuxDoLink(nav, incomingUrl, linkSequence, { selected = 0 }, consumeLink)
         com.kudo.android.notifications.NotificationPermission(account.user?.id)
@@ -175,7 +187,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                     1 -> CategoriesScreen(account.categories, account.categoriesLoading, account.categoryError, account::loadCategories, ::login) { nav.navigate("category/${it.id}") }
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
                                         { nav.navigate("personal/${AccountDestination.MESSAGES.name}") })
-                                    4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") },
+                                    4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") },
                                         destination = { destination ->
                                             when (destination) {
                                                 AccountDestination.BOOKMARKS -> nav.navigate("bookmarks")
@@ -363,6 +375,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         SettingsScreen(display, app.settings::update, account.user, account::logout, { nav.popBackStack() }, ::openWebPage,
                             { nav.navigate("ignored-users") }, network.summary, { nav.navigate("doh-settings") })
                     }
+                    composable("downloads") { DownloadsScreen(app.downloads) { nav.popBackStack() } }
                     composable("doh-settings") { DohSettingsScreen(app.network) { nav.popBackStack() } }
                     composable("about") { AboutScreen(openLink = ::openWebPage, openExternal = ::openBrowser) { nav.popBackStack() } }
                     composable("ignored-users") {

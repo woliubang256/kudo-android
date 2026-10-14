@@ -3,6 +3,7 @@ package com.kudo.android.data
 import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebSettings
+import com.kudo.android.media.NativeDownloadManager
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.OkHttpClient
 import kotlin.coroutines.resume
@@ -25,6 +26,16 @@ class AppContainer(context: Context) {
     val client = DiscourseClient(cookies, userAgent = { userAgent }, route = network::client)
     val repository = CommunityRepository(client)
     val connect = ConnectRepository(cookies, userAgent, route = network::client)
+    internal val downloads = NativeDownloadManager(context.applicationContext, network.client(OkHttpClient.Builder()
+        .followRedirects(true).followSslRedirects(true)
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val builder = request.newBuilder().removeHeader("Cookie")
+            if (request.url.isHttps && request.url.host == "linux.do") {
+                builder.header("Cookie", cookies.get(request.url.toString())).header("User-Agent", userAgent)
+            }
+            chain.proceed(builder.build())
+        }.build()), cookies, userAgent)
     val imageHttpClient: okhttp3.Call.Factory = network.client(OkHttpClient.Builder().addNetworkInterceptor { chain ->
         val request = chain.request()
         val builder = request.newBuilder().removeHeader("Cookie")
