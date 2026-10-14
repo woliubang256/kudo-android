@@ -74,6 +74,11 @@ enum State {
     Plain(SharedTcp),
     Tls(Box<ClientConnection>),
 }
+struct EncryptedInput {
+    bytes: [u8; 16384],
+    filled: usize,
+    consumed: usize,
+}
 pub struct Socket {
     resolver: Arc<Resolver>,
     state: Mutex<State>,
@@ -81,7 +86,7 @@ pub struct Socket {
     shutdown: Mutex<Option<Arc<TcpStream>>>,
     closed: Arc<AtomicBool>,
     read_timeout: Arc<AtomicU64>,
-    read_lock: Mutex<()>,
+    read_lock: Mutex<EncryptedInput>,
     write_lock: Mutex<()>,
 }
 
@@ -133,7 +138,11 @@ impl Socket {
             shutdown: Mutex::new(None),
             closed: Arc::new(AtomicBool::new(false)),
             read_timeout: Arc::new(AtomicU64::new(0)),
-            read_lock: Mutex::new(()),
+            read_lock: Mutex::new(EncryptedInput {
+                bytes: [0; 16384],
+                filled: 0,
+                consumed: 0,
+            }),
             write_lock: Mutex::new(()),
         }
     }
@@ -255,41 +264,53 @@ impl Socket {
             .map_err(|e| io_failure(IoStage::Read, e))
     }
     fn read_inner(&self, buf: &mut [u8]) -> io::Result<usize> {
-        let _reader = self.read_lock.lock().map_err(|_| other("socket_lock"))?;
+        let mut input = self.read_lock.lock().map_err(|_| other("socket_lock"))?;
         let mut tcp = self.tcp()?;
         loop {
-            {
+            let needs_network = {
                 let mut state = self.state.lock().map_err(|_| other("socket_lock"))?;
                 match &mut *state {
                     State::Plain(_) => {
                         drop(state);
                         return tcp.read(buf);
                     }
-                    State::Tls(conn) => match conn.reader().read(buf) {
-                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                        result => return result,
-                    },
+                    State::Tls(conn) => {
+                        match conn.reader().read(buf) {
+                            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+                            result => return result,
+                        }
+                        // Drain plaintext before feeding more records. TCP may combine
+                        // a large record's tail with small records, filling rustls's
+                        // plaintext buffer before this batch of ciphertext is consumed.
+                        if input.consumed < input.filled {
+                            let mut encrypted =
+                                io::Cursor::new(&input.bytes[input.consumed..input.filled]);
+                            let count = conn.read_tls(&mut encrypted)?;
+                            if count == 0 {
+                                return Err(other("tls_record_incomplete"));
+                            }
+                            input.consumed += count;
+                            conn.process_new_packets()
+                                .map_err(|_| other("tls_record_invalid"))?;
+                            false
+                        } else {
+                            true
+                        }
+                    }
                     State::Empty => return Err(other("socket_not_connected")),
                 }
-            }
-            // Network I/O must never hold the TLS state mutex: HTTP/2 has independent readers/writers.
-            let mut encrypted = [0u8; 16384];
-            let count = tcp.read(&mut encrypted)?;
-            {
-                let mut state = self.state.lock().map_err(|_| other("socket_lock"))?;
-                if let State::Tls(conn) = &mut *state {
-                    let mut input = io::Cursor::new(&encrypted[..count]);
-                    if count == 0 {
-                        conn.read_tls(&mut input)?;
-                    }
-                    while (input.position() as usize) < count {
-                        if conn.read_tls(&mut input)? == 0 {
-                            return Err(other("tls_record_incomplete"));
-                        }
-                        conn.process_new_packets()
-                            .map_err(|_| other("tls_record_invalid"))?;
+            };
+            if needs_network {
+                // Network I/O must never hold the TLS state mutex: HTTP/2 has independent readers/writers.
+                input.filled = tcp.read(&mut input.bytes)?;
+                input.consumed = 0;
+                if input.filled == 0 {
+                    let mut state = self.state.lock().map_err(|_| other("socket_lock"))?;
+                    if let State::Tls(conn) = &mut *state {
+                        conn.read_tls(&mut io::empty())?;
                     }
                 }
+                continue;
             }
             // TLS key updates/session tickets may produce outbound records, ordered with application writes.
             let _writer = self.write_lock.lock().map_err(|_| other("socket_lock"))?;
@@ -539,6 +560,246 @@ mod tests {
         server.join().unwrap();
         assert_eq!(expected, received);
     }
+    #[test]
+    fn mixed_tls_records_after_a_fragment_do_not_fail_with_read_failed() {
+        for versions in [vec![&rustls::version::TLS13], vec![&rustls::version::TLS12]] {
+            let (mut client, mut server) = tls_pair(&versions);
+            let first = vec![17; 16384];
+            server.writer().write_all(&first).unwrap();
+            let first_record = encoded(&mut server);
+            // Leave the final 128 encrypted bytes for the next TCP read. That read
+            // also contains small records and the prefix of another large record.
+            let prefix = first_record.len() - 128;
+            let mut input = io::Cursor::new(&first_record[..prefix]);
+            while (input.position() as usize) < prefix {
+                assert!(client.read_tls(&mut input).unwrap() > 0);
+                client.process_new_packets().unwrap();
+            }
+            assert_eq!(
+                client.reader().read(&mut [0; 1]).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+            let mut expected = first;
+            let mut encrypted = first_record[prefix..].to_vec();
+            for (index, size) in [512, 1024, 16384, 37, 8192].into_iter().enumerate() {
+                let plaintext = vec![index as u8; size];
+                server.writer().write_all(&plaintext).unwrap();
+                expected.extend_from_slice(&plaintext);
+                encrypted.extend(encoded(&mut server));
+            }
+            server.send_close_notify();
+            encrypted.extend(encoded(&mut server));
+            let (socket, mut peer) = connected();
+            *socket.state.lock().unwrap() = State::Tls(Box::new(client));
+            socket.timeout(2000).unwrap();
+            peer.write_all(&encrypted).unwrap();
+            let mut actual = Vec::new();
+            let mut block = [0; 257];
+            loop {
+                let count = socket
+                    .read(&mut block)
+                    .expect("valid mixed TLS records must be readable");
+                if count == 0 {
+                    break;
+                }
+                actual.extend_from_slice(&block[..count]);
+            }
+            assert_eq!(expected, actual);
+        }
+    }
+
+    #[test]
+    fn repeated_tls_responses_keep_every_byte_with_varying_read_sizes() {
+        let (client, mut server) = tls_pair(&[&rustls::version::TLS13]);
+        let mut expected = Vec::new();
+        let mut encrypted = Vec::new();
+        // One TLS connection, repeated header-sized and image-sized records.
+        for round in 0..32 {
+            for size in [79, 16384, 513, 8192, 9] {
+                let bytes = vec![round; size];
+                server.writer().write_all(&bytes).unwrap();
+                expected.extend_from_slice(&bytes);
+                encrypted.extend(encoded(&mut server));
+            }
+        }
+        server.send_close_notify();
+        encrypted.extend(encoded(&mut server));
+        let (socket, mut peer) = connected();
+        *socket.state.lock().unwrap() = State::Tls(Box::new(client));
+        socket.timeout(2000).unwrap();
+        let writer = thread::spawn(move || peer.write_all(&encrypted).unwrap());
+        let mut received = Vec::new();
+        let mut block = [0; 32768];
+        let mut iteration = 0;
+        loop {
+            let size = [1, 257, 4096, 32768][iteration % 4];
+            let count = socket.read(&mut block[..size]).unwrap();
+            if count == 0 {
+                break;
+            }
+            received.extend_from_slice(&block[..count]);
+            assert!(received.len() <= expected.len());
+            iteration += 1;
+        }
+        writer.join().unwrap();
+        assert_eq!(expected, received);
+    }
+
+    #[test]
+    fn tls_record_header_and_payload_fragments_preserve_bytes() {
+        for version in [&rustls::version::TLS13, &rustls::version::TLS12] {
+            for prefix in [1, 4, 5, 17, 4095, 4096, 8191, 16383] {
+                let (mut client, mut server) = tls_pair(&[version]);
+                let expected = vec![37; 16384];
+                server.writer().write_all(&expected).unwrap();
+                let encrypted = encoded(&mut server);
+                let mut input = io::Cursor::new(&encrypted[..prefix]);
+                while (input.position() as usize) < prefix {
+                    assert!(client.read_tls(&mut input).unwrap() > 0);
+                    client.process_new_packets().unwrap();
+                }
+                let (socket, mut peer) = connected();
+                *socket.state.lock().unwrap() = State::Tls(Box::new(client));
+                socket.timeout(2000).unwrap();
+                peer.write_all(&encrypted[prefix..]).unwrap();
+                peer.write_all(&{
+                    server.send_close_notify();
+                    encoded(&mut server)
+                })
+                .unwrap();
+                let mut actual = Vec::new();
+                let mut block = [0; 127];
+                loop {
+                    let count = socket.read(&mut block).unwrap();
+                    if count == 0 {
+                        break;
+                    }
+                    actual.extend_from_slice(&block[..count]);
+                }
+                assert_eq!(expected, actual, "fragment prefix {prefix}");
+            }
+        }
+    }
+
+    #[test]
+    fn truncated_and_corrupt_tls_records_still_fail() {
+        for corrupt in [false, true] {
+            let (client, mut server) = tls_pair(&[&rustls::version::TLS13]);
+            server.writer().write_all(&vec![19; 8192]).unwrap();
+            let mut encrypted = encoded(&mut server);
+            if corrupt {
+                *encrypted.last_mut().unwrap() ^= 1;
+            } else {
+                encrypted.pop();
+            }
+            let (socket, mut peer) = connected();
+            *socket.state.lock().unwrap() = State::Tls(Box::new(client));
+            socket.timeout(2000).unwrap();
+            peer.write_all(&encrypted).unwrap();
+            peer.shutdown(Shutdown::Write).unwrap();
+            let error = socket.read(&mut [0; 8192]).unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                if corrupt {
+                    "tls_record_invalid"
+                } else {
+                    "read_eof"
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn a_waiting_tls_reader_does_not_block_application_writes() {
+        let (client, mut server) = tls_pair(&[&rustls::version::TLS13]);
+        let (socket, mut peer) = connected();
+        *socket.state.lock().unwrap() = State::Tls(Box::new(client));
+        socket.timeout(2000).unwrap();
+        peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let reader = socket.clone();
+        let reading = thread::spawn(move || reader.read(&mut [0; 1]));
+        thread::sleep(Duration::from_millis(30));
+        let writer = socket.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let writing = thread::spawn(move || tx.send(writer.write(b"next stream")).unwrap());
+        let result = rx.recv_timeout(Duration::from_millis(500));
+        socket.close();
+        assert!(
+            result.is_ok(),
+            "TLS reader must release the connection state lock while waiting"
+        );
+        result.unwrap().unwrap();
+        let mut plaintext = [0; 11];
+        loop {
+            server.read_tls(&mut peer).unwrap();
+            server.process_new_packets().unwrap();
+            if server.reader().read(&mut plaintext).is_ok() {
+                break;
+            }
+        }
+        assert_eq!(&plaintext, b"next stream");
+        writing.join().unwrap();
+        let _ = reading.join().unwrap();
+    }
+
+    fn tls_pair(
+        versions: &[&'static rustls::SupportedProtocolVersion],
+    ) -> (ClientConnection, rustls::ServerConnection) {
+        use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+        let cert = CertificateDer::from(include_bytes!("test-cert.der").to_vec());
+        let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+            include_bytes!("test-key.der").to_vec(),
+        ));
+        let server_config = rustls::ServerConfig::builder_with_protocol_versions(versions)
+            .with_no_client_auth()
+            .with_single_cert(vec![cert.clone()], key)
+            .unwrap();
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(cert).unwrap();
+        let client_config = rustls::ClientConfig::builder_with_protocol_versions(versions)
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        let mut client = ClientConnection::new(
+            Arc::new(client_config),
+            ServerName::try_from("localhost").unwrap(),
+        )
+        .unwrap();
+        let mut server = rustls::ServerConnection::new(Arc::new(server_config)).unwrap();
+        for _ in 0..16 {
+            let mut outbound = Vec::new();
+            while client.wants_write() {
+                client.write_tls(&mut outbound).unwrap();
+            }
+            let mut input = io::Cursor::new(&outbound);
+            while (input.position() as usize) < outbound.len() {
+                assert!(server.read_tls(&mut input).unwrap() > 0);
+                server.process_new_packets().unwrap();
+            }
+            let outbound = encoded(&mut server);
+            let mut input = io::Cursor::new(&outbound);
+            while (input.position() as usize) < outbound.len() {
+                assert!(client.read_tls(&mut input).unwrap() > 0);
+                client.process_new_packets().unwrap();
+            }
+            if !client.is_handshaking()
+                && !server.is_handshaking()
+                && !client.wants_write()
+                && !server.wants_write()
+            {
+                return (client, server);
+            }
+        }
+        panic!("test TLS handshake did not finish");
+    }
+
+    fn encoded(server: &mut rustls::ServerConnection) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        while server.wants_write() {
+            server.write_tls(&mut bytes).unwrap();
+        }
+        bytes
+    }
+
     #[test]
     fn closed_socket_cannot_start_a_connection() {
         let socket = Socket::new(Arc::new(
