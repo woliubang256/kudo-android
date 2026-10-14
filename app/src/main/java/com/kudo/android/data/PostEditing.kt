@@ -1,6 +1,20 @@
 package com.kudo.android.data
 
+import org.json.JSONObject
+
 data class EditablePost(val post: Post, val topicId: Int, val raw: String, val title: String)
+
+data class PostEditDraft(val originalRaw: String, val originalTitle: String, val raw: String, val title: String, val reason: String = "") {
+    fun toJson(): String = JSONObject().put("originalRaw", originalRaw).put("originalTitle", originalTitle)
+        .put("raw", raw).put("title", title).put("reason", reason).toString()
+    companion object {
+        fun fromJson(value: String): PostEditDraft = JSONObject(value).let {
+            PostEditDraft(it.getString("originalRaw"), it.getString("originalTitle"), it.getString("raw"), it.getString("title"), it.optString("reason"))
+        }
+        fun fromPost(source: EditablePost) = PostEditDraft(source.raw, source.title, source.raw, source.title)
+    }
+}
+data class PostEditResult(val topicId: Int, val post: Post, val title: String)
 
 suspend fun CommunityRepository.editablePost(postId: Int, viewerId: Int): EditablePost {
     require(postId > 0 && viewerId > 0)

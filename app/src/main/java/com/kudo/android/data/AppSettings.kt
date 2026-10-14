@@ -34,7 +34,13 @@ class AppSettings(context: Context) {
     fun saveDraft(key: String, draft: Draft) { prefs.edit().putString("draft_${key}_title", draft.title).putString("draft_${key}_raw", draft.raw).putInt("draft_${key}_category", draft.categoryId).putString("draft_${key}_recipients", draft.recipients).apply() }
     fun clearDraft(key: String) { prefs.edit().remove("draft_${key}_title").remove("draft_${key}_raw").remove("draft_${key}_category").remove("draft_${key}_recipients").apply() }
     fun drafts(userId: Int): List<SavedDraft> = localAccountDrafts(prefs.all, userId)
+    fun postEditDraft(userId: Int, postId: Int): PostEditDraft? = prefs.getString("post_edit_${userId}_$postId", null)
+        ?.let { runCatching { PostEditDraft.fromJson(it) }.getOrNull() }
+    fun savePostEditDraft(userId: Int, postId: Int, draft: PostEditDraft?) {
+        val key = "post_edit_${userId}_$postId"
+        prefs.edit().apply { if (draft == null) remove(key) else putString(key, draft.toJson()) }.apply()
+    }
     fun clearAccountData() {
-        prefs.edit().apply { prefs.all.keys.filter { it.startsWith("draft_") }.forEach(::remove) }.apply()
+        prefs.edit().apply { prefs.all.keys.filter { it.startsWith("draft_") || it.startsWith("post_edit_") }.forEach(::remove) }.apply()
     }
 }
