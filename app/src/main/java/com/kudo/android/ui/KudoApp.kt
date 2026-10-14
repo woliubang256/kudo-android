@@ -322,7 +322,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         } ?: Column { AccountPageTopBar("聊天", { nav.popBackStack() }); EmptyState("请先登录", "登录后查看聊天。", actionLabel = "登录", action = ::login) }
                     }
                     composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) { entry ->
-                        WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser, openApp = appLinks::open)
+                        WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
+                            openApp = { appLinks.open(it) }, externalLinkMode = display.externalLinkMode)
                     }
                     composable("topic/{id}?post={post}",
                         arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("post") { type = NavType.IntType; defaultValue = 0 }),

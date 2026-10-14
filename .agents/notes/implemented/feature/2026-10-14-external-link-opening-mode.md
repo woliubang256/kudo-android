@@ -14,6 +14,8 @@ ExternalAppLinkLauncher 在 SYSTEM 模式发送原始隐式 ACTION_VIEW，不指
 
 KudoApp 原生正文统一入口先检查既有文件下载，再传入当前偏好给启动器；没有外部启动时使用已校验的 HTTP(S) 回退并沿用原生站内路由。子域名不扩展原生帖子解析，进入应用内网页。受限夸克 scheme 在 IN_APP 模式使用其分享网页回退。
 
+WebView 只在主文档、用户手势且非重定向的外部点击、当前模式为 SYSTEM 时调用系统启动器；linux.do 及子域名、IN_APP 点击、脚本与重定向维护网页历史。模式通过 rememberUpdatedState 更新，切换设置不重载网页。受支持的 scheme 在 IN_APP 或系统启动失败时使用 HTTP(S) 分享回退。Manifest 移除夸克包可见性例外，保留显式浏览器功能所需 HTTP(S) 查询。
+
 ## Existing note audit
 
 [第三方 App 分流](../../implemented/feature/2026-10-14-external-app-links.md)部分取代：不再自动筛选候选或指定夸克包名，但协议范围与已记录的验证限制仍有效。[网页浏览](../../implemented/feature/2026-10-10-in-app-web-links.md)部分取代外站默认方式，保留站内连续历史、会话和显式浏览器入口。[站内深链](../../implemented/feature/2026-10-09-linuxdo-links.md)保留原生解析与系统入口，仅新增外部域名边界，不给任意子域名扩展原生帖子解析。[下载管理](../../implemented/feature/2026-10-14-native-download-manager.md)保留下载优先。没有其他同主题 proposed/rejected；无完全取代或需要归档的笔记。
@@ -30,4 +32,4 @@ KudoApp 原生正文统一入口先检查既有文件下载，再传入当前偏
 
 ## Consequences
 
-用户有可保存的选择入口，原生点击已遵循偏好；WebView 主动点击分流尚未接入。系统模式可能直接进入默认浏览器，夸克 HTTP(S) 不保证匹配夸克；厂商面板与关联设置不同。应用内网页与系统浏览器登录态独立。系统没有处理程序或拒绝启动时使用应用内网页回退。
+用户有可保存的选择入口，原生及 WebView 主动点击均遵循偏好。系统模式可能直接进入默认浏览器，夸克 HTTP(S) 不保证匹配夸克；厂商面板与关联设置不同。应用内网页与系统浏览器登录态独立。系统没有处理程序或拒绝启动时使用应用内网页回退。显式“在浏览器打开”继续强制浏览器，不随新偏好变化。

@@ -30,6 +30,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kudo.android.ui.LinuxDoLink
 import com.kudo.android.ui.ExternalAppLinkPolicy
+import com.kudo.android.data.ExternalLinkMode
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -41,11 +42,12 @@ private class WebPageState(val saved: Bundle? = null) {
     }
 }
 
-/** Site navigation stays in web history; only deliberate third-party links may open another app. */
+/** Site history stays in the reader; deliberate external clicks follow the user's opening mode. */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> Unit,
-    webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false }) {
+    webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false },
+    externalLinkMode: ExternalLinkMode = ExternalLinkMode.SYSTEM) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
     var title by rememberSaveable(url) { mutableStateOf("网页") }
@@ -60,6 +62,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
     val currentBack by rememberUpdatedState(back)
     val currentOpenApp by rememberUpdatedState(openApp)
+    val currentExternalLinkMode by rememberUpdatedState(externalLinkMode)
     fun navigateBack() { val view = page.view; if (view?.canGoBack() == true) view.goBack() else currentBack() }
     fun retry() {
         navigationGeneration++
@@ -118,7 +121,8 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                             val deliberate = ExternalAppLinkPolicy.canOpenFromWeb(request.isForMainFrame,
                                 request.hasGesture(), request.isRedirect)
                             // Linux.do pages, script navigation and redirects keep their web history.
-                            if (deliberate && web?.toHttpUrlOrNull()?.host != "linux.do") {
+                            if (deliberate && currentExternalLinkMode == ExternalLinkMode.SYSTEM &&
+                                !ExternalAppLinkPolicy.isSiteUrl(value)) {
                                 ExternalAppLinkPolicy.contentUrl(value)?.let { if (currentOpenApp(it)) return true }
                             }
                             if (web != null) return false
