@@ -26,9 +26,13 @@ HISTORY 屏幕通过 LifecycleResumeEffect 在返回 RESUMED 时刷新。ViewMod
 
 TopicVisitHistoryTest 使用真实 ViewModel 和 MockWebServer，4 项中 3 项先因缺少 track_visit 失败，访客及仓库预览排除用例原本通过（`artifacts/topic-visit-history-repro.txt`）。补上参数后 4 项通过（`artifacts/topic-visit-history-fixed.txt`），验证登录访问后读取服务端模拟历史、不提前标读、刷新不重复、重新进入再次访问和明确楼层目标不变。
 
-PersonalHistoryUiTest 使用真实屏幕、ViewModel、受控 LifecycleRegistry 与离线 HTTP 响应。旧实现返回历史后等待新条目超时，其他个人列表分页保留用例通过（`artifacts/history-return-repro-device.txt`）；修复后的集中设备验证尚待运行。
+PersonalHistoryUiTest 使用真实屏幕、ViewModel、受控 LifecycleRegistry 与离线 HTTP 响应。旧实现返回历史后等待新条目超时，其他个人列表分页保留用例通过（`artifacts/history-return-repro-device.txt`）；修复后两项均通过，验证历史首屏仅请求一次、返回刷新服务端模拟结果、其他个人列表保留分页。
 
 70 项关联 JVM 测试通过（`artifacts/topic-history-final-build.txt`）：访问历史 4、续读 12、楼层导航 12、实时回复 11、主题 ViewModel 9、阅读曝光计算 6、上报队列 3、账号数据 6、楼中楼与签名 7。既有详情夹具按 encodedPath 匹配路由，保留完整请求参数日志并新增首次/续读补窗/访客参数断言；未删除实际传输检查。首轮 51 项中一个延迟续读夹具仍用完整 path 分支而未触发阻塞，修正同类匹配后相关 12 项全部通过（初次日志 `artifacts/topic-history-unit-regression.txt`），不是修改产品逻辑绕过失败。
+
+20 项真机关联测试全部通过（`artifacts/topic-history-final-device.txt`）：历史 2、阅读可见性与暂停 8、向前分页 6、实时回复生命周期 2、个人中心入口及大字号 2，没有跳过项。Debug / AndroidTest 构建与 Lint 通过，0 errors、45 既有 warnings、1 hint。没有扩大全量测试或重复无关联已通过的测试。
+
+RMX2202 / Android 13 构建显式 versionCode=2005、versionName=0.2.3，与安装前版本相同；回读包 `artifacts/topic-history-before.apk` 核对 SHA256 签名一致（95f95aff266413e4c3fb431bf7ae96552d0e5e601b986e4a53d2a116b6623e4f），应用只 adb install -r、测试包 -r -t，再 am instrument，没有卸载或清数据。最终产物 `artifacts/kudo-topic-history.apk`。测试使用离线拦截或 MockWebServer，不修改真实账号浏览历史；真实服务器的最后访问时间及跨设备显示尚未做端到端验收。
 
 ## Consequences
 

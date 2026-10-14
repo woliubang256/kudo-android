@@ -56,7 +56,7 @@ class TopicFloorNavigationTest {
     }
 
     @Test fun unloadedNestedTargetMergesTheWindowAndResolvesItsParentWithoutReadingWrites() = runTest {
-        withTopic({ request -> when (request.path) {
+        withTopic({ request -> when (request.requestUrl!!.encodedPath) {
             "/t/5/80.json" -> MockResponse().setBody(topic(post(80, 20)))
             "/t/5/20.json" -> MockResponse().setBody(topic(post(20)))
             else -> null
@@ -73,8 +73,8 @@ class TopicFloorNavigationTest {
     @Test fun loadingAfterAFarJumpDoesNotInsertTheFirstPageBeforeTheTarget() = runTest {
         withTopic({ request ->
             when {
-                request.path == "/t/5.json" -> MockResponse().setBody(streamedTopic("${post(1)},${post(2)}"))
-                request.path == "/t/5/100.json" -> MockResponse().setBody(streamedTopic(post(100)))
+                request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(streamedTopic("${post(1)},${post(2)}"))
+                request.requestUrl!!.encodedPath == "/t/5/100.json" -> MockResponse().setBody(streamedTopic(post(100)))
                 request.path?.startsWith("/t/5/posts.json") == true -> {
                     val ids = request.requestUrl?.queryParameterValues("post_ids[]").orEmpty().mapNotNull { value -> value?.toIntOrNull() }
                     MockResponse().setBody(streamedTopic(ids.joinToString(",") { post(it) }))
@@ -94,11 +94,11 @@ class TopicFloorNavigationTest {
 
     @Test fun jumpingToACachedPreviewLoadsAContinuousWindowInsteadOfAppendingOneFloor() = runTest {
         withTopic({ request -> when {
-            request.path == "/t/5.json" -> MockResponse().setBody(streamedTopic((1..20).joinToString(",") {
+            request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(streamedTopic((1..20).joinToString(",") {
                 if (it == 2) post(it).replace("\"cooked\"", "\"reply_count\":1,\"cooked\"") else post(it)
             }))
             request.path == "/posts/2/replies.json?after=1" -> MockResponse().setBody("[${post(108, 2)}]")
-            request.path == "/t/5/108.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }))
+            request.requestUrl!!.encodedPath == "/t/5/108.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }))
             request.path?.startsWith("/t/5/posts.json") == true -> {
                 val ids = request.requestUrl!!.queryParameterValues("post_ids[]").orEmpty().map { it!!.toInt() }
                 MockResponse().setBody(streamedTopic(ids.joinToString(",") { post(it) }))
@@ -126,7 +126,7 @@ class TopicFloorNavigationTest {
     @Test fun failedBackwardPageKeepsTheWindowAndRetrySkipsOnlyUnavailableIds() = runTest {
         val pages = AtomicInteger()
         withTopic({ request -> when {
-            request.path == "/t/5/100.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }))
+            request.requestUrl!!.encodedPath == "/t/5/100.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }))
             request.path?.startsWith("/t/5/posts.json") == true -> {
                 val ids = request.requestUrl!!.queryParameterValues("post_ids[]").orEmpty().map { it!!.toInt() }
                 if (78 in ids && pages.incrementAndGet() == 1) MockResponse().setResponseCode(503).setBody("{}")
@@ -150,8 +150,8 @@ class TopicFloorNavigationTest {
         val started = CountDownLatch(2); val release = CountDownLatch(1)
         val pages = CopyOnWriteArrayList<List<Int>>()
         withTopic({ request -> when {
-            request.path == "/t/5.json" -> MockResponse().setBody(streamedTopic(post(1), 200))
-            request.path == "/t/5/108.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }, 200))
+            request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(streamedTopic(post(1), 200))
+            request.requestUrl!!.encodedPath == "/t/5/108.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }, 200))
             request.path?.startsWith("/t/5/posts.json") == true -> {
                 val ids = request.requestUrl!!.queryParameterValues("post_ids[]").orEmpty().map { it!!.toInt() }
                 pages += ids
@@ -178,7 +178,7 @@ class TopicFloorNavigationTest {
     @Test fun laterBackwardPageFailureKeepsTheWindowAndCanBeRetried() = runTest {
         val attempts = AtomicInteger()
         withTopic({ request -> when {
-            request.path == "/t/5/100.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }))
+            request.requestUrl!!.encodedPath == "/t/5/100.json" -> MockResponse().setBody(streamedTopic((98..117).joinToString(",") { post(it) }))
             request.path?.startsWith("/t/5/posts.json") == true -> {
                 val ids = request.requestUrl!!.queryParameterValues("post_ids[]").orEmpty().map { it!!.toInt() }
                 if (58 in ids && attempts.incrementAndGet() == 1) MockResponse().setResponseCode(503).setBody("{}")
@@ -209,7 +209,7 @@ class TopicFloorNavigationTest {
     }
 
     @Test fun missingAndForbiddenFloorsKeepTheCurrentContentAndExposeAnError() = runTest {
-        withTopic({ request -> when (request.path) {
+        withTopic({ request -> when (request.requestUrl!!.encodedPath) {
             "/t/5/80.json" -> MockResponse().setBody(topic(post(79)))
             "/t/5/100.json" -> MockResponse().setResponseCode(403).setBody("""{"errors":["不能访问"]}""")
             else -> null
@@ -256,7 +256,7 @@ class TopicFloorNavigationTest {
 
     @Test fun aJumpWindowThatCompletesAParentClearsTheCancelledContextLoadingState() = runTest {
         val started = CountDownLatch(1); val release = CountDownLatch(1); val calls = AtomicInteger()
-        withTopic({ request -> when (request.path) {
+        withTopic({ request -> when (request.requestUrl!!.encodedPath) {
             "/t/5.json" -> MockResponse().setBody(topic("${post(1)},${post(80, 20)}"))
             "/t/5/20.json" -> {
                 if (calls.incrementAndGet() == 1) { started.countDown(); release.await(5, TimeUnit.SECONDS) }
@@ -302,7 +302,7 @@ class TopicFloorNavigationTest {
                         override fun dispatch(request: RecordedRequest): MockResponse {
                             paths += "${request.method} ${request.path}"
                             return response(request) ?: when {
-                                request.path == "/t/5.json" || request.path == "/t/5/1.json" -> MockResponse().setBody(topic())
+                                request.requestUrl!!.encodedPath == "/t/5.json" || request.requestUrl!!.encodedPath == "/t/5/1.json" -> MockResponse().setBody(topic())
                                 request.path!!.startsWith("/u/") -> MockResponse().setBody("""{"user":{"id":2,"username":"author"}}""")
                                 else -> MockResponse().setResponseCode(404).setBody("{}")
                             }
