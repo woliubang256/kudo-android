@@ -14,6 +14,8 @@ Status: implemented
 
 删除生产列表缩略图的相册来源注册及可变预览状态。相册已有延迟补齐／状态恢复契约保留，供旧版本保存的查看器会话恢复；相关竞态测试使用独立测试来源，不再把列表当入口。
 
+ImageLoadError 将 Coil 的失败异常转为可分享的短诊断：HTTP 使用真实 response.code，原生 DoH 保留受限格式的安全错误码，普通连接、DNS、超时、TLS 和已知解码失败显示异常类型与中文原因。本地共享冷却显示 COOLDOWN 及剩余秒数，不能冒充本次 HTTP 429。读取最多 8 层 cause，防止循环异常链；优先保留已识别的网络异常，避免 TLS 内部原因把握手错误变成未知。未知原因保留类型，不猜测为限流或 Cloudflare。原始异常消息可能包含签名 URL、请求头和私有节点，除受控冷却文案、原生安全码与固定解码特征外不输出消息；不输出响应正文或堆栈。解析器不修改网络路由、缓存、并发及重试策略。
+
 ## Existing note audit
 
 - [相册会话](../../implemented/feature/2026-10-09-image-gallery-and-transitions.md)与[来源过渡](../../implemented/feature/2026-10-09-image-origin-animation.md)：部分取代列表直接预览约定；正文相册、过渡和恢复仍有效。
@@ -27,8 +29,11 @@ Status: implemented
 - 保留图片点击设置：兼容直接预览习惯；用户明确要求统一进入详情，不新增偏好。
 - 删除全部延迟相册代码：生产代码更少；旧保存会话仍可能包含 topicId，保留恢复能力和独立竞态回归。
 - 失败后仅显示静态占位：不会增加点击行为，卡片仍可进入帖子；用户无法直接重试列表封面，采用失败时点击重试、其他状态点击进入主题。
+- 直接展示异常原文：最快获取连接细节，但 URL 参数和网络节点可能带凭据；只展示真实响应码、异常类型及受控原因，未知失败不猜原因。
 
 ## Testing
+
+2026-10-14：RMX2202 / Android13 快速连续滑动后，停下检查的列表封面均成功，尚未抓到线上偶发失败的具体原因；生产加载器不记录失败异常。新增真机夹具在原实现上复现 HTTP 503 被丢弃，日志 artifacts/image-diagnostics-2026-10-14/error-display-repro-device.txt。ImageLoadErrorTest 的 7 项 JVM 用例验证 HTTP / 原生安全码、包装异常、普通超时与 DNS/TLS/EOF、共享冷却、解码、敏感原文屏蔽和循环 cause。TLS 内部原因丢失的用例先失败（nested-error-repro.txt），修复后与其他解析用例一起通过（error-mapping-tests.txt）。
 
 2026-10-12：新增 FeedImageLoadingUiTest 的慢响应、失败重试、成功封面替换与失败封面替换 4 项在旧实现上均失败，日志 `artifacts/feed-image-loading-repro-device.txt`。修复后这 4 项与列表角标位置、封面只进入主题和比例阈值 3 项关联用例在 medium_phone / Android 16 模拟器全部通过（14.839 秒，`artifacts/feed-image-loading-final-device.txt`）；断言包含等待真实第二次请求、重试不打开主题、标题仍能进入、图片区域不跳动与旧角标不残留。初轮标题触摸使用合并语义节点，实际点中整张卡片中央的失败封面；改用未合并的标题节点后通过，没有修改产品跳转行为。Debug / AndroidTest 构建及 Lint 通过（0 errors / 41 warnings / 1 hint，`artifacts/feed-image-loading-fixed-build.txt`）。浅色等待、深色 130% 字号等待和失败截图已检查，文件分别为 `feed-image-loading-light.png`、`feed-image-loading-dark.png` 和 `feed-image-error-dark.png`。当前无真机连接，这批结果不代表真机验收；后续遵照用户要求直接打包，不追加测试。
 
