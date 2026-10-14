@@ -31,8 +31,9 @@ internal fun CommunityIconButton(icon: ImageVector, description: String, action:
 }
 
 @Composable
-internal fun CommunityButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, compact: Boolean = false) {
-    Box(modifier.clip(RoundedCornerShape(4.dp)).background(LogoYellow.copy(alpha = if (enabled) 1f else 0.18f))
+internal fun CommunityButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, compact: Boolean = false,
+    shape: Shape = RoundedCornerShape(4.dp)) {
+    Box(modifier.clip(shape).background(LogoYellow.copy(alpha = if (enabled) 1f else 0.18f))
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .heightIn(min = if (compact) 36.dp else 48.dp).padding(horizontal = 18.dp, vertical = if (compact) 6.dp else 11.dp), contentAlignment = Alignment.Center) {
         Text(text, color = if (enabled) Ink else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), style = MaterialTheme.typography.bodyMedium)

@@ -2,6 +2,7 @@ package com.kudo.android.ui.account
 
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -59,7 +60,7 @@ private fun UpdateSheetContent(visibility: MutableTransitionState<Boolean>, chec
             release?.let { value ->
                 Box(Modifier.fillMaxWidth()) {
                     if (newer && downloadActions != null) downloadActions(value)
-                    else if (newer) CommunityButton("前往 GitHub 下载", { external(value.url) }, Modifier.fillMaxWidth())
+                    else if (newer) CommunityButton("前往 GitHub 下载", { external(value.url) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(50))
                     else ModalLink("在 GitHub 查看此版本") { external(value.url) }
                 }
             }
@@ -70,7 +71,7 @@ private fun UpdateSheetContent(visibility: MutableTransitionState<Boolean>, chec
         }
         error?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-            CommunityButton("重试", { retry++ }, Modifier.fillMaxWidth())
+            CommunityButton("重试", { retry++ }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(50))
             ModalLink("到 GitHub 查看版本") { external("$KudoSourceUrl/releases") }
         }
         release?.let { value ->

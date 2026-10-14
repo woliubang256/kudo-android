@@ -2,6 +2,7 @@ package com.kudo.android.ui.account
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -109,22 +110,22 @@ internal fun UpdateDownloadActions(release: GitHubRelease, model: UpdateDownload
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (percent == null) "正在下载安装包…" else "正在下载 $percent%", Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium)
-                    CommunityButton("取消下载", { model.cancel(task.id) }, compact = true)
+                    CommunityButton("取消下载", { model.cancel(task.id) }, compact = true, shape = RoundedCornerShape(50))
                 }
             }
             DownloadStatus.COMPLETED -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     CommunityButton(if (preparing) "正在校验安装包…" else "安装更新", { model.download(release) },
-                        Modifier.weight(1f), enabled = !preparing)
+                        Modifier.weight(1f), enabled = !preparing, shape = RoundedCornerShape(50))
                     Text("重新下载", Modifier.clickable(enabled = !preparing, role = Role.Button) { model.restart(release) }
                         .padding(vertical = 14.dp, horizontal = 4.dp), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             DownloadStatus.FAILED, DownloadStatus.CANCELED -> {
                 Text(task.error ?: "下载未完成", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                CommunityButton("重新下载更新", { model.download(release) }, Modifier.fillMaxWidth())
+                CommunityButton("重新下载更新", { model.download(release) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(50))
             }
-            null -> CommunityButton("下载更新", { model.download(release) }, Modifier.fillMaxWidth())
+            null -> CommunityButton("下载更新", { model.download(release) }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(50))
         }
     }
 }
