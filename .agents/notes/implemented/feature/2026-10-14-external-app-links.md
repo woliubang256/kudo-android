@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+[外部链接打开方式](2026-10-14-external-link-opening-mode.md)取代本篇启动器筛选候选与指定夸克包的决定：系统模式直接发送隐式 VIEW，应用内模式不唤端。下述旧选择理由保留，协议校验、网页手势边界和历史验证限制仍有效。
+
 原生内容保持文件下载和 Linux.do 导航优先。第三方 HTTP(S) 链接查询匹配 Activity，排除通用浏览器、本应用和系统解析器；一个候选直接打开，多个候选仅在候选 App 中选择，没有可用候选或启动失败回退应用内网页。准确的 pan.quark.cn/s/<id> 分享地址例外，向 com.quark.browser 发送原始 URL，保留提取码和 fragment，不启动 App 首页。显式“在浏览器打开”保持原来的含义。
 
 跳转器与原生正文仅接受夸克发布的 qklink/uclink www.uc.cn Android appkey 的 open_url 分享协议；任意 intent、命令、文件或其他 scheme 不开放。未安装时使用协议中经过同样校验的分享网页回退。第三方 App 使用自己的网络配置，不继承本应用 DoH/ECH。
