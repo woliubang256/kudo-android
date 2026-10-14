@@ -12,6 +12,8 @@ AppSettings 持久化 ExternalLinkMode（SYSTEM 默认、IN_APP），缺失或�
 
 ExternalAppLinkLauncher 在 SYSTEM 模式发送原始隐式 ACTION_VIEW，不指定包或组件、不自行筛选或强制 chooser；IN_APP 模式返回 false。linux.do 及以 .linux.do 结尾的真实子域名始终返回 false，伪装后缀不是站内。受限夸克 scheme 校验继续有效，启动异常交还网页回退。
 
+KudoApp 原生正文统一入口先检查既有文件下载，再传入当前偏好给启动器；没有外部启动时使用已校验的 HTTP(S) 回退并沿用原生站内路由。子域名不扩展原生帖子解析，进入应用内网页。受限夸克 scheme 在 IN_APP 模式使用其分享网页回退。
+
 ## Existing note audit
 
 [第三方 App 分流](../../implemented/feature/2026-10-14-external-app-links.md)部分取代：不再自动筛选候选或指定夸克包名，但协议范围与已记录的验证限制仍有效。[网页浏览](../../implemented/feature/2026-10-10-in-app-web-links.md)部分取代外站默认方式，保留站内连续历史、会话和显式浏览器入口。[站内深链](../../implemented/feature/2026-10-09-linuxdo-links.md)保留原生解析与系统入口，仅新增外部域名边界，不给任意子域名扩展原生帖子解析。[下载管理](../../implemented/feature/2026-10-14-native-download-manager.md)保留下载优先。没有其他同主题 proposed/rejected；无完全取代或需要归档的笔记。
@@ -28,4 +30,4 @@ ExternalAppLinkLauncher 在 SYSTEM 模式发送原始隐式 ACTION_VIEW，不指
 
 ## Consequences
 
-用户有可保存的选择入口及遵循系统分发的启动器。原生入口尚未传入偏好，WebView 分流尚未接入，完整端到端选择不记为已实现。系统模式可能直接进入默认浏览器，夸克 HTTP(S) 不保证匹配夸克；厂商面板与关联设置不同。应用内网页与系统浏览器登录态独立。
+用户有可保存的选择入口，原生点击已遵循偏好；WebView 主动点击分流尚未接入。系统模式可能直接进入默认浏览器，夸克 HTTP(S) 不保证匹配夸克；厂商面板与关联设置不同。应用内网页与系统浏览器登录态独立。系统没有处理程序或拒绝启动时使用应用内网页回退。

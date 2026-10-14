@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+[外部链接打开方式](2026-10-14-external-link-opening-mode.md)以 linux.do 及其真实子域名为应用内边界；本篇原生解析仍仅用于 linux.do 主域，子域名进入网页，不扩大系统深链 Manifest 域名。
+
 应用内未知页面与外站的回退由[应用内网页](2026-10-10-in-app-web-links.md)部分替代；本篇保留系统入口消费和原生目标格式。
 
 同源 HTTP(S) 链接解析为帖子、用户、分类、首页四种目标；解析与 Android 导航分离。帖子保留 /t/id 兼容，并支持 /t/slug/id/number；用户路径忽略用户名后的子路径；分类支持 /c/id、/c/slug/id 和嵌套 slug 后的有效 ID。每次新 Intent 作为独立事件消费，重建后不重放已消费地址。其他系统传入的站内地址清回首页并选中首页页签，非站内地址不参与路由。显式浏览器动作使用浏览器包名避免自身回环。

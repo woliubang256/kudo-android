@@ -128,7 +128,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                 app.downloads.enqueue(url)?.let { showMessage("已加入下载队列") }
                 return
             }
-            if (appLinks.open(url)) return
+            if (appLinks.open(url, display.externalLinkMode)) return
             val fallback = ExternalAppLinkPolicy.fallbackUrl(url) ?: return invalidLink()
             nav.openContentLink(fallback, { selected = 0 }, ::invalidLink)
         }
