@@ -54,6 +54,7 @@ data class Post(
     val signature: String = "", val replyCount: Int = 0, val read: Boolean? = null,
     val boosts: List<PostBoost> = emptyList(), val canBoost: Boolean = false,
     val polls: List<PostPoll> = emptyList(), val pollVotes: Map<String, List<String>> = emptyMap(),
+    val isSolution: Boolean = false,
 ) {
     val activeReaction: String? get() = currentReaction?.id ?: "heart".takeIf { liked }
     val canReact: Boolean get() = if (activeReaction != null) currentReaction?.canUndo ?: canUndoLike else canLike
@@ -62,6 +63,9 @@ data class Post(
 }
 data class PostReaction(val id: String, val count: Int)
 data class UserReaction(val id: String, val canUndo: Boolean)
+data class TopicSolution(
+    val postNumber: Int, val username: String = "", val name: String = "", val excerpt: String = "",
+)
 data class TopicDetail(
     val id: Int, val title: String, val categoryId: Int, val posts: List<Post>, val stream: List<Int>, val closed: Boolean,
     val author: Member? = posts.firstOrNull { it.number == 1 }?.author,
@@ -71,6 +75,7 @@ data class TopicDetail(
     val highestPostNumber: Int = maxOf(posts.maxOfOrNull(Post::number) ?: 1, stream.size),
     val archived: Boolean = false,
     val lastReadPostNumber: Int? = null,
+    val solutions: List<TopicSolution> = emptyList(),
 ) {
     val originalPost: Post? get() = posts.firstOrNull { it.number == 1 } ?: pinnedOriginal
     val resumePostNumber: Int? get() = lastReadPostNumber?.takeIf { it > 0 }
@@ -183,13 +188,19 @@ object DiscourseParser {
             boosts = json.optJSONArray("boosts").objects().mapNotNull { runCatching { parseBoost(it) }.getOrNull() },
             canBoost = json.optBoolean("can_boost"),
             polls = json.optJSONArray("polls").objects().map(::parsePoll).filter { it.name.isNotEmpty() },
-            pollVotes = json.optJSONObject("polls_votes")?.let { votes -> votes.keys().asSequence().associateWith { votes.optJSONArray(it).strings() } }.orEmpty())
+            pollVotes = json.optJSONObject("polls_votes")?.let { votes -> votes.keys().asSequence().associateWith { votes.optJSONArray(it).strings() } }.orEmpty(),
+            isSolution = json.optBoolean("accepted_answer"))
     }
 
     fun detail(json: JSONObject): TopicDetail {
         val stream = json.getJSONObject("post_stream")
         val ids = stream.optJSONArray("stream")
-        val posts = stream.optJSONArray("posts").objects().map(::post)
+        val parsedPosts = stream.optJSONArray("posts").objects().map(::post)
+        val solutions = topicSolutions(json, parsedPosts)
+        val solutionNumbers = solutions.map(TopicSolution::postNumber).toSet()
+        val posts = parsedPosts.map { post ->
+            if (post.isSolution || post.number in solutionNumbers) post.copy(isSolution = true) else post
+        }
         val original = posts.firstOrNull { it.number == 1 }
         return TopicDetail(json.getInt("id"), json.text("title"), json.optInt("category_id"),
             posts, if (ids == null) emptyList() else (0 until ids.length()).map { ids.getInt(it) }, json.optBoolean("closed"),
@@ -199,7 +210,26 @@ object DiscourseParser {
             tags = json.optJSONArray("tags").topicTags(),
             highestPostNumber = maxOf(json.optInt("highest_post_number"), posts.maxOfOrNull(Post::number) ?: 1,
                 if (json.positiveInt("highest_post_number") == null) ids?.length() ?: 0 else 0), archived = json.optBoolean("archived"),
-            lastReadPostNumber = json.positiveInt("last_read_post_number"))
+            lastReadPostNumber = json.positiveInt("last_read_post_number"), solutions = solutions)
+    }
+
+    private fun topicSolutions(json: JSONObject, posts: List<Post>): List<TopicSolution> {
+        val summaries = buildList {
+            listOf("accepted_answer", "accepted_answers", "solutions").forEach { key ->
+                when (val value = json.opt(key)) {
+                    is JSONObject -> add(value)
+                    is JSONArray -> addAll(value.objects())
+                }
+            }
+        }.mapNotNull { item ->
+            val number = item.positiveInt("post_number") ?: return@mapNotNull null
+            TopicSolution(number, item.text("username"), item.text("name"),
+                plainText(item.text("excerpt").ifBlank { item.text("blurb") }))
+        }
+        val flagged = posts.filter { it.isSolution }.map { post ->
+            TopicSolution(post.number, post.author.username, post.author.name)
+        }
+        return (summaries + flagged).distinctBy(TopicSolution::postNumber).sortedBy(TopicSolution::postNumber)
     }
 
     fun notices(json: JSONObject): List<Notice> = json.optJSONArray("notifications").objects().map { item ->
