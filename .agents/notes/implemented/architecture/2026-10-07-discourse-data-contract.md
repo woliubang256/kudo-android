@@ -18,7 +18,7 @@ data 包分开模型解析、DiscourseClient 和 CommunityRepository。分页使
 
 Member 保留独立 animated_avatar、资质 flair_* 和状态。账号/用户资料使用 status，帖子使用 user_status；完整响应中状态缺失与列表中状态未知分开表示，防止旧缓存恢复已清除的状态。帖子与搜索结果的作者使用 user_id，缺失时为 0，绝不把帖子 id 当作用户身份。新增字段只接受字符串，错误类型不转成图片地址；非法结束时间不转成永久状态。表情目录按分组解析 name / url，保留自定义上传地址。展示语义见[头像方案](../feature/2026-10-08-avatar-presentation.md)。
 
-AvatarMetadataCache 合并 40ms 内的可见作者请求，每批最多 50 个 ID，使用 /user-cards.json?user_ids= 读取完整角标。只补齐无资质且状态未知的作者；ID 与用户名都匹配才应用结果。缓存最多 256 人、有效 60 秒，失败退避 15 秒，单次辅助请求最多 5 秒；失败不传播为页面错误。/emojis.json 目录在缓存生命周期内复用，支持官网自定义表情地址。缓存拥有独立可取消任务，账号切换时调用 close，旧请求不能进入新账号实例。
+AvatarMetadataCache 合并 250ms 内的可见作者请求，每批最多 50 个 ID，相邻批次开始至少间隔 1 秒，使用 /user-cards.json?user_ids= 读取完整角标。只补齐无资质且状态未知的作者；ID 与用户名都匹配才应用结果。缓存最多 256 人、有效 5 分钟，失败退避至少 15 秒，429 采用更长的服务端等待时间，单次辅助请求最多 5 秒；失败不传播为页面错误。更长缓存和批次间隔减少来回刷帖的附加请求，不延迟帖子正文加载；状态结束时间仍在本地隐藏已到期状态，完整响应仍可立即清除旧状态。/emojis.json 目录在缓存生命周期内复用，支持官网自定义表情地址。缓存拥有独立可取消任务，账号切换时调用 close，旧请求不能进入新账号实例。
 
 详情作者优先使用第一楼完整资料，深链未加载第一楼时使用 details.created_by 与主题 created_at，不能把首个已加载回复当成楼主。valid_reactions 保留服务器允许的回应名称。Post 区分 reactions、reaction_users_count、current_user_reaction 和 can_undo；其他回应即使同步到了 actions_summary 的赞，也不能被显示或撤销成爱心。
 
@@ -59,5 +59,7 @@ Cloudflare challenge is detected from the challenge response header and common c
 AvatarModelTest 的帖子作者 ID 复现先失败（artifacts/avatar-model-repro.txt），随后覆盖真实用户 ID、缺失用户 ID、原动图、图标/图片资质、两种状态与到期边界、未知/空状态和自定义表情目录。
 
 AvatarMetadataCacheTest 验证 61 人分两批、重复作者合并、完整响应清空状态、LRU 上限与过期、失败退避、错身份拒绝、换号取消、表情单次读取和真实 Repository 请求格式。
+
+长时浏览新增的三项复现先失败（artifacts/auxiliary-request-repro.txt）：两分钟后重复作者重新请求、连续批次突发发送、服务端要求 60 秒却在 20 秒后又请求。修复后 AvatarMetadataCacheTest 全部 10 项以及头像模型、首页推送、阅读同步定向回归通过（artifacts/auxiliary-request-fixed.txt）。真机头像与首页共 13 项通过（artifacts/auxiliary-request-device.txt），不对真实社区进行压力测试。
 
 头像数据与缓存共 14 项定向测试通过，输出 artifacts/avatar-metadata-final.txt。失败退避用例曾复现 CompletableDeferred(null) 选中 parent 构造器导致无限等待，改为显式完成的空结果后通过；空结果也必须有确定完成状态。

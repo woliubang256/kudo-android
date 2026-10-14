@@ -23,6 +23,7 @@ class AvatarMetadataCache(
     private val pending = linkedMapOf<Key, CompletableDeferred<Member?>>()
     private var worker: Job? = null
     private var retryAfter = 0L
+    private var nextCardRequestAt = 0L
     private val emojiLock = Mutex()
     private var emojis: Emojis? = null
     private var emojiRequest: Deferred<Emojis>? = null
@@ -39,7 +40,7 @@ class AvatarMetadataCache(
                 cached != null -> CompletableDeferred(cached.member)
                 retryAfter > nowMillis() -> CompletableDeferred<Member?>().apply { complete(null) }
                 else -> pending.getOrPut(key) { CompletableDeferred(job) }.also {
-                    if (worker == null) worker = scope.launch { delay(40); drain() }
+                    if (worker == null) worker = scope.launch { delay(250); drain() }
                 }
             }
         }.await()
@@ -52,19 +53,28 @@ class AvatarMetadataCache(
 
     private suspend fun drain() {
         while (currentCoroutineContext().isActive) {
+            delay((nextCardRequestAt - nowMillis()).coerceAtLeast(0))
             val keys = lock.withLock {
                 pending.keys.take(50).also { if (it.isEmpty()) worker = null }
             }
             if (keys.isEmpty()) return
-            val result = if (retryAfter > nowMillis()) null else optionalRequest { loadCards(keys.map { it.id }.distinct()) }
+            val backingOff = retryAfter > nowMillis()
+            var failureDelay = RETRY_MILLIS
+            val result = if (backingOff) null else {
+                nextCardRequestAt = nowMillis() + 1000
+                optionalRequest(onFailure = { failure ->
+                    if (failure is ApiFailure && failure.kind == FailureKind.RATE_LIMIT)
+                        failureDelay = maxOf(RETRY_MILLIS, failure.retryAfter?.toLong()?.times(1000) ?: RETRY_MILLIS)
+                }) { loadCards(keys.map { it.id }.distinct()) }
+            }
             val members = result?.associateBy(::key).orEmpty()
             lock.withLock {
                 job.ensureActive()
                 val now = nowMillis()
-                if (result == null) retryAfter = now + RETRY_MILLIS
+                if (result == null && !backingOff) retryAfter = now + failureDelay
                 for (key in keys) {
                     val member = members[key]
-                    cache[key] = Cached(member, now + if (result == null) RETRY_MILLIS else CACHE_MILLIS)
+                    cache[key] = Cached(member, if (result == null) retryAfter else now + CACHE_MILLIS)
                     pending.remove(key)?.complete(member)
                 }
                 while (cache.size > capacity) cache.remove(cache.keys.first())
@@ -92,14 +102,14 @@ class AvatarMetadataCache(
 
     override fun close() { job.cancel() }
 
-    private suspend fun <T> optionalRequest(block: suspend () -> T): T? = try {
+    private suspend fun <T> optionalRequest(onFailure: (Exception) -> Unit = {}, block: suspend () -> T): T? = try {
         withTimeoutOrNull(5000) { block() }
-    } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+    } catch (e: CancellationException) { throw e } catch (e: Exception) { onFailure(e); null }
 
     private fun key(member: Member) = Key(member.id, member.username.lowercase(Locale.ROOT))
 
     companion object {
-        private const val CACHE_MILLIS = 60_000L
+        private const val CACHE_MILLIS = 300_000L
         private const val RETRY_MILLIS = 15_000L
         fun standardEmojiUrl(name: String): String? = name.takeIf { it.matches(Regex("[A-Za-z0-9_+\\-]+(?::t[2-6])?")) }
             ?.let { "/images/emoji/twemoji/${it.replace(":t", "/")}.png?v=15" }

@@ -60,9 +60,9 @@ internal fun RefreshFeedOnResume(feed: FeedViewModel, user: Member?) {
 }
 
 @Composable
-private fun ObserveHomeUpdates(feed: FeedViewModel, user: Member?) {
+internal fun ObserveHomeUpdates(feed: FeedViewModel, user: Member?, visible: Boolean) {
     LaunchedEffect(user?.id, user?.unifiedNew) { feed.setUser(user) }
-    LifecycleResumeEffect(feed, user?.id, user?.unifiedNew) {
+    if (visible) LifecycleResumeEffect(feed, user?.id, user?.unifiedNew) {
         feed.setUser(user)
         feed.setUpdatesActive(true)
         onPauseOrDispose { feed.setUpdatesActive(false) }
@@ -177,7 +177,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         val state by feed.state.collectAsStateWithLifecycle()
                         val pages by feed.pages.collectAsStateWithLifecycle()
                         val backdrop = rememberLayerBackdrop()
-                        ObserveHomeUpdates(feed, account.user)
+                        ObserveHomeUpdates(feed, account.user, selected == 0)
                         LaunchedEffect(feed) {
                             feed.refreshEvents.collect { count ->
                                 if (count > 0) showMessage("已为你加载${count}条新内容")

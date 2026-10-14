@@ -13,6 +13,47 @@ class AvatarMetadataCacheTest {
     private fun user(id: Int) = Member(id, "user$id", "用户$id", "/avatar/$id.png")
     private fun card(id: Int) = user(id).copy(status = UserStatus("coffee", "喝杯咖啡"), avatarDetailsLoaded = true)
 
+    @Test fun revisitingAuthorsAfterOneMinuteReusesMetadataForFiveMinutes() = runTest {
+        var requests = 0
+        val cache = AvatarMetadataCache(this, { ids -> requests++; ids.map(::card) }, { emptyMap() }, { testScheduler.currentTime })
+        try {
+            cache.resolve(user(1))
+            advanceTimeBy(120_000)
+            cache.resolve(user(1))
+            assertEquals("来回浏览不能每分钟重复补齐作者", 1, requests)
+            advanceTimeBy(180_001)
+            cache.resolve(user(1))
+            assertEquals(2, requests)
+        } finally { cache.close() }
+    }
+
+    @Test fun largeVisibleBatchesHaveAMinimumIntervalInsteadOfDrainingInABurst() = runTest {
+        val timestamps = mutableListOf<Long>()
+        val cache = AvatarMetadataCache(this, { ids -> timestamps += testScheduler.currentTime; ids.map(::card) }, { emptyMap() }, { testScheduler.currentTime })
+        try {
+            (1..61).map { async { cache.resolve(user(it)) } }.awaitAll()
+            assertEquals(2, timestamps.size)
+            assertTrue("连续补齐批次至少间隔一秒", timestamps[1] - timestamps[0] >= 1000)
+        } finally { cache.close() }
+    }
+
+    @Test fun rateLimitBackoffRespectsTheServerWaitInsteadOfRetryingAfterFifteenSeconds() = runTest {
+        var requests = 0
+        val cache = AvatarMetadataCache(this, {
+            requests++
+            throw ApiFailure(FailureKind.RATE_LIMIT, "稍后再试", 60)
+        }, { emptyMap() }, { testScheduler.currentTime })
+        try {
+            cache.resolve(user(1))
+            advanceTimeBy(20_000)
+            cache.resolve(user(2))
+            assertEquals(1, requests)
+            advanceTimeBy(40_001)
+            cache.resolve(user(2))
+            assertEquals(2, requests)
+        } finally { cache.close() }
+    }
+
     @Test fun visibleRequestsMergeDeduplicateAndRespectServerBatchLimit() = runTest {
         val batches = mutableListOf<List<Int>>()
         val cache = AvatarMetadataCache(this, { ids -> batches += ids; ids.map(::card) }, { emptyMap() }, { testScheduler.currentTime })
@@ -46,7 +87,7 @@ class AvatarMetadataCacheTest {
             cache.resolve(user(1)); cache.resolve(user(2)); cache.resolve(user(1)); cache.resolve(user(3))
             cache.resolve(user(2))
             assertEquals(listOf(1, 2, 3, 2), requests)
-            advanceTimeBy(60_001)
+            advanceTimeBy(300_001)
             cache.resolve(user(2))
             assertEquals(listOf(1, 2, 3, 2, 2), requests)
         } finally { cache.close() }
@@ -76,7 +117,7 @@ class AvatarMetadataCacheTest {
             try { awaitCancellation() } finally { cancelled = true }
         }, { emptyMap() })
         val request = async { cache.resolve(user(1)) }
-        advanceTimeBy(41); runCurrent()
+        advanceTimeBy(251); runCurrent()
         cache.close()
         assertTrue(runCatching { request.await() }.exceptionOrNull() is CancellationException)
         runCurrent()

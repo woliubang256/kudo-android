@@ -16,6 +16,8 @@ Linux.do 使用 ping.ldstatic.com 的 HTTP MessageBus 长轮询，非 WebSocket�
 
 首页恢复前台进行差异检查，替代此前自动刷新首页的决定；分类页保留原恢复行为。主页面不可见或后台时停止订阅与检查，恢复重新建立游标并检查缺口。切换账号/筛选取消旧任务、清空提示并重新基线。成功刷新只确认刷新开始前的通知；期间新到通知还会检查，失败保留提示。底栏点击“刷新”先回首页和顶部，再请求第一页。
 
+ObserveHomeUpdates 明确接收首页可见状态，root 路由仅在 selected == 0 且 RESUMED 时启用首页订阅。板块、通知与我的页面仍处于同一 root，不能把 root 可见误认为首页可见。切换底部页面释放 LifecycleResumeEffect 并取消订阅和待处理检查；隐藏时仍同步账号身份，返回首页按既有方式补查。
+
 ## Related decisions
 
 [返回列表保持阅读现场](../bug-fix/2026-10-11-feed-return-stability.md)部分取代本篇保留的分类恢复自动刷新：分类和标签返回只同步账号，保留条目、分页和位置。首页的MessageBus、恢复差异检查与主动刷新提示继续沿用；本篇保留最初按页区分恢复策略的决定，新策略避免详情返回破坏分类阅读位置。
@@ -30,6 +32,8 @@ Linux.do 使用 ping.ldstatic.com 的 HTTP MessageBus 长轮询，非 WebSocket�
 - 复用主站带 Cookie 的客户端访问推送域名：实现少，但打破会话同源边界；固定推送地址及独立共享会话凭据维持最小凭据范围。
 
 ## Testing
+
+2026-10-14 HomeRequestLifecycleTest 先复现 root 内切到其他底部页面后首页订阅未停止（artifacts/home-request-lifecycle-repro.txt）。修复后验证隐藏、隐藏期间后台恢复、重新进入首页、首页前后台切换的订阅次数与请求数；连同头像和首页返回回归共 13 项真机测试通过（artifacts/auxiliary-request-device.txt）。JVM 推送与阅读同步定向回归及构建通过（artifacts/auxiliary-request-fixed.txt）。
 
 MessageBusTest 的5项测试通过：无 Cookie、共享密钥、游标初始化/重置/去重、重定向拒绝、限流退避与取消，日志 artifacts/live-refresh-transport.txt。FeedUpdatesTest 的5项测试通过：合并20次提示、忽略仅浏览量变化、切换筛选、失败保留与成功清除、刷新期间更新遗漏/已包含两条路径、后台停止/恢复、换号撤销在途检查，日志 artifacts/live-refresh-state.txt。
 
