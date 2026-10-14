@@ -63,7 +63,6 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                                 style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                             MemberNameDecorations(post.author)
                             if (post.author.id == detail.author?.id) Text("楼主", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.weight(1f))
                         }
                         TopicAuthorMetadata(post.updatedAt, detail.categoryId.takeIf { post.number == 1 }?.let { categoryId ->
                             LocalTopicPresentation.current.categories.firstOrNull { it.id == categoryId }

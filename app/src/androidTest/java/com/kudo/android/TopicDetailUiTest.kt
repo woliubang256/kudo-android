@@ -133,6 +133,18 @@ class TopicDetailUiTest {
         capture("topic-reply-avatar-and-name-light.png")
     }
 
+    @Test fun replyNicknameIsNotEllipsizedByTrailingAuthorSpacer() {
+        val member = reply.author.copy(name = "回复作者昵称需要完整显示", status = null)
+        val post = reply.copy(author = member)
+        val state = initial.copy(detail = detail.copy(posts = listOf(first, post)))
+        compose.setContent { Screen(state) }
+        compose.onNodeWithTag("topic-posts").performScrollToNode(hasText(member.displayName))
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(member.displayName, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertFalse("回复作者的中等长度昵称不应被尾部空白 Spacer 压成省略", layouts.single().isLineEllipsized(0))
+    }
+
     @Test fun statusOnlyStaysOnAvatarWithoutADuplicateAfterTheNickname() {
         val member = author.copy(flair = null)
         val post = first.copy(author = member)
