@@ -78,6 +78,7 @@ import com.kudo.android.ui.components.CommunityLoadingIndicator
 import com.kudo.android.ui.components.LocalAvatarMetadata
 import com.kudo.android.ui.components.mediaUrl
 import com.kudo.android.ui.LinuxDoLink
+import com.kudo.android.ui.ExternalAppLinkPolicy
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
@@ -463,7 +464,7 @@ internal fun parseInlineArticle(html: String, linkColor: Color, onFootnote: ((St
                     }
                     "a" -> {
                         val footnoteId = footnoteReferenceId(node)
-                        val url = LinuxDoLink.webUrl(node.attr("href"))
+                        val url = ExternalAppLinkPolicy.contentUrl(node.attr("href"))
                         val color = explicitColor ?: node.parents().firstNotNullOfOrNull { articleStyleColor(it.attr("style")) } ?: linkColor
                         if (footnoteId != null) {
                             if (onFootnote != null) withLink(LinkAnnotation.Clickable("footnote-$footnoteId",
