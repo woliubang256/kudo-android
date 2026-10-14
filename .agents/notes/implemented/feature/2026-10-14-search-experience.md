@@ -44,6 +44,8 @@ SearchDataTest 六项通过（artifacts/search-data-tests.txt），覆盖命中�
 
 SearchQueryTest 九项通过，覆盖所有面板 token、引号字面文本、带引号分类参数、未知操作符、范围与日期校验、排序缩写、重复与混合标签语义；相关失败复现日志与修复日志保留于 artifacts/。
 
+SearchViewModelTest 六项通过，覆盖访客无历史请求、独立历史错误、失败下一页原位重试、用户搜索剥离帖子条件、连续搜索迟到响应和退出时在途历史隔离。最终与数据六项、查询九项、主题元数据六项共二十七项 JVM 测试通过；Debug 构建与 Lint 通过，0 errors / 45 既有 warnings / 1 hint（artifacts/search-delivery-build.txt）。最终 APK 为 artifacts/kudo-search.apk，已覆盖安装到真机。
+
 SearchUiTest 八项与搜索入口/主题样式/楼层定位五项回归共十三项真机通过（artifacts/search-verified-device.txt），覆盖历史登录隔离、三类原生跳转、真实命中楼层、排序与高级条件、深色130%字号、短窗口校验与固定底部动作、返回先收起筛选。初次重置断言把提示文字也当成输入，日志 EditableText 已为空；改为直接检查 EditableText，未改产品重置逻辑。
 
 截图 search-post-results.png、search-category-tag-results.png、search-user-results.png、search-filters-dark-large.png 与 search-filters-short-window.png 已查看；根节点截图不包含独立系统键盘窗口。类别/标签截图中的灰色是点击波纹，非静止选中背景。
