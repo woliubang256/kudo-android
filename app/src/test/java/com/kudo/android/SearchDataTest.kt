@@ -2,8 +2,10 @@ package com.kudo.android
 
 import com.kudo.android.data.*
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -53,8 +55,17 @@ class SearchDataTest {
 
     @Test fun categoryAndTagSearchKeepsSlugAndDoesNotInventMorePages() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setBody("""{"categories":[{"id":4,"name":"开发调优","slug":"dev"},{"id":5,"name":"资源","slug":"resource"}]}"""))
-            server.enqueue(MockResponse().setBody("""{"results":[{"text":"开发","slug":"123-tag"},null,{"text":3}]}"""))
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                    "/site.json" -> MockResponse().setBody("""{"categories":[{"id":4,"name":"开发调优","slug":"dev"},{"id":5,"name":"资源","slug":"resource"}]}""")
+                    "/tags/filter/search" -> {
+                        val limit = request.requestUrl!!.queryParameter("limit")?.toIntOrNull()
+                        if (limit != null && limit !in 0..5) MockResponse().setResponseCode(400).setBody("""{"errors":["limit 无效"]}""")
+                        else MockResponse().setBody("""{"results":[{"text":"开发","slug":"123-tag"},null,{"text":3}]}""")
+                    }
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
             val result = CommunityRepository(DiscourseClient(NoCookies, server.url("/"))).searchResults("开发", SearchKind.CATEGORIES_TAGS)
             assertEquals(4, result.categories.single().id)
             assertEquals("123-tag", result.tags.single().slug)
@@ -63,6 +74,26 @@ class SearchDataTest {
             val tags = server.takeRequest().requestUrl!!
             assertEquals("/tags/filter/search", tags.encodedPath)
             assertEquals("开发", tags.queryParameter("q"))
+            assertNull(tags.queryParameter("limit"))
+        }
+    }
+
+    @Test fun tagSuggestionsUseServerDefaultEvenWhenSiteLimitIsOne() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val limit = request.requestUrl!!.queryParameter("limit")?.toIntOrNull()
+                    return if (limit != null && limit !in 0..1) MockResponse().setResponseCode(400).setBody("""{"errors":["limit 无效"]}""")
+                    else MockResponse().setBody("""{"results":[{"text":"安卓开发","slug":"android-dev"}]}""")
+                }
+            }
+            val tags = CommunityRepository(DiscourseClient(NoCookies, server.url("/"))).searchTags("安卓 开发")
+            assertEquals("安卓开发", tags.single().name)
+            assertEquals("android-dev", tags.single().slug)
+            val request = server.takeRequest().requestUrl!!
+            assertEquals("/tags/filter/search", request.encodedPath)
+            assertEquals("安卓 开发", request.queryParameter("q"))
+            assertNull(request.queryParameter("limit"))
         }
     }
 
