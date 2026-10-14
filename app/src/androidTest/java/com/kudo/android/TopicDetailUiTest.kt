@@ -153,6 +153,18 @@ class TopicDetailUiTest {
         compose.onNodeWithTag("member-name-decorations-${member.id}", useUnmergedTree = true).assertDoesNotExist()
     }
 
+    @Test fun mediumNicknameIsNotEllipsizedByTrailingAuthorSpacer() {
+        val member = author.copy(name = "夏日夜空里的", status = null)
+        val post = first.copy(author = member)
+        compose.setContent {
+            Screen(initial.copy(detail = detail.copy(posts = listOf(post), author = member), authorProfile = member))
+        }
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(member.displayName, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertFalse("中等长度昵称不应被尾部空白 Spacer 压成省略", layouts.single().isLineEllipsized(0))
+    }
+
     @Test fun longNicknameKeepsItsAvatarAndInlineIconsInDarkLargeText() {
         val member = author.copy(name = "这是一个用于检查头像挂件和昵称图标的很长昵称")
         val post = first.copy(author = member)

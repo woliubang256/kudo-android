@@ -76,7 +76,6 @@ internal fun TopicTopBar(
                     Text(author.displayName, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal)
                     MemberNameDecorations(author)
-                    Spacer(Modifier.weight(1f))
                 }
                 TopicAuthorMetadata(state.detail.originalPost?.updatedAt ?: state.detail.createdAt,
                     category = null, edited = state.detail.originalPost?.edited == true)
