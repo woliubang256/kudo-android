@@ -36,14 +36,15 @@ class WebScreenUiTest {
     private val views = mutableListOf<FixtureWebView>()
     private val loadedTitle = AtomicReference("")
     private val loads = AtomicInteger()
+    private val navigations = mutableListOf<String>()
     private var failFirst = false
     @Volatile private var responseGate: CountDownLatch? = null
     private val start = "https://reader-fixture.test/guidelines"
 
     private fun create(context: Context) = FixtureWebView(context).also { views += it }
     private fun current() = views.last()
-    private fun show(close: () -> Unit = {}, external: (String) -> Unit = {}) {
-        compose.setContent { KudoTheme(DisplaySettings()) { WebScreen(start, close, external, ::create) } }
+    private fun show(close: () -> Unit = {}, external: (String) -> Unit = {}, app: (String) -> Boolean = { false }) {
+        compose.setContent { KudoTheme(DisplaySettings()) { WebScreen(start, close, external, ::create, app) } }
         awaitPage("指南")
     }
     private fun awaitPage(title: String) {
@@ -190,6 +191,62 @@ class WebScreenUiTest {
         compose.runOnIdle { assertEquals(1, closed) }
     }
 
+    @Test fun userAppLinkHandsOffWithoutChangingTheCurrentWebPage() {
+        val opened = mutableListOf<String>()
+        show(app = { opened += it; true })
+        click("quark")
+        compose.runOnIdle {
+            assertEquals(listOf("https://pan.quark.cn/s/Abc123?pwd=1234"), opened)
+            assertEquals(start, current().url)
+        }
+        compose.onNodeWithText("指南").assertIsDisplayed()
+    }
+
+    @Test fun missingAppAndPublishedSchemeFallBackToTheShareWebPage() {
+        val attempted = mutableListOf<String>()
+        show(app = { attempted += it; false })
+        click("quark"); awaitPage("夸克网页")
+        compose.onNodeWithContentDescription("返回").performClick(); awaitPage("指南")
+        // Separate the fixture's adjacent touch targets before checking scheme navigation.
+        javascript("document.querySelectorAll('a').forEach(a=>a.style.display='block')")
+        click("quark-scheme")
+        compose.runOnIdle { assertEquals("Navigation requests: $navigations", 2, attempted.size) }
+        awaitPage("夸克网页")
+        compose.runOnIdle {
+            assertEquals(2, attempted.size)
+            assertTrue(attempted.last().startsWith("qklink://"))
+            assertEquals("https://pan.quark.cn/s/Abc123?pwd=1234", current().url)
+        }
+    }
+
+    @Test fun scriptsRedirectsFramesAndSitePagesNeverInvokeAppHandoff() {
+        val opened = mutableListOf<String>()
+        show(app = { opened += it; true })
+        // A real script navigation must stay in web history, even if an app could handle it.
+        javascript("location.href='https://pan.quark.cn/s/Abc123?pwd=1234'")
+        awaitPage("夸克网页")
+        fun request(value: String, frame: Boolean = true, gesture: Boolean = true, redirect: Boolean = false) =
+            object : WebResourceRequest {
+                override fun getUrl() = android.net.Uri.parse(value)
+                override fun isForMainFrame() = frame
+                override fun hasGesture() = gesture
+                override fun isRedirect() = redirect
+                override fun getMethod() = "GET"
+                override fun getRequestHeaders() = emptyMap<String, String>()
+            }
+        compose.runOnUiThread {
+            val view = current()
+            val client = view.webViewClient!!
+            assertFalse(client.shouldOverrideUrlLoading(view, request("https://pan.quark.cn/s/Abc123", redirect = true)))
+            assertFalse(client.shouldOverrideUrlLoading(view, request("https://pan.quark.cn/s/Abc123", frame = false)))
+            assertFalse(client.shouldOverrideUrlLoading(view, request("https://linux.do/t/123")))
+            assertTrue(client.shouldOverrideUrlLoading(view, request("intent://evil")))
+            assertTrue(client.shouldOverrideUrlLoading(view, request(
+                "qklink://www.uc.cn/b20b84fd735a8dd3f7541129bacc4e9a?action=open_url&url=https%3A%2F%2Fpan.quark.cn%2Fs%2FAbc123", gesture = false)))
+        }
+        compose.runOnIdle { assertTrue(opened.isEmpty()) }
+    }
+
     @Test fun cookieStoreIsSharedWithAppAndIsolatedFromOtherOrigins() {
         compose.runOnUiThread { AndroidSessionCookies().set(start, "app_fixture=from_app; Path=/; Secure; SameSite=Lax") }
         show()
@@ -265,7 +322,10 @@ class WebScreenUiTest {
         override fun destroy() { released = true; super.destroy() }
         override fun setWebViewClient(client: WebViewClient) {
             super.setWebViewClient(object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = client.shouldOverrideUrlLoading(view, request)
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    navigations += "${request.url} main=${request.isForMainFrame} gesture=${request.hasGesture()} redirect=${request.isRedirect}"
+                    return client.shouldOverrideUrlLoading(view, request)
+                }
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                     if (request.isForMainFrame) responseGate?.await(10, TimeUnit.SECONDS)
                     val value = request.url.toString()
@@ -278,6 +338,7 @@ class WebScreenUiTest {
                         value.contains("/u/") -> "网页用户"
                         value.contains("/c/") -> "网页分类"
                         value.contains("other-fixture") -> "其他网站"
+                        value.contains("pan.quark.cn") -> "夸克网页"
                         else -> "指南"
                     }
                     val html = """<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>$title</title>
@@ -290,6 +351,8 @@ class WebScreenUiTest {
                         <a id="blank" target="_blank" href="https://linux.do/t/topic/3001000/9">新窗口</a>
                         <a id="redirect" href="https://reader-fixture.test/redirect">跳转</a>
                         <a id="other" href="https://other-fixture.test/page">外站</a>
+                        <a id="quark" href="https://pan.quark.cn/s/Abc123?pwd=1234">夸克分享</a>
+                        <a id="quark-scheme" href="qklink://www.uc.cn/b20b84fd735a8dd3f7541129bacc4e9a?action=open_url&amp;url=https%3A%2F%2Fpan.quark.cn%2Fs%2FAbc123%3Fpwd%3D1234">夸克 App 分享</a>
                         ${if (value.contains("/redirect")) "<script>location.replace('https://linux.do/t/topic/3001000/10')</script>" else ""}
                         </body></html>"""
                     val response = WebResourceResponse("text/html", "UTF-8", if (failFirst && attempt == 1) 500 else 200,

@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
-import android.net.Uri
+import androidx.core.net.toUri
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal class ExternalAppLinkLauncher(
@@ -21,7 +21,7 @@ internal class ExternalAppLinkLauncher(
     fun open(value: String): Boolean {
         val url = ExternalAppLinkPolicy.contentUrl(value) ?: return false
         if (url.toHttpUrlOrNull()?.host == "linux.do") return false
-        val view = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)
+        val view = Intent(Intent.ACTION_VIEW, url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
         if (ExternalAppLinkPolicy.quarkShare(url) != null || ExternalAppLinkPolicy.quarkScheme(url) != null) {
             val quark = Intent(view).setPackage(ExternalAppLinkPolicy.QUARK_PACKAGE)
             if (query(quark).isNotEmpty() && start(quark)) return true
@@ -29,7 +29,7 @@ internal class ExternalAppLinkLauncher(
             if (ExternalAppLinkPolicy.quarkScheme(url) != null) return false
         }
         val browsers = listOf("https", "http").flatMap { scheme ->
-            query(Intent(Intent.ACTION_VIEW, Uri.parse("$scheme://app-link-browser-probe.invalid/"))
+            query(Intent(Intent.ACTION_VIEW, "$scheme://app-link-browser-probe.invalid/".toUri())
                 .addCategory(Intent.CATEGORY_BROWSABLE))
         }.mapNotNull { it.activityInfo?.packageName }.toSet()
         val candidates = appLinkCandidates(query(view).mapNotNull { result ->

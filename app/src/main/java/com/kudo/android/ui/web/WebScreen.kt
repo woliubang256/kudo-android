@@ -29,8 +29,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kudo.android.ui.LinuxDoLink
+import com.kudo.android.ui.ExternalAppLinkPolicy
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 private class WebPageState(val saved: Bundle? = null) {
     var view: WebView? = null
@@ -39,11 +41,11 @@ private class WebPageState(val saved: Bundle? = null) {
     }
 }
 
-/** Native routing ends at this screen: links and redirects stay in the same web history. */
+/** Site navigation stays in web history; only deliberate third-party links may open another app. */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> Unit,
-    webViewFactory: (Context) -> WebView = { WebView(it) }) {
+    webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false }) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
     var title by rememberSaveable(url) { mutableStateOf("网页") }
@@ -57,6 +59,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val scrolled = viewportHeight > 0 && scrollY >= viewportHeight
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
     val currentBack by rememberUpdatedState(back)
+    val currentOpenApp by rememberUpdatedState(openApp)
     fun navigateBack() { val view = page.view; if (view?.canGoBack() == true) view.goBack() else currentBack() }
     fun retry() {
         navigationGeneration++
@@ -110,10 +113,21 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                            // Never dispatch to native routes, including Linux.do topics, profiles and categories.
-                            val blocked = LinuxDoLink.webUrl(request.url.toString()) == null
-                            if (blocked && request.isForMainFrame) message = "暂不支持此类链接"
-                            return blocked
+                            val value = request.url.toString()
+                            val web = LinuxDoLink.webUrl(value)
+                            val deliberate = ExternalAppLinkPolicy.canOpenFromWeb(request.isForMainFrame,
+                                request.hasGesture(), request.isRedirect)
+                            // Linux.do pages, script navigation and redirects keep their web history.
+                            if (deliberate && web?.toHttpUrlOrNull()?.host != "linux.do") {
+                                ExternalAppLinkPolicy.contentUrl(value)?.let { if (currentOpenApp(it)) return true }
+                            }
+                            if (web != null) return false
+                            if (request.isForMainFrame) {
+                                val fallback = ExternalAppLinkPolicy.fallbackUrl(value)
+                                if (deliberate && fallback != null) view.loadUrl(fallback)
+                                else message = if (fallback != null) "请手动点击链接打开应用" else "暂不支持此类链接"
+                            }
+                            return true
                         }
                         override fun onPageStarted(view: WebView, value: String, favicon: Bitmap?) {
                             navigationGeneration++
