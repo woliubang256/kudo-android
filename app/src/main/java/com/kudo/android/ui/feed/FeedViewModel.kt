@@ -237,22 +237,3 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
 private fun Topic.hasNewContentComparedTo(old: Topic): Boolean = bumpedAt != old.bumpedAt || replies != old.replies ||
     title != old.title || excerpt != old.excerpt || image != old.image || categoryId != old.categoryId || tags != old.tags || closed != old.closed
 
-data class SearchState(val query: String = "", val results: List<Topic> = emptyList(), val loading: Boolean = false, val searched: Boolean = false, val hasMore: Boolean = false, val page: Int = 1, val error: Throwable? = null)
-class SearchViewModel(private val repository: CommunityRepository) : ViewModel() {
-    private val _state = MutableStateFlow(SearchState())
-    val state = _state.asStateFlow()
-    private var job: Job? = null
-    fun search(query: String, more: Boolean = false) {
-        val trimmed = query.trim()
-        if (trimmed.isEmpty() || (more && _state.value.loading)) return
-        job?.cancel()
-        val page = if (more) _state.value.page + 1 else 1
-        _state.update { if (more) it.copy(loading = true, error = null) else SearchState(query = trimmed, loading = true, searched = true) }
-        job = viewModelScope.launch {
-            try {
-                val (topics, hasMore) = withContext(Dispatchers.IO) { repository.search(trimmed, page) }
-                _state.update { it.copy(results = (if (more) it.results + topics else topics).distinctBy(Topic::id), loading = false, page = page, hasMore = hasMore) }
-            } catch (e: CancellationException) { throw e } catch (e: Exception) { _state.update { it.copy(loading = false, error = e) } }
-        }
-    }
-}
