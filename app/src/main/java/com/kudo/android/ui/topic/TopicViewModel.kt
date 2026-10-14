@@ -180,10 +180,11 @@ class TopicViewModel(
             authorLoading = false, originalLoading = false, contextLoading = false, contextError = null, replyLoads = emptyMap(),
             jumping = false, jumpError = null, loadingPrevious = false, previousError = null) }
         val target = _state.value.targetNumber
+        val trackVisit = !initialLoadCompleted && _state.value.viewerId != null
         val restoreReading = !initialLoadCompleted && target == null && _state.value.viewerId != null
         refreshJob = viewModelScope.launch {
             try {
-                val first = withContext(Dispatchers.IO) { repository.detail(topicId, target) }
+                val first = withContext(Dispatchers.IO) { repository.detail(topicId, target, trackVisit = trackVisit) }
                 var detail = first
                 var resolvedTarget = target
                 var adjacent = emptyList<JumpPage>()

@@ -70,7 +70,9 @@ class CommunityRepository(val client: DiscourseClient) {
             .optJSONArray("users").objects().map { DiscourseParser.member(it, avatarDetailsLoaded = true) }
     }
     suspend fun emojiUrls(): Map<String, String> = DiscourseParser.emojiUrls(client.get("/emojis.json"))
-    suspend fun detail(id: Int, number: Int? = null) = DiscourseParser.detail(client.get(if (number == null) "/t/$id.json" else "/t/$id/$number.json"))
+    suspend fun detail(id: Int, number: Int? = null, trackVisit: Boolean = false) = DiscourseParser.detail(
+        client.get(if (number == null) "/t/$id.json" else "/t/$id/$number.json",
+            if (trackVisit) mapOf("track_visit" to "true") else emptyMap()))
     suspend fun recordReading(batch: TopicReadingBatch) {
         require(batch.topicId > 0 && batch.topicTime > 0 && batch.timings.isNotEmpty())
         require(batch.timings.all { (number, time) -> number > 0 && time in 1..60_000 })

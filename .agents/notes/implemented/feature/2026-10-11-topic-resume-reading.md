@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+[访问历史](../bug-fix/2026-10-14-topic-visit-history.md)在登录首个打开请求增加 track_visit；本篇续读位置与相邻页补全请求仍不记录额外访问，阅读进度语义保持。
+
 详情模型保留服务器 last_read_post_number，并计算 min(last_read_post_number + 1, highest_post_number) 作为 resumePostNumber；零、负数、缺失或null不产生目标，加一使用Long避免溢出。字段是最高已读楼层，不是像素滚动位置，继续使用现有实际正文曝光和 timings 同步。
 
 首次详情统一恢复：普通登录用户进入读取最新进度，明确指定楼层（包括首楼）优先；游客和首次访问从头开始。首次加载成功后不再套用服务器位置，刷新沿用已有targetNumber，返回已有页面沿用其视口；关闭后重新进入创建新ViewModel，再读取服务器最新进度。
