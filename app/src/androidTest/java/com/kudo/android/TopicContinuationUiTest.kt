@@ -72,7 +72,7 @@ class TopicContinuationUiTest {
         compose.waitUntil { requests == 1 }
         compose.runOnIdle { state = state.copy(replyLoads = mapOf(2 to ReplyLoad(mapOf(2 to ReplyCursor(12))))) }
         compose.runOnIdle { assertEquals(1, requests) }
-        compose.onNodeWithTag("thread-posts").performScrollToIndex(children.size + 1)
+        compose.onNodeWithTag("thread-posts").performScrollToIndex(children.size)
         compose.waitUntil { requests == 2 }
         compose.onNodeWithTag("sheet-drag-handle").performTouchInput {
             swipe(center, center + androidx.compose.ui.geometry.Offset(0f, 650f), durationMillis = 600)
