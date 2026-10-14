@@ -34,13 +34,17 @@ class CommitMessageTest(unittest.TestCase):
         records = [("good", "docs: 更新说明"), ("bad", "修复旧问题"), ("merge", "Merge branch 'main'")]
         self.assertEqual([("bad", "修复旧问题")], invalid_records(records))
 
-    def test_workflow_tag_range_preserves_legacy_history_and_checks_every_new_commit(self):
+    def test_workflow_checks_main_push_range_and_does_not_trigger_on_tags(self):
         bash = str(Path(r"C:\Program Files\Git\bin\bash.exe")) if os.name == "nt" else shutil.which("bash")
         if not bash or not Path(bash).is_file():
             self.skipTest("Bash is required for the workflow shell fixture")
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/commit-messages.yml").read_text(encoding="utf-8")
+        triggers = workflow.split("permissions:", 1)[0]
+        self.assertIn("    branches:\n      - main", triggers)
+        self.assertNotIn("    tags:", triggers)
         block = workflow.split("        run: |\n", 1)[1]
         shell = "\n".join(line[10:] for line in block.splitlines())
+        self.assertNotIn('REF_TYPE" == "tag"', shell)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             def git(*args):
@@ -61,16 +65,13 @@ class CommitMessageTest(unittest.TestCase):
             latest = git("rev-parse", "HEAD")
             (root / "validate.sh").write_text('set -euo pipefail\npython3() { printf "%s\\n" "$2" > revision.txt; }\n' + shell,
                 encoding="utf-8", newline="\n")
-            def selected(sha, ref_type="tag", before="0" * 40):
+            def selected(sha, ref_type="branch", before=legacy):
                 subprocess.run([bash, "validate.sh"], cwd=root, check=True, capture_output=True,
                     env={**os.environ, "EVENT_NAME": "push", "REF_TYPE": ref_type, "BEFORE": before, "SHA": sha, "BASE_REF": ""})
                 return read_records((root / "revision.txt").read_text().strip(), root)
             self.assertEqual([(good, "fix: 修复当前功能")], selected(good))
             self.assertEqual([(invalid, "新增但没有前缀")], invalid_records(selected(latest)))
             self.assertEqual([(invalid, "新增但没有前缀")], invalid_records(selected(latest, "branch", good)))
-            git("tag", "-d", "v0.1.0")
-            self.assertEqual([(good, "fix: 修复当前功能")], selected(good))
-            self.assertNotIn(legacy, [commit for commit, _ in selected(good)])
 
 
 if __name__ == "__main__":

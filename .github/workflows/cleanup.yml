@@ -1,0 +1,64 @@
+name: Cleanup Actions
+
+on:
+  schedule:
+    - cron: '23 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 删除多少天以前的 Actions 运行和中转产物
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: actions-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      RETENTION_DAYS: ${{ inputs.retention_days || '30' }}
+    steps:
+      - name: Delete stale workflow runs and artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$RETENTION_DAYS" =~ ^[0-9]+$ ]] || (( RETENTION_DAYS < 7 )); then
+            echo "retention_days must be an integer of at least 7" >&2
+            exit 1
+          fi
+          cutoff=$(date -u -d "${RETENTION_DAYS} days ago" +%s)
+
+          gh api --paginate "repos/$REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id, .created_at, .status] | @tsv' |
+            while IFS=$'\t' read -r run_id created_at status; do
+              [[ -n "$run_id" ]] || continue
+              [[ "$status" == "completed" ]] || continue
+              created=$(date -u -d "$created_at" +%s)
+              if (( created < cutoff )); then
+                echo "Deleting workflow run $run_id created at $created_at"
+                gh api --method DELETE "repos/$REPOSITORY/actions/runs/$run_id" >/dev/null
+              fi
+            done
+
+          gh api --paginate "repos/$REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id, .created_at, .expired] | @tsv' |
+            while IFS=$'\t' read -r artifact_id created_at expired; do
+              [[ -n "$artifact_id" ]] || continue
+              [[ "$expired" == "true" ]] && continue
+              created=$(date -u -d "$created_at" +%s)
+              if (( created < cutoff )); then
+                echo "Deleting artifact $artifact_id created at $created_at"
+                gh api --method DELETE "repos/$REPOSITORY/actions/artifacts/$artifact_id" >/dev/null
+              fi
+            done
