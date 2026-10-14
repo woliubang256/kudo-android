@@ -27,6 +27,8 @@ import com.kudo.android.media.DownloadStatus
 import com.kudo.android.media.DownloadTask
 import com.kudo.android.media.NativeDownloadManager
 import com.kudo.android.media.DOWNLOAD_VERIFICATION_MESSAGE
+import com.kudo.android.media.ApkInstallRequest
+import com.kudo.android.media.isApk
 import com.kudo.android.ui.components.CommunityIconButton
 import com.kudo.android.ui.components.CommunityButton
 import com.kudo.android.ui.components.EmptyState
@@ -60,6 +62,7 @@ internal fun DownloadsScreen(manager: NativeDownloadManager, back: () -> Unit) {
 @Composable
 private fun DownloadTaskRow(task: DownloadTask, manager: NativeDownloadManager, context: Context) {
     val verification = LocalWebVerification.current
+    val install = LocalApkInstall.current
     val progress = task.totalBytes?.takeIf { it > 0 }?.let { (task.bytes * 100f / it).coerceIn(0f, 100f) }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)
         .padding(horizontal = 16.dp, vertical = 13.dp).testTag("download-${task.id}"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -90,7 +93,11 @@ private fun DownloadTaskRow(task: DownloadTask, manager: NativeDownloadManager, 
             }
             DownloadStatus.COMPLETED -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("下载完成", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                CommunityButton("打开", {
+                CommunityButton(if (task.isApk()) "安装" else "打开", {
+                    if (task.isApk() && install != null) {
+                        install(ApkInstallRequest(task))
+                        return@CommunityButton
+                    }
                     val intent = manager.openIntent(task)
                     if (intent == null) showKudoToast(context, "文件已不可用")
                     else try { context.startActivity(intent) } catch (_: ActivityNotFoundException) { showKudoToast(context, "没有可打开此文件的应用") }

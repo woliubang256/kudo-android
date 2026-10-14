@@ -37,6 +37,7 @@ private fun UpdateSheetContent(visibility: MutableTransitionState<Boolean>, chec
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
+    val downloadActions = LocalUpdateDownloadActions.current
     val latestCheck by rememberUpdatedState(check)
     LaunchedEffect(visibility.targetState, retry) {
         if (!visibility.targetState || initialRelease != null) return@LaunchedEffect
@@ -53,7 +54,8 @@ private fun UpdateSheetContent(visibility: MutableTransitionState<Boolean>, chec
         scrollContent = release == null, showActions = release != null, actions = {
             release?.let { value ->
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    if (newer) CommunityButton("前往 GitHub 下载", { external(value.url) }, Modifier.fillMaxWidth())
+                    if (newer && downloadActions != null) downloadActions(value)
+                    else if (newer) CommunityButton("前往 GitHub 下载", { external(value.url) }, Modifier.fillMaxWidth())
                     else ModalLink("在 GitHub 查看此版本") { external(value.url) }
                 }
             }

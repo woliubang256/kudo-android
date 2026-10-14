@@ -134,6 +134,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             nav.openContentLink(fallback, { selected = 0 }, ::invalidLink)
         }
         fun editor(id: Int? = null, number: Int? = null, categoryId: Int? = null) { authenticated { nav.navigate("compose?topic=${id ?: 0}&reply=${number ?: 0}&category=${categoryId ?: 0}") } }
+        ApkInstallHost {
+        UpdateDownloadEnvironment(app.downloads, ::openBrowser) {
         LaunchedEffect(account) { account.events.collect { showMessage(it) } }
         val downloadLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
         LaunchedEffect(app.downloads, downloadLifecycle) {
@@ -452,6 +454,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }
             }
             }
+        }
+        }
         }
         }
         }

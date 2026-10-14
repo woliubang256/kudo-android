@@ -27,7 +27,10 @@ internal data class StableVersion(val major: Int, val minor: Int, val patch: Int
     }
 }
 
-data class GitHubRelease(val version: String, val name: String, val notes: String, val publishedAt: String, val url: String) {
+data class GitHubApk(val name: String, val url: String, val size: Long, val sha256: String? = null)
+
+data class GitHubRelease(val version: String, val name: String, val notes: String, val publishedAt: String, val url: String,
+    val apk: GitHubApk? = null) {
     fun isNewerThan(current: String): Boolean =
         (StableVersion.parse(version) ?: throw UpdateFailure("无法识别最新版本号")) >
             (StableVersion.parse(current) ?: throw UpdateFailure("无法识别当前版本号，请到仓库查看"))
@@ -70,7 +73,23 @@ internal fun parseRelease(json: JSONObject): GitHubRelease {
     // Derive navigation from the known repository, rather than trusting an API-supplied URL.
     return GitHubRelease(version.toString(), json.optString("name").takeUnless { it.isBlank() || it == "null" } ?: tag,
         json.optString("body").takeUnless { it == "null" }.orEmpty(),
-        json.optString("published_at").takeUnless { it == "null" }.orEmpty(), "$KudoSourceUrl/releases/tag/$tag")
+        json.optString("published_at").takeUnless { it == "null" }.orEmpty(), "$KudoSourceUrl/releases/tag/$tag",
+        releaseApk(json, tag, version.toString()))
+}
+
+private fun releaseApk(json: JSONObject, tag: String, version: String): GitHubApk? {
+    val name = "kodo_${version}_release_arm64-v8a.apk"
+    val url = "$KudoSourceUrl/releases/download/$tag/$name"
+    val assets = json.optJSONArray("assets") ?: return null
+    for (index in 0 until assets.length()) {
+        val asset = assets.optJSONObject(index) ?: continue
+        if (asset.optString("name") != name || asset.optString("state") != "uploaded" ||
+            asset.optLong("size") <= 0 || asset.optString("browser_download_url") != url) continue
+        val digest = asset.optString("digest").takeIf { it.matches(Regex("sha256:[0-9a-fA-F]{64}")) }
+            ?.substringAfter(':')?.lowercase()
+        return GitHubApk(name, url, asset.optLong("size"), digest)
+    }
+    return null
 }
 
 private suspend fun Call.awaitPublicResponse(): Response = suspendCancellableCoroutine { continuation ->

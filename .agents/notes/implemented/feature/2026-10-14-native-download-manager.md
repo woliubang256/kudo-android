@@ -16,6 +16,8 @@ Download-looking links are intercepted before content routing. Ordinary web link
 
 ## Existing note audit
 
+[应用内更新安装](2026-10-14-in-app-update-installation.md)复用下载任务、网络与通知，更新 APK 下载完成后前台进入安装流程；下载管理中 APK 的打开动作显示“安装”并接入来源授权。普通文件保留原有打开行为。
+
 [Web routing](2026-10-10-in-app-web-links.md) partially overlaps: native file links now leave that routing path before WebView; ordinary web navigation and existing WebView download fallback remain owned by that decision. [DoH/ECH policy](2026-10-12-doh-network.md) retains all routing rules, including suspension under VPN/system proxy and the distinction between configured DoH and accepted ECH. [Local notifications](2026-10-11-local-notification-delivery.md) remains responsible for community notifications; download notifications use a separate channel and do not change reading state. No prior note is fully superseded.
 
 ## Alternatives considered
