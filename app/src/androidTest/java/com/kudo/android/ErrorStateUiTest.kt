@@ -39,4 +39,22 @@ class ErrorStateUiTest {
         compose.waitUntil(1500) { retries == 1 }
         compose.runOnIdle { assertEquals(1, retries) }
     }
+
+    @Test
+    fun manualRetryPreventsTheCountdownFromSubmittingAnotherRequest() {
+        var retries = 0
+        compose.setContent {
+            KudoTheme(DisplaySettings()) {
+                ErrorState(
+                    ApiFailure(FailureKind.RATE_LIMIT, "cooldown 2 seconds", retryAfter = 2),
+                    retry = { retries++ },
+                    login = {},
+                )
+            }
+        }
+
+        compose.onNode(hasClickAction(), useUnmergedTree = true).performClick()
+        compose.waitUntil(3500) { retries == 1 }
+        compose.runOnIdle { assertEquals(1, retries) }
+    }
 }

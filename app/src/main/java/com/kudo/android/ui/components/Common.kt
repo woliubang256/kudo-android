@@ -27,7 +27,21 @@ import com.kudo.android.media.imageLoadErrorText
 import com.kudo.android.ui.account.LocalWebVerification
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
+import kotlinx.coroutines.delay
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+
+private val trailingCountdown = Regex("""[0-9]+([^0-9]*)$""")
+
+private fun rateLimitSubtitle(message: String, remaining: Int): String {
+    val match = trailingCountdown.find(message)
+    if (match == null) {
+        return "$message\n\u8bf7\u5728 $remaining \u79d2\u540e\u91cd\u8bd5"
+    }
+    val prefix = message.substring(0, match.range.first)
+    val suffix = match.groupValues[1]
+    return if (remaining > 0) "$prefix$remaining$suffix"
+    else "$prefix\u6b63\u5728\u91cd\u65b0\u52a0\u8f7d\u2026"
+}
 
 fun mediaUrl(value: String): String? {
     val url = "https://linux.do/".toHttpUrlOrNull()?.resolve(value.replace("{size}", "120")) ?: return null
@@ -76,6 +90,34 @@ fun ErrorState(error: Throwable, retry: () -> Unit, login: () -> Unit, back: (()
         FailureKind.VERIFICATION -> { { if (verification != null) verification(retry) else login() } }
         FailureKind.SIGN_IN -> login
         else -> retry
+    }
+    val rateLimitRetryAfter = (error as? ApiFailure)
+        ?.takeIf { it.kind == FailureKind.RATE_LIMIT }
+        ?.retryAfter?.takeIf { it > 0 }
+    if (rateLimitRetryAfter != null) {
+        var remaining by remember(error) { mutableIntStateOf(rateLimitRetryAfter) }
+        var retryStarted by remember(error) { mutableStateOf(false) }
+        val triggerRetry = {
+            if (!retryStarted) {
+                retryStarted = true
+                retry()
+            }
+        }
+        LaunchedEffect(error) {
+            repeat(rateLimitRetryAfter) {
+                delay(1_000)
+                remaining = (remaining - 1).coerceAtLeast(0)
+            }
+            triggerRetry()
+        }
+        EmptyState(
+            "\u6682\u65f6\u6ca1\u80fd\u52a0\u8f7d",
+            rateLimitSubtitle(error.message.orEmpty(), remaining),
+            Icons.Rounded.CloudOff,
+            "\u91cd\u65b0\u52a0\u8f7d",
+            triggerRetry,
+        )
+        return
     }
     EmptyState(if (kind == FailureKind.VERIFICATION) "和社区连接，只差一步" else if (kind == FailureKind.SIGN_IN) "登录后继续" else "暂时没能加载",
         error.message ?: "请稍后重试", if (auth) Icons.Rounded.VerifiedUser else Icons.Rounded.CloudOff,

@@ -46,4 +46,6 @@ ImageNetworkDeviceTest 使用本机 MockWebServer 与真实 Rust Socket/Coil 图
 
 ## Consequences
 
+The shared `ErrorState` now renders a live countdown for rate-limit failures. When `retryAfter` is positive, the countdown ticks once per second and invokes the supplied retry callback once at zero; a manual retry uses the same one-shot guard, so it cannot be followed by a duplicate automatic request. Other failure kinds and rate-limit failures without a positive retry duration keep their existing manual actions.
+
 未知范围的 429 保守暂停同一来源，某些接口独立限额也会短时影响其他页面；这是防止持续触发全局限流的代价。到期不自动重放历史请求，用户主动重试或既有订阅下一轮检查恢复访问。已在途请求不被强制取消。线上 Cloudflare、账号或网络差异仍需实际长时间使用验证，离线测试不能证明所有图片失败都有相同原因。
