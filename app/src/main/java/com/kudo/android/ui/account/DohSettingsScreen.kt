@@ -85,8 +85,22 @@ internal fun DohSettingsScreen(network: DohNetwork, back: () -> Unit) {
                             Modifier.testTag("doh-enabled"), enabled = !showing)
                     }
                 }
-                item { Text("加密解析并启用 ECH，用于原生页面与图片。开启 VPN 或系统代理时自动暂停，关闭后恢复。网页登录与外链仍使用系统网络。",
+                item { Text("加密解析并启用 ECH，用于原生页面与图片。网页登录与外链仍使用系统网络。",
                     Modifier.padding(horizontal = 9.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(MaterialTheme.colorScheme.surface)
+                        .padding(start = 18.dp, end = 12.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("VPN 自动切换", style = MaterialTheme.typography.bodyLarge)
+                            Text("检测到 VPN 或系统代理时自动暂停 DoH，断开后恢复",
+                                Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        CommunitySwitch(configuration.vpnAutoSwitch, {
+                            network.settings.update(configuration.copy(vpnAutoSwitch = it)); network.refresh()
+                        }, Modifier.testTag("doh-vpn-auto-switch"), enabled = !showing)
+                    }
+                }
                 item {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { SectionLabel("服务器") }

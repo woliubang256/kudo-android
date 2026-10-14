@@ -2,6 +2,7 @@ package com.kudo.android
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.runtime.mutableStateOf
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.network.*
@@ -52,5 +53,24 @@ class DohSettingsUiTest {
         compose.onNodeWithTag("doh-enabled").assertIsOn().performClick()
         compose.runOnIdle { snapshot = snapshot.copy(vpn = false); network.refresh(); assertFalse(settings.configuration.value.enabled) }
         compose.onNodeWithTag("doh-enabled").assertIsOff()
+    }
+
+    @Test fun vpnAutoSwitchDefaultsOnCanBeDisabledAndPersistsAcrossTheScreen() {
+        val visible = mutableStateOf(true)
+        compose.setContent { KudoTheme(DisplaySettings()) { if (visible.value) DohSettingsScreen(network) {} } }
+        compose.onNodeWithText("VPN 自动切换").performScrollTo()
+        compose.onNodeWithTag("doh-vpn-auto-switch").assertIsOn().performClick()
+        compose.runOnIdle {
+            assertFalse(settings.configuration.value.vpnAutoSwitch)
+            network.refresh()
+        }
+        compose.onNodeWithTag("doh-vpn-auto-switch").assertIsOff()
+        compose.runOnIdle { visible.value = false }
+        compose.waitForIdle()
+        assertFalse(DohSettings(instrumentation.context).configuration.value.vpnAutoSwitch)
+        compose.runOnIdle { visible.value = true }
+        compose.onNodeWithText("VPN 自动切换").performScrollTo()
+        compose.onNodeWithTag("doh-vpn-auto-switch").assertIsOff()
+        compose.onNodeWithText("检测到 VPN 或系统代理时自动暂停 DoH，断开后恢复").assertIsDisplayed()
     }
 }
