@@ -14,6 +14,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.kudo.android.BuildConfig
 import com.kudo.android.data.GitHubRelease
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,11 +67,13 @@ internal fun HomeUpdateHost(model: HomeUpdateViewModel, active: Boolean, externa
         if (visibility.isIdle && !visibility.currentState) displayed = null
     }
     val showing = visibility.currentState || visibility.targetState
+    val backdrop = rememberLayerBackdrop()
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
+        Box(Modifier.fillMaxSize().layerBackdrop(backdrop)
+            .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
             .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) { content() }
         displayed?.let { value ->
-            UpdateSheet(visibility, value, external) {
+            UpdateSheet(visibility, value, backdrop, external) {
                 visibility.targetState = false
                 model.dismiss()
             }

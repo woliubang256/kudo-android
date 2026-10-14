@@ -51,7 +51,7 @@ fun AboutScreen(openLink: (String) -> Unit = {}, openExternal: (String) -> Unit 
     fun show(value: String) { dialog = value; visibility.targetState = true }
     fun dismiss() { visibility.targetState = false }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).layerBackdrop(backdrop)
+        Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
             .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
             .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
             PageTopBar("关于酷DO", back)
@@ -82,7 +82,7 @@ fun AboutScreen(openLink: (String) -> Unit = {}, openExternal: (String) -> Unit 
                     color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) }
             }
         }
-        if (dialog == "update") UpdateSheet(visibility, checkUpdate ?: updates::latest, openExternal, ::dismiss)
+        if (dialog == "update") UpdateSheet(visibility, checkUpdate ?: updates::latest, backdrop, openExternal, ::dismiss)
         else LiquidModal(visibility, if (dialog == "privacy") "隐私说明" else "开源致谢",
             false, backdrop, settings.glass, ::dismiss, sheetBackground = MaterialTheme.colorScheme.background,
             maxDialogHeight = if (dialog == "licenses") 560.dp else Dp.Infinity,

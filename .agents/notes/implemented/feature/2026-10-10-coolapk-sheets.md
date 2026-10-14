@@ -12,7 +12,7 @@ CommunitySheet 在同窗口绘制，手机底部贴边、顶部20dp圆角、实�
 
 LiquidModal 的 actionSheet 分支委托新面板，说明和破坏性确认保留现有玻璃 Dialog。设置单选采用浅灰底与白色分组、分隔线及黄色字和勾；操作菜单保留已有第一排功能。
 
-面板通过可选 `maxHeightFraction`（大于0且不超过1）限制可用高度占比，默认 1 保留既有面板尺寸；可用高度先扣除顶部安全区和 12dp 间距，比例限制覆盖整个面板及底部导航避让区。固定操作区使用独立 actions 槽位，滚动内容不带动底部动作，供[版本更新面板](2026-10-11-github-updates.md)选择限高和固定下载入口。
+面板通过可选 `maxHeightFraction`（大于0且不超过1）限制可用高度占比，默认 1 保留既有面板尺寸；可用高度先扣除顶部安全区和 12dp 间距，比例限制覆盖整个面板及底部导航避让区。固定操作区使用独立 actions 槽位，滚动内容不带动底部动作。[版本更新面板](2026-10-11-github-updates.md)曾使用该能力，其容器现由[玻璃更新Dialog](../bug-fix/2026-10-14-update-glass-dialog.md)取代；CommunitySheet 的限高和固定动作能力继续保留给底部面板。
 
 ## Related decisions
 

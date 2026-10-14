@@ -14,6 +14,8 @@ LiquidModal 封装同窗口的玻璃模态层，设置内容提供 LayerBackdrop
 
 模态层在当前窗口内绘制，使用返回键拦截、完整触摸遮罩、dialog语义与焦点分组；焦点离开模态分组时取消离开。小屏和大字号下内容能滚动，底部安全区不能挡住取消，说明不能仅显示摘要。兼容材质沿用API 33折射、31模糊、26半透明边界。接入页面必须在打开及退出动画期间隐藏背景可访问入口；选择仍即时保存，取消/背景/返回键均不修改，退出仅确认触发一次。主题或材质改变后动画使用最新主题，不影响底层业务。
 
+LiquidModal 的 scrollContent 默认开启，说明内容整段滚动；[更新Dialog](../bug-fix/2026-10-14-update-glass-dialog.md)关闭外层滚动，让版本信息固定、内部日志单独滚动。showActions 控制独立底部动作区，隐藏动作时不保留空操作行；既有说明与确认默认保留动作。
+
 SettingsScreen 用独立目标内容和 MutableTransitionState 控制模态，关闭期间保留标题与内容，避免退出动画闪空。背景页面使用 clearAndSetSemantics 和焦点进入拦截，直到动画完全退出。主题、材质、字号选项使用 selectable 语义与黄色勾选；说明、致谢与退出确认不使用 AlertDialog。表面仅采样设置内容，选项或关闭不会触发隐藏页面的设置入口。
 
 ## Existing note audit

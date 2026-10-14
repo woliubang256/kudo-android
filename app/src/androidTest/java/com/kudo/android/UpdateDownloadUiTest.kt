@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -21,6 +23,8 @@ import com.kudo.android.data.*
 import com.kudo.android.media.*
 import com.kudo.android.ui.account.*
 import com.kudo.android.ui.theme.KudoTheme
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.cancel
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -68,8 +72,12 @@ class UpdateDownloadUiTest {
     private fun show(value: GitHubRelease = release) {
         compose.setContent { CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalApkInstall provides { installs.add(it) }) {
             KudoTheme(DisplaySettings()) { UpdateDownloadEnvironment(manager, { external = it }) {
-                val visible = remember { MutableTransitionState(true) }
-                UpdateSheet(visible, value, { external = it }) { visible.targetState = false }
+                Box(Modifier.fillMaxSize()) {
+                    val backdrop = rememberLayerBackdrop()
+                    Box(Modifier.matchParentSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background))
+                    val visible = remember { MutableTransitionState(true) }
+                    UpdateSheet(visible, value, backdrop, { external = it }) { visible.targetState = false }
+                }
             } }
         } }
     }
@@ -171,8 +179,10 @@ class UpdateDownloadUiTest {
         compose.setContent { CompositionLocalProvider(LocalApkInstall provides { installs.add(it) }) {
             KudoTheme(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f)) { Box(Modifier.fillMaxSize()) {
                 Box(Modifier.width(320.dp).height(360.dp)) { UpdateDownloadEnvironment(manager, { external = it }) {
+                    val backdrop = rememberLayerBackdrop()
+                    Box(Modifier.matchParentSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background))
                     val visible = remember { MutableTransitionState(true) }
-                    UpdateSheet(visible, release.copy(notes = (1..60).joinToString("\n") { "- 更新内容 $it" }), {}) { visible.targetState = false }
+                    UpdateSheet(visible, release.copy(notes = (1..60).joinToString("\n") { "- 更新内容 $it" }), backdrop, {}) { visible.targetState = false }
                 } }
             } }
         } }

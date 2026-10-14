@@ -1,12 +1,14 @@
 package com.kudo.android
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -16,6 +18,8 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.account.AboutScreen
 import com.kudo.android.ui.account.UpdateSheet
 import com.kudo.android.ui.theme.KudoTheme
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.awaitCancellation
 import org.junit.Assert.*
 import org.junit.Rule
@@ -37,6 +41,9 @@ class UpdateUiTest {
         compose.runOnIdle { assertEquals(KudoSourceUrl, external); assertEquals(0, requests) }
         compose.onNodeWithText("检查更新").performScrollTo().performClick()
         compose.onNodeWithText("发现新版本 1.2.3").assertIsDisplayed()
+        compose.onNodeWithTag("liquid-dialog").assertIsDisplayed()
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        capture("update-manual-glass.png")
         compose.onNodeWithText("• 支持检查更新").assertIsDisplayed()
         compose.onNodeWithText("• 头像角标完整显示").assertIsDisplayed()
         compose.onNodeWithText("取消").assertDoesNotExist()
@@ -75,7 +82,7 @@ class UpdateUiTest {
         compose.onNodeWithText("检查更新").performClick()
         compose.onNodeWithText("正在检查 GitHub 版本…").assertIsDisplayed()
         compose.onNodeWithTag("modal-scrim").performTouchInput { click(Offset(2f, 2f)) }
-        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        compose.onNodeWithTag("liquid-dialog").assertDoesNotExist()
         compose.runOnIdle { assertTrue(cancelled) }
     }
 
@@ -94,7 +101,7 @@ class UpdateUiTest {
 
     @Test fun longNotesPanelUsesAtMostEightyPercentOfAvailableHeight() {
         val maximum = showUpdate(height = 640, settings = DisplaySettings(theme = ThemeMode.LIGHT))
-        val panel = compose.onNodeWithTag("liquid-action-sheet").fetchSemanticsNode().boundsInRoot
+        val panel = compose.onNodeWithTag("liquid-dialog").fetchSemanticsNode().boundsInRoot
         assertTrue("长日志面板不得超过可用高度的80%：${panel.height} > $maximum", panel.height <= maximum + 2f)
         capture("update-height-long-light.png")
     }
@@ -110,7 +117,7 @@ class UpdateUiTest {
         compose.onNodeWithText("• 更新内容 60").performScrollTo().assertIsDisplayed()
         assertEquals(beforeDownload, download.assertIsDisplayed().fetchSemanticsNode().boundsInRoot)
         assertEquals(beforeTitle, title.assertIsDisplayed().fetchSemanticsNode().boundsInRoot)
-        assertTrue(compose.onNodeWithTag("liquid-action-sheet").fetchSemanticsNode().boundsInRoot.height <= maximum + 2f)
+        assertTrue(compose.onNodeWithTag("liquid-dialog").fetchSemanticsNode().boundsInRoot.height <= maximum + 2f)
         capture("update-short-dark-large-scrolled.png")
         download.performClick()
         compose.runOnIdle { assertEquals(release.url, external) }
@@ -120,7 +127,7 @@ class UpdateUiTest {
         val maximum = showUpdate(height = 640, settings = DisplaySettings(theme = ThemeMode.LIGHT), notes = "- 短日志")
         compose.onNodeWithText("• 短日志").assertIsDisplayed()
         compose.onNodeWithText("前往 GitHub 下载").assertIsDisplayed()
-        val panel = compose.onNodeWithTag("liquid-action-sheet").fetchSemanticsNode().boundsInRoot
+        val panel = compose.onNodeWithTag("liquid-dialog").fetchSemanticsNode().boundsInRoot
         assertTrue("短日志应按内容收缩", panel.height < maximum - 20f)
         capture("update-short-notes.png")
     }
@@ -132,9 +139,12 @@ class UpdateUiTest {
             BoxWithConstraints(Modifier.width(width.dp).height(height.dp)) {
                 val density = LocalDensity.current
                 val top = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
-                SideEffect { maximum = with(density) { ((maxHeight - top - 12.dp) * .8f).toPx() } }
+                val bottom = WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding()
+                SideEffect { maximum = with(density) { ((maxHeight - top - bottom - 32.dp) * .8f).toPx() } }
+                val backdrop = rememberLayerBackdrop()
+                Box(Modifier.matchParentSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background))
                 val visibility = remember { MutableTransitionState(true) }
-                UpdateSheet(visibility, { release.copy(notes = notes) }, external) { visibility.targetState = false }
+                UpdateSheet(visibility, { release.copy(notes = notes) }, backdrop, external) { visibility.targetState = false }
             }
         } } }
         compose.waitForIdle()

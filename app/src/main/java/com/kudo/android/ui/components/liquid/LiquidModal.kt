@@ -72,6 +72,7 @@ internal fun LiquidModal(
     actions: @Composable RowScope.() -> Unit = {},
     showTitle: Boolean = !actionSheet,
     showActions: Boolean = !actionSheet,
+    scrollContent: Boolean = true,
     sheetBackground: Color = MaterialTheme.colorScheme.surface,
     dismissEnabled: Boolean = true,
     maxDialogHeight: Dp = Dp.Infinity,
@@ -82,7 +83,8 @@ internal fun LiquidModal(
 ) {
     if (actionSheet) {
         CommunitySheet(visibility, title, dismiss, showTitle = showTitle, showActions = showActions,
-            dismissEnabled = dismissEnabled, containerColor = sheetBackground, actions = actions, content = content)
+            scrollContent = scrollContent, dismissEnabled = dismissEnabled, containerColor = sheetBackground,
+            actions = actions, content = content)
         return
     }
     val light = MaterialTheme.colorScheme.surface.luminance() > 0.5f
@@ -129,11 +131,14 @@ internal fun LiquidModal(
                     .padding(20.dp),
             ) {
                 CompositionLocalProvider(LocalContentColor provides foreground) {
-                    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(Modifier.weight(1f, fill = false)
+                        .then(if (scrollContent) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         if (showTitle) Text(title, Modifier.padding(bottom = 4.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         content()
                     }
-                    Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
+                    if (showActions) Row(Modifier.fillMaxWidth().padding(top = 18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
                 }
             }
         }

@@ -15,23 +15,26 @@ import com.kudo.android.BuildConfig
 import com.kudo.android.data.GitHubRelease
 import com.kudo.android.data.KudoSourceUrl
 import com.kudo.android.ui.components.*
+import com.kudo.android.ui.components.liquid.LiquidModal
+import com.kudo.android.ui.theme.LocalDisplaySettings
+import com.kyant.backdrop.Backdrop
 import kotlinx.coroutines.CancellationException
 
 @Composable
 internal fun UpdateSheet(visibility: MutableTransitionState<Boolean>, check: suspend () -> GitHubRelease,
-    external: (String) -> Unit, dismiss: () -> Unit) {
-    UpdateSheetContent(visibility, check, external, dismiss, null)
+    backdrop: Backdrop, external: (String) -> Unit, dismiss: () -> Unit) {
+    UpdateSheetContent(visibility, check, backdrop, external, dismiss, null)
 }
 
 @Composable
 internal fun UpdateSheet(visibility: MutableTransitionState<Boolean>, release: GitHubRelease,
-    external: (String) -> Unit, dismiss: () -> Unit) {
-    UpdateSheetContent(visibility, { release }, external, dismiss, release)
+    backdrop: Backdrop, external: (String) -> Unit, dismiss: () -> Unit) {
+    UpdateSheetContent(visibility, { release }, backdrop, external, dismiss, release)
 }
 
 @Composable
 private fun UpdateSheetContent(visibility: MutableTransitionState<Boolean>, check: suspend () -> GitHubRelease,
-    external: (String) -> Unit, dismiss: () -> Unit, initialRelease: GitHubRelease?) {
+    backdrop: Backdrop, external: (String) -> Unit, dismiss: () -> Unit, initialRelease: GitHubRelease?) {
     var release by remember(initialRelease) { mutableStateOf(initialRelease) }
     var newer by remember(initialRelease) { mutableStateOf(initialRelease?.isNewerThan(BuildConfig.VERSION_NAME) ?: false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -50,10 +53,11 @@ private fun UpdateSheetContent(visibility: MutableTransitionState<Boolean>, chec
         catch (e: Exception) { error = e.message ?: "检查失败，请稍后重试" }
         finally { loading = false }
     }
-    CommunitySheet(visibility, "检查更新", dismiss, maxHeightFraction = .8f,
+    LiquidModal(visibility, "检查更新", false, backdrop, LocalDisplaySettings.current.glass, dismiss,
+        maxDialogHeightFraction = .8f, showTitle = release == null,
         scrollContent = release == null, showActions = release != null, actions = {
             release?.let { value ->
-                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Box(Modifier.fillMaxWidth()) {
                     if (newer && downloadActions != null) downloadActions(value)
                     else if (newer) CommunityButton("前往 GitHub 下载", { external(value.url) }, Modifier.fillMaxWidth())
                     else ModalLink("在 GitHub 查看此版本") { external(value.url) }
