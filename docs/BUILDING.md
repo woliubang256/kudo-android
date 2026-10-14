@@ -124,6 +124,8 @@ git config core.hooksPath .githooks
 
 钩子会拒绝没有受支持前缀的提交；`scripts/check_commit_history.py` 还会在 CI 中检查本次推送或 Pull Request 的提交范围。历史提交不会被自动改写，发布日志仍只提取实际修改 `app/src/main/` 的 `feat:`、`fix:` 和 `perf:` 提交。
 
+`.github/workflows/commit-messages.yml` 只在 `main` 推送和 Pull Request 上检查提交信息，不再为已经属于 `main` 历史的版本 Tag 重复运行。`.github/workflows/cleanup.yml` 每周自动清理超过 30 天的已完成 Actions 运行和中转产物，也支持手动触发并指定保留天数（至少 7 天）；GitHub Release 中的 APK 附件不受影响。
+
 版本名为 Tag 去掉 `v`，严格使用 `vX.Y.Z`，其中 `X`、`Y`、`Z` 各为 `0–9` 的一位数字；`versionCode = major × 1000000 + minor × 1000 + patch + 1`。例如 `v1.2.3` 对应 `1.2.3` / `1002004`，`v0.2.1` 对应 `0.2.1` / `2002`，本次 `v0.2.4` 对应 `0.2.4` / `2005`。补丁位从 `0.1.9` 进位到 `0.2.0`，大功能可提升 minor 或 major 位；前导零、`-rc`、`-beta` 等格式会失败。每次升级请使用更大的版本号。
 
 普通本地构建保留 `0.1.0` / `1` 默认值，也可按 Tag 值构建相同版本：

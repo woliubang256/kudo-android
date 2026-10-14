@@ -42,6 +42,8 @@ GitHub的generate-notes主要按PR整理，直接提交可能没有可用更新�
 
 ## Commit subject validation
 
+Tag 推送的重复校验由[Actions 运行保留与主分支提交检查](2026-10-15-actions-retention-and-main-validation.md)接管：当前工作流只监听 `main` 推送和 Pull Request，不再单独监听版本 Tag；本篇以下关于 Tag 范围的记录保留为历史实现背景。
+
 A versioned `.githooks/commit-msg` hook calls `scripts/check_commit_message.py` and accepts the supported Conventional Commit types, optional scopes, and merge subjects. The local repository enables this hook with `core.hooksPath=.githooks`; standalone tests cover valid, invalid, commented, and merge messages. Existing history remains unchanged and future commits are rejected when their subject has no recognized prefix.
 
 The repository also provides `scripts/check_commit_history.py` for CI and release branches. It validates only the supplied revision range, so existing unprefixed history is not rewritten while every new pull request or push can be rejected before release. Clones must run `git config core.hooksPath .githooks` once to activate the local hook; the CI range check remains the shared enforcement point when a clone has not installed local hooks.
