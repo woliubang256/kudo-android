@@ -55,11 +55,13 @@ data class Post(
     val boosts: List<PostBoost> = emptyList(), val canBoost: Boolean = false,
     val polls: List<PostPoll> = emptyList(), val pollVotes: Map<String, List<String>> = emptyMap(),
     val isSolution: Boolean = false,
+    val canEdit: Boolean = false,
 ) {
     val activeReaction: String? get() = currentReaction?.id ?: "heart".takeIf { liked }
     val canReact: Boolean get() = if (activeReaction != null) currentReaction?.canUndo ?: canUndoLike else canLike
     val edited: Boolean get() = version > 1
     val hasEditHistory: Boolean get() = edited && canViewEditHistory
+    fun editableBy(viewerId: Int?): Boolean = viewerId != null && author.id == viewerId && canEdit
 }
 data class PostReaction(val id: String, val count: Int)
 data class UserReaction(val id: String, val canUndo: Boolean)
@@ -189,7 +191,7 @@ object DiscourseParser {
             canBoost = json.optBoolean("can_boost"),
             polls = json.optJSONArray("polls").objects().map(::parsePoll).filter { it.name.isNotEmpty() },
             pollVotes = json.optJSONObject("polls_votes")?.let { votes -> votes.keys().asSequence().associateWith { votes.optJSONArray(it).strings() } }.orEmpty(),
-            isSolution = json.optBoolean("accepted_answer"))
+            isSolution = json.optBoolean("accepted_answer"), canEdit = json.optBoolean("can_edit"))
     }
 
     fun detail(json: JSONObject): TopicDetail {
