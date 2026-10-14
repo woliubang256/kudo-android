@@ -183,7 +183,7 @@ class ReplyPreviewImagesUiTest {
             }
         } }
         compose.onNodeWithText("回复者：", substring = true).assertIsDisplayed()
-        compose.onNodeWithText("内容已忽略").assertIsDisplayed()
+        compose.onNodeWithText("内容已忽略", substring = true).assertIsDisplayed()
         compose.onNodeWithTag("reply-preview-images-30", useUnmergedTree = true).assertDoesNotExist()
     }
 }

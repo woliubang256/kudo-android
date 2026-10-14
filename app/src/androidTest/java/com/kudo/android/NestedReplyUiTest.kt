@@ -63,7 +63,8 @@ class NestedReplyUiTest {
     @Test fun darkLargeTextKeepsIgnoredRepliesHiddenUntilExplicitlyRevealed() {
         compose.setContent { Screen(settings = DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f), ignored = setOf("child3")) }
         compose.onNodeWithTag("reply-preview-2").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("reply-preview-post-3").assertTextEquals("子作者3：内容已忽略").performClick()
+        compose.onNode(hasText("子作者3：内容已忽略") and hasAnyAncestor(hasTestTag("reply-preview-post-3")))
+            .assertIsDisplayed().performClick()
         compose.onNodeWithTag("post-3").assertIsDisplayed()
         compose.onNodeWithText("子回复正文3").assertDoesNotExist()
         compose.onNode(hasText("查看此楼层") and hasAnyAncestor(hasTestTag("post-3"))).performClick()

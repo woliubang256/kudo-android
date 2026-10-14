@@ -116,21 +116,21 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
 internal fun ReplyPreview(thread: PostThread, load: ReplyLoad?, hasMore: Boolean, enabled: Boolean, open: (Int?) -> Unit) {
     if (thread.replies.isEmpty() && !hasMore && load?.loading != true && load?.error == null) return
     val ignored = LocalIgnoredUsers.current
+    val threadPosts = remember(thread) { (listOf(thread.root) + thread.replies).associateBy(Post::number) }
     Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp).fillMaxWidth()
         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
         .testTag("reply-preview-${thread.root.number}").padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         thread.replies.take(3).forEach { post ->
             val hidden = post.author.username.lowercase(Locale.ROOT) in ignored
             val images = remember(post.cooked) { parseArticle(post.cooked).articleImages() }
+            val authorLabel = replyAuthorLabel(post, thread.root.number, threadPosts)
             Box(Modifier.fillMaxWidth().testTag("reply-preview-post-${post.number}")) {
-                if (hidden) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("${post.author.displayName}：", color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium, maxLines = 1,
-                        modifier = Modifier.clickable(enabled = enabled) { open(post.number) })
-                    Text("内容已忽略", Modifier.weight(1f).clickable(enabled = enabled) { open(post.number) }, maxLines = 2,
-                        overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                } else ReplyPreviewText(post, images, enabled) { open(post.number) }
+                if (hidden) Text(buildAnnotatedString {
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) { append("$authorLabel：") }
+                    append("内容已忽略")
+                }, Modifier.fillMaxWidth().clickable(enabled = enabled) { open(post.number) }, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                else ReplyPreviewText(post, authorLabel, images, enabled) { open(post.number) }
             }
         }
         Text(if (load?.loading == true && thread.replies.isEmpty()) "正在加载回复…" else if (hasMore || thread.replies.size > 3) "查看更多回复" else "查看 ${thread.replies.size} 条回复",
@@ -139,16 +139,16 @@ internal fun ReplyPreview(thread: PostThread, load: ReplyLoad?, hasMore: Boolean
 }
 
 @Composable
-private fun ReplyPreviewText(post: Post, images: List<ArticleBlock.Image>, enabled: Boolean, open: () -> Unit) {
+private fun ReplyPreviewText(post: Post, authorLabel: String, images: List<ArticleBlock.Image>, enabled: Boolean, open: () -> Unit) {
     val linkColor = MaterialTheme.colorScheme.primary
     val style = MaterialTheme.typography.bodyMedium
     val textHtml = remember(post.cooked) {
         parseArticle(post.cooked).filterIsInstance<ArticleBlock.TextBlock>().joinToString("<br>") { it.html }
     }
     val article = remember(textHtml, linkColor) { parseInlineArticle(textHtml, linkColor) }
-    val text = remember(article.text, post.author.displayName, linkColor) {
+    val text = remember(article.text, authorLabel, linkColor) {
         buildAnnotatedString {
-            withStyle(SpanStyle(color = linkColor)) { append("${post.author.displayName}：") }
+            withStyle(SpanStyle(color = linkColor)) { append("$authorLabel：") }
             append(article.text.subSequence(0, article.text.text.trimEnd().length))
         }
     }
@@ -238,19 +238,30 @@ private fun ReplyPreviewImages(images: List<ArticleBlock.Image>, postId: Int, la
 
 @Composable
 internal fun ThreadPreviewPost(post: Post, enabled: Boolean, image: (String) -> Unit,
-    openLink: (String) -> Unit, navigate: (Int) -> Unit) {
+    openLink: (String) -> Unit, navigate: (Int) -> Unit, authorLabel: String = post.author.displayName) {
     val hidden = post.author.username.lowercase(Locale.ROOT) in LocalIgnoredUsers.current
     Column(Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("thread-preview-post-${post.number}"),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Avatar(post.author, 24.dp)
-            Text(post.author.displayName, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary)
-            Text("#${post.number} · 跳到帖子", Modifier.clickable(enabled = enabled) { navigate(post.number) }
-                .padding(vertical = 8.dp).testTag("thread-jump-${post.number}"),
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(authorLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("#${post.number}", Modifier.testTag("thread-floor-${post.number}"), maxLines = 1,
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            IconButton(onClick = { navigate(post.number) }, enabled = enabled,
+                modifier = Modifier.testTag("thread-jump-${post.number}")) {
+                Icon(Icons.Rounded.OpenInNew, "跳到第 ${post.number} 楼", Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary)
+            }
         }
         if (hidden) Text("内容已忽略", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else RichContent(post.cooked, image, openLink, galleryKey = "thread-preview-${post.id}")
     }
+}
+
+internal fun replyAuthorLabel(post: Post, rootNumber: Int, posts: Map<Int, Post>): String {
+    val parent = post.replyTo?.takeIf { it > 1 && it < post.number && it != rootNumber }
+        ?: return post.author.displayName
+    val recipient = posts[parent]?.author?.displayName ?: "#$parent"
+    return "${post.author.displayName} 回复 $recipient"
 }

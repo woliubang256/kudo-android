@@ -310,6 +310,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
             }
         }
         val thread = threads.firstOrNull { it.root.id == threadRootId }
+        val threadPosts = remember(thread) { thread?.let { (listOf(it.root) + it.replies).associateBy(Post::number) }.orEmpty() }
         LaunchedEffect(threadVisibility.targetState, threadRootId) {
             if (threadVisibility.targetState && thread != null) loadReplies(thread.root, false)
         }
@@ -324,10 +325,12 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
             LiquidModal(threadVisibility, "评论回复", true, modalBackdrop, glass, { threadVisibility.targetState = false }) {
                 if (thread != null && detail != null) {
                     LazyColumn(state = threadList, modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).testTag("thread-posts")) {
-                        item("root") { ThreadPreviewPost(thread.root, !overlayShowing, image, openLink, ::navigatePost) }
+                        item("root") { ThreadPreviewPost(thread.root, !overlayShowing, image, openLink, ::navigatePost,
+                            replyAuthorLabel(thread.root, thread.root.number, threadPosts)) }
                         items(thread.replies, key = { it.id }) { post ->
                             HorizontalDivider()
-                            ThreadPreviewPost(post, !overlayShowing, image, openLink, ::navigatePost)
+                            ThreadPreviewPost(post, !overlayShowing, image, openLink, ::navigatePost,
+                                replyAuthorLabel(post, thread.root.number, threadPosts))
                         }
                         val load = state.replyLoads[thread.root.id]
                         if (load?.loading == true) item { LoadingRow() }
