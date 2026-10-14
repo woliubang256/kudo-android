@@ -78,7 +78,11 @@ internal fun TopicTopBar(
                     MemberNameDecorations(author)
                 }
                 TopicAuthorMetadata(state.detail.originalPost?.updatedAt ?: state.detail.createdAt,
-                    category = null, edited = state.detail.originalPost?.edited == true)
+                    category = null, edited = state.detail.originalPost?.edited == true,
+                    history = state.detail.originalPost?.takeIf { enabled && it.hasEditHistory }?.let { post ->
+                        val actions = LocalTopicActions.current
+                        { actions.history(state.detail.id, post) }
+                    })
             }
         }
         if (author != null && author.id != state.viewerId &&

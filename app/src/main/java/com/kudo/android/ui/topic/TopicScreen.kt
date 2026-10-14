@@ -130,7 +130,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
             currentFloor = number
         }
     }
-    var located by remember(detail?.id, state.targetRevision) { mutableStateOf(false) }
+    var located by rememberSaveable(detail?.id, state.targetRevision) { mutableStateOf(false) }
     LaunchedEffect(state.targetRevision) {
         previousAnchor = null
         if (state.targetRevision > 0) { floorVisibility.targetState = false; keyboard?.hide() }

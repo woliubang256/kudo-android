@@ -45,14 +45,14 @@ import kotlinx.coroutines.launch
 
 class TopicActionsController(val openList: (Int) -> Unit, val openDetail: (Int, Post?, (Post) -> Unit) -> Unit,
     val openReply: (Int, Post, (Post) -> Unit) -> Unit = { id, post, bookmark -> openDetail(id, post, bookmark) },
-    val edit: (Int, Post) -> Unit = { _, _ -> })
+    val edit: (Int, Post) -> Unit = { _, _ -> }, val history: (Int, Post) -> Unit = { _, _ -> })
 val LocalTopicActions = staticCompositionLocalOf { TopicActionsController({}, { _, _, _ -> }) }
 val LocalIgnoredUsers = staticCompositionLocalOf<Set<String>> { emptySet() }
 
 @Composable
 fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: GlassMode, login: () -> Unit,
     ignored: (Int, String) -> Unit, message: suspend (String) -> Unit, changed: () -> Unit = {},
-    editPost: (Int, Post) -> Unit = { _, _ -> }, content: @Composable () -> Unit) {
+    editPost: (Int, Post) -> Unit = { _, _ -> }, openHistory: ((Int, Post) -> Unit)? = null, content: @Composable () -> Unit) {
     val vm: TopicActionsViewModel = viewModel(key = "topic-actions-${viewer?.id}", factory = viewModelFactory { initializer { TopicActionsViewModel(repository, viewer) } })
     val current = vm.state
     var retained by remember(vm) { mutableStateOf(current) }
@@ -63,6 +63,7 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
     val visibility = remember(vm) { MutableTransitionState(false) }
     var detailBookmark by remember(vm) { mutableStateOf<((Post) -> Unit)?>(null) }
     val currentEdit by rememberUpdatedState(editPost)
+    val currentHistory by rememberUpdatedState(openHistory)
     LaunchedEffect(current.topicId) { visibility.targetState = current.topicId != null }
     LaunchedEffect(vm) { vm.events.collect { event -> when (event) {
         is TopicActionEvent.Message -> launch { message(event.text) }
@@ -73,7 +74,7 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
         detailBookmark = bookmark; vm.open(id, true, post)
     }, { id, post, bookmark ->
         detailBookmark = bookmark; vm.open(id, true, post, isReply = true)
-    }, { id, post -> currentEdit(id, post) }) }
+    }, { id, post -> currentEdit(id, post) }, { id, post -> currentHistory?.invoke(id, post) }) }
     fun authenticate(action: () -> Unit) { if (viewer == null) { vm.dismiss(); login() } else action() }
     val showing = current.topicId != null || visibility.currentState || visibility.targetState
     Box(Modifier.fillMaxSize()) {
@@ -117,7 +118,11 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
                         } }, bookmark = { authenticate {
                             val post = state.post
                             if (post != null && state.fromDetail && detailBookmark != null) { vm.dismiss(); detailBookmark?.invoke(post) } else vm.bookmark()
-                        } }, history = { vm.history() }, ignore = { authenticate { vm.ignore() } }, report = { authenticate { vm.report() } },
+                        } }, history = {
+                            val post = state.post; val id = state.topicId
+                            if (currentHistory != null && post != null && id != null) { vm.dismiss(); currentHistory?.invoke(id, post) }
+                            else vm.history()
+                        }, ignore = { authenticate { vm.ignore() } }, report = { authenticate { vm.report() } },
                         copyLink = { state.link?.let { link ->
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("链接", link))
                             vm.dismiss()

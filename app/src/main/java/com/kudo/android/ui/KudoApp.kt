@@ -167,7 +167,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                 ignored = { id, username -> account.recordIgnore(id, username, true); refreshEpoch++ },
                 message = { showMessage(it) }, editPost = { id, post ->
                     authenticated { nav.navigate("edit-post/${post.id}?topic=$id") }
-                }, changed = {
+                }, openHistory = { _, post -> nav.navigate("post-history/${post.id}") }, changed = {
                     refreshEpoch++
                     nav.currentBackStackEntry?.savedStateHandle?.set("refresh", System.nanoTime())
                 }) {
@@ -396,6 +396,12 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             }
                         }
                         }
+                    }
+                    composable("post-history/{post}", arguments = listOf(navArgument("post") { type = NavType.IntType })) { entry ->
+                        val postId = entry.arguments!!.getInt("post")
+                        val vm = model("post-history-${account.user?.id}-$postId") { PostHistoryViewModel(app.repository, postId) }
+                        val state by vm.state.collectAsStateWithLifecycle()
+                        PostHistoryScreen(postId, state, vm::reload, vm::more, { nav.popBackStack() }, ::login, ::user, ::openLink)
                     }
                     composable("edit-post/{post}?topic={topic}", arguments = listOf(
                         navArgument("post") { type = NavType.IntType }, navArgument("topic") { type = NavType.IntType })) { entry ->

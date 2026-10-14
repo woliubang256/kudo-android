@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,7 +89,7 @@ internal fun CategoryInline(category: Category, modifier: Modifier = Modifier, o
 }
 
 @Composable
-internal fun TopicAuthorMetadata(time: String, category: Category?, edited: Boolean = false) {
+internal fun TopicAuthorMetadata(time: String, category: Category?, edited: Boolean = false, history: (() -> Unit)? = null) {
     val timestamp = relativeTime(time)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (timestamp.isNotBlank()) Text(timestamp, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -100,8 +102,13 @@ internal fun TopicAuthorMetadata(time: String, category: Category?, edited: Bool
         }
         if (edited) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (timestamp.isNotBlank() || category != null) MetadataSeparator()
-            Text("已编辑", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.clickable(enabled = history != null, role = Role.Button) { history?.invoke() }
+                .padding(vertical = 4.dp).testTag("edited-history"), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Icon(Icons.Rounded.Edit, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("已编辑", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

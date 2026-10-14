@@ -45,6 +45,7 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
     vote: (Post, String, List<String>) -> Unit = { _, _, _ -> }, login: () -> Unit = {},
     onHeading: ((ArticleHeading, BringIntoViewRequester) -> Unit)? = null) {
     val ignoredUsers = LocalIgnoredUsers.current
+    val historyActions = LocalTopicActions.current
     var revealed by remember(post.id, ignoredUsers) { mutableStateOf(false) }
     val ignored = post.author.username.lowercase(Locale.ROOT) in ignoredUsers
     Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).testTag("post-${post.number}")) {
@@ -66,7 +67,7 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                         }
                         TopicAuthorMetadata(post.updatedAt, detail.categoryId.takeIf { post.number == 1 }?.let { categoryId ->
                             LocalTopicPresentation.current.categories.firstOrNull { it.id == categoryId }
-                        }, post.edited)
+                        }, post.edited, history = if (enabled && post.hasEditHistory) ({ historyActions.history(detail.id, post) }) else null)
                     }
                 }
                 PostUnreadIndicator(post, state)
@@ -304,7 +305,9 @@ internal fun ThreadPreviewPost(post: Post, enabled: Boolean, image: (String) -> 
             else RichContent(post.cooked, image, openLink, galleryKey = "thread-preview-${post.id}")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f).padding(end = 4.dp).testTag("thread-metadata-${post.number}")) {
-                    TopicAuthorMetadata(post.updatedAt, null, post.edited)
+                    val historyActions = LocalTopicActions.current
+                    TopicAuthorMetadata(post.updatedAt, null, post.edited,
+                        history = if (enabled && post.hasEditHistory) ({ state.detail?.let { historyActions.history(it.id, post) } }) else null)
                 }
                 if (!hidden) {
                     val actions = LocalTopicActions.current
