@@ -18,6 +18,8 @@ import coil3.decode.DataSource
 import coil3.decode.ImageSource
 import coil3.fetch.Fetcher
 import coil3.fetch.SourceFetchResult
+import coil3.network.HttpException
+import coil3.network.NetworkResponse
 import coil3.request.Options
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.TopicCard
@@ -30,6 +32,7 @@ import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.net.UnknownHostException
 import java.util.concurrent.CopyOnWriteArrayList
 
 @RunWith(AndroidJUnit4::class)
@@ -43,6 +46,7 @@ class FeedImageLoadingUiTest {
     private val replacement = CompletableDeferred<Unit>()
     private val requests = CopyOnWriteArrayList<String>()
     private var failFirst = false
+    private var firstFailure: Throwable = IOException("fixture offline")
     private var opened = 0
     private val wide = "https://feed-image-loading.test/wide.png"
     private val ordinary = "https://feed-image-loading.test/ordinary.png"
@@ -67,7 +71,7 @@ class FeedImageLoadingUiTest {
                                 attempt == 1 -> first.await()
                                 else -> retry.await()
                             }
-                            if (failFirst && url == wide && attempt == 1) throw IOException("fixture offline")
+                            if (failFirst && url == wide && attempt == 1) throw firstFailure
                             return SourceFetchResult(ImageSource(Buffer().write(bytes), options.fileSystem),
                                 "image/png", DataSource.MEMORY)
                         }
@@ -110,6 +114,60 @@ class FeedImageLoadingUiTest {
         assertEquals(bounds, compose.onNodeWithTag("topic-image-51").fetchSemanticsNode().boundsInRoot)
         compose.onNodeWithTag("topic-image-51").performTouchInput { click() }
         compose.runOnIdle { assertEquals(2, opened); assertEquals(1, requests.size) }
+    }
+
+    @Test fun failedImageShowsHttpCodeAndReasonBelowRetryAndClearsThemWhenRetrying() {
+        failFirst = true
+        firstFailure = HttpException(NetworkResponse(code = 503))
+        show(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f))
+        first.complete(Unit)
+        compose.waitUntil(5000) { compose.onAllNodesWithText("加载失败，点击重试", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        val retryText = compose.onNodeWithText("加载失败，点击重试", useUnmergedTree = true)
+        val details = compose.onNodeWithText("HTTP 503 · 服务暂不可用", useUnmergedTree = true)
+        details.assertIsDisplayed()
+        assertTrue(details.fetchSemanticsNode().boundsInRoot.top >= retryText.fetchSemanticsNode().boundsInRoot.bottom)
+        capture("feed-image-http-error-dark.png")
+        details.performTouchInput { click() }
+        compose.waitUntil(5000) { requests.size == 2 }
+        details.assertDoesNotExist()
+        compose.onNodeWithTag("topic-image-51-loading", useUnmergedTree = true).assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, opened) }
+        retry.complete(Unit)
+        awaitLoaded()
+        details.assertDoesNotExist()
+        compose.onNodeWithTag("topic-image-51").performTouchInput { click() }
+        compose.runOnIdle { assertEquals(1, opened); assertEquals(2, requests.size) }
+    }
+
+    @Test fun failedImageShowsWrappedNativeCodeAndReasonInLightTheme() {
+        failFirst = true
+        firstFailure = IOException("wrapper", UnknownHostException("DoH: dns_timeout"))
+        show()
+        first.complete(Unit)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("topic-image-51-error", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("DoH dns_timeout · DoH 查询超时", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("topic-image-51-loading", useUnmergedTree = true).assertDoesNotExist()
+        capture("feed-image-native-error-light.png")
+        compose.runOnIdle { assertEquals(0, opened); assertEquals(1, requests.size) }
+    }
+
+    @Test fun changingFailedUrlClearsDiagnosticAndUnknownErrorsDoNotExposeRawSecrets() {
+        var image by mutableStateOf(wide)
+        failFirst = true
+        firstFailure = IllegalStateException("https://private.example/image?signature=secret Cookie: session=secret")
+        show(image = { image })
+        first.complete(Unit)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("topic-image-51-error", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("IllegalStateException · 图片加载失败，原因未识别", useUnmergedTree = true).assertIsDisplayed()
+        compose.onAllNodes(hasText("secret", substring = true), useUnmergedTree = true).assertCountEquals(0)
+        compose.runOnIdle { image = ordinary }
+        compose.waitUntil(5000) { requests.contains(ordinary) }
+        compose.onNodeWithTag("topic-image-51-error", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("topic-image-51-loading", useUnmergedTree = true).assertIsDisplayed()
+        replacement.complete(Unit)
+        awaitLoaded()
+        compose.onNodeWithTag("topic-image-51-error", useUnmergedTree = true).assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, opened) }
     }
 
     @Test fun failedImageStopsLoadingAndRetryWaitsForAnotherRequestWithoutOpeningTopic() {

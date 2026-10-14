@@ -16,12 +16,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.kudo.android.data.*
+import com.kudo.android.media.imageLoadErrorText
 import com.kudo.android.ui.account.LocalWebVerification
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
@@ -128,27 +130,36 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
 private fun TopicPreviewImage(topicId: Int, url: String, openTopic: () -> Unit) {
     var decodedRatio by remember(url) { mutableStateOf<Float?>(null) }
     var loading by remember(url) { mutableStateOf(true) }
-    var failed by remember(url) { mutableStateOf(false) }
+    var failureText by remember(url) { mutableStateOf<String?>(null) }
+    val failed = failureText != null
     var retry by remember(url) { mutableIntStateOf(0) }
     Box(Modifier.fillMaxWidth().heightIn(max = 190.dp).aspectRatio(1.9f)
         .testTag("topic-image-$topicId").clip(RoundedCornerShape(10.dp))
         .then(if (loading || failed) Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) else Modifier)
         .clickable(onClickLabel = if (failed) "重新加载图片" else "进入帖子详情") {
-            if (failed) { loading = true; failed = false; retry++ } else openTopic()
+            if (failed) { loading = true; failureText = null; retry++ } else openTopic()
         }) {
         key(url, retry) { AsyncImage(url, if (failed) "话题图片加载失败，点击重试" else "话题图片，点击进入帖子详情",
             Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
-            onLoading = { loading = true; failed = false; decodedRatio = null },
-            onError = { loading = false; failed = true; decodedRatio = null },
+            onLoading = { loading = true; failureText = null; decodedRatio = null },
+            onError = { loading = false; failureText = imageLoadErrorText(it.result.throwable); decodedRatio = null },
             onSuccess = {
                 loading = false
-                failed = false
+                failureText = null
                 val decoded = it.result.image
                 if (decoded.width > 0 && decoded.height > 0) decodedRatio = decoded.width.toFloat() / decoded.height
             }) }
         if (loading) CommunityLoadingIndicator(Modifier.align(Alignment.Center).size(24.dp).testTag("topic-image-$topicId-loading"))
-        if (failed) Text("加载失败，点击重试", Modifier.align(Alignment.Center),
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        failureText?.let { details ->
+            Column(Modifier.align(Alignment.Center).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("加载失败，点击重试", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                Text(details, Modifier.testTag("topic-image-$topicId-error"), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                    maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+        }
         ImageAspectBadge(decodedRatio)
     }
 }
