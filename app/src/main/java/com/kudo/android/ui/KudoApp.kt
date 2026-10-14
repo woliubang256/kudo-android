@@ -250,7 +250,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         SearchScreen(state.forAccount(account.user?.id), vm::search, { nav.popBackStack() }, ::topic, ::user, ::login, listStyle = display.topicListStyle,
                             openCategory = { nav.navigate("category/$it") }, openTag = { tag -> nav.navigate("tag/${Uri.encode(tag.slug.ifBlank { tag.name })}?id=0") },
                             changeKind = vm::changeKind, changeSort = vm::changeSort, clear = vm::clear, refreshHistory = vm::refreshHistory,
-                            loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory)
+                            loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory,
+                            initialScrollIndex = vm.scrollIndex, initialScrollOffset = vm.scrollOffset, saveScrollPosition = vm::saveScrollPosition)
                     }
                     composable("personal/{destination}") { entry ->
                         val member = account.user
@@ -420,7 +421,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         SearchScreen(state.forAccount(account.user?.id), vm::search, { nav.popBackStack() }, ::topic, ::user, ::login, listStyle = display.topicListStyle,
                             openCategory = { nav.navigate("category/$it") }, openTag = { tag -> nav.navigate("tag/${Uri.encode(tag.slug.ifBlank { tag.name })}?id=0") },
                             changeKind = vm::changeKind, changeSort = vm::changeSort, clear = vm::clear, refreshHistory = vm::refreshHistory,
-                            loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory)
+                            loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory,
+                            initialScrollIndex = vm.scrollIndex, initialScrollOffset = vm.scrollOffset, saveScrollPosition = vm::saveScrollPosition)
                     }
                     composable("user/{username}") { entry ->
                         val username = entry.arguments!!.getString("username")!!

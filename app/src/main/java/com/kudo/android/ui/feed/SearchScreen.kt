@@ -48,7 +48,8 @@ fun SearchScreen(
     changeKind: (SearchKind) -> Unit = {}, changeSort: (SearchSort) -> Unit = {}, clear: () -> Unit = {},
     refreshHistory: () -> Unit = {}, loadMetadata: () -> Unit = {}, suggestTags: (String) -> Unit = {},
     applyFilters: (String, SearchFilters) -> Unit = { _, _ -> },
-    clearHistory: () -> Unit = {},
+    clearHistory: () -> Unit = {}, initialScrollIndex: Int = 0, initialScrollOffset: Int = 0,
+    saveScrollPosition: (Int, Int) -> Unit = { _, _ -> },
 ) {
     var query by rememberSaveable(state.accountId) { mutableStateOf(state.query) }
     var filtersOpen by remember(state.accountId) { mutableStateOf(false) }
@@ -64,8 +65,16 @@ fun SearchScreen(
     LaunchedEffect(state.query, state.accountId) { query = state.query }
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
-    val scroll = rememberLazyListState()
-    LaunchedEffect(state.query, state.kind) { scroll.scrollToItem(0) }
+    val scroll = rememberLazyListState(initialScrollIndex, initialScrollOffset)
+    DisposableEffect(Unit) {
+        onDispose {
+            saveScrollPosition(scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset)
+        }
+    }
+    LaunchedEffect(state.query, state.kind, initialScrollIndex, initialScrollOffset) {
+        if (initialScrollIndex == 0 && initialScrollOffset == 0 &&
+            (scroll.firstVisibleItemIndex != 0 || scroll.firstVisibleItemScrollOffset != 0)) scroll.scrollToItem(0)
+    }
     val ignored = com.kudo.android.ui.topic.LocalIgnoredUsers.current
     val posts = state.hits.posts.filterNot { it.topic.author?.username?.lowercase(Locale.ROOT) in ignored }
     val users = state.hits.users.filterNot { it.username.lowercase(Locale.ROOT) in ignored }

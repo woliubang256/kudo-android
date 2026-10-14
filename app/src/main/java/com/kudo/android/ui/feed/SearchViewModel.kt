@@ -36,6 +36,20 @@ class SearchViewModel(
     private var searchGeneration = 0
     private var historyGeneration = 0
     private var tagGeneration = 0
+    var scrollIndex: Int = 0
+        private set
+    var scrollOffset: Int = 0
+        private set
+
+    fun saveScrollPosition(index: Int, offset: Int) {
+        scrollIndex = index.coerceAtLeast(0)
+        scrollOffset = offset.coerceAtLeast(0)
+    }
+
+    private fun resetScrollPosition() {
+        scrollIndex = 0
+        scrollOffset = 0
+    }
 
     init { refreshHistory(); if (initialQuery.isNotBlank()) search(initialQuery) }
 
@@ -43,6 +57,7 @@ class SearchViewModel(
         if (id == _state.value.accountId) return
         generation++; searchGeneration++; historyGeneration++; tagGeneration++
         searchJob?.cancel(); historyJob?.cancel(); metadataJob?.cancel(); tagsJob?.cancel()
+        resetScrollPosition()
         _state.value = SearchState(accountId = id)
         refreshHistory()
         if (initialQuery.isNotBlank()) search(initialQuery)
@@ -88,6 +103,7 @@ class SearchViewModel(
 
     fun clear() {
         searchGeneration++; searchJob?.cancel()
+        resetScrollPosition()
         _state.update { it.copy(query = "", hits = SearchResults(), filters = SearchFilters(), loading = false,
             searched = false, hasMore = false, page = 1, error = null, moreError = null) }
         refreshHistory()
@@ -115,6 +131,7 @@ class SearchViewModel(
         val old = _state.value
         val trimmed = if (more) old.query else query.trim()
         if (trimmed.isEmpty() || (more && (old.loading || !old.hasMore || old.kind != SearchKind.POSTS))) return
+        if (!more) resetScrollPosition()
         searchJob?.cancel()
         val token = ++searchGeneration
         val page = if (more) old.page + 1 else 1

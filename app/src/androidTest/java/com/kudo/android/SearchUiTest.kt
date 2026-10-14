@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -171,6 +172,34 @@ class SearchUiTest {
         compose.onNodeWithText("命中第 9 楼").performClick()
         assertEquals(listOf(3 to 9), openedTopics)
         capture("search-post-results.png")
+    }
+
+    @Test fun returningFromTopicRestoresTheSearchResultPosition() {
+        val author = Member(1, "author", "作者", "")
+        val hits = (1..40).map { number ->
+            SearchHit(number, number, Topic(number, "搜索主题 $number", "搜索摘要 $number", author, 1, emptyList(), 0, 0, 0, "", ""))
+        }
+        val state = SearchState(accountId = 7, query = "测试", hits = SearchResults(posts = hits), searched = true)
+        var showingSearch by mutableStateOf(true)
+        var savedIndex = 0
+        var savedOffset = 0
+        compose.setContent {
+            KudoTheme(DisplaySettings()) {
+                if (showingSearch) {
+                    SearchScreen(state, { _, _ -> }, {}, { _, _ -> showingSearch = false }, {}, {}, listStyle = TopicListStyle.TITLE,
+                        initialScrollIndex = savedIndex, initialScrollOffset = savedOffset,
+                        saveScrollPosition = { index, offset -> savedIndex = index; savedOffset = offset })
+                } else {
+                    androidx.compose.foundation.text.BasicText("主题详情", Modifier.testTag("topic-detail"))
+                }
+            }
+        }
+        compose.onNodeWithTag("search-results").performScrollToNode(hasTestTag("search-hit-20"))
+        compose.onNodeWithTag("search-hit-20").assertIsDisplayed()
+        compose.runOnIdle { showingSearch = false }
+        compose.onNodeWithTag("topic-detail").assertIsDisplayed()
+        compose.runOnIdle { showingSearch = true }
+        compose.onNodeWithTag("search-hit-20").assertIsDisplayed()
     }
 
     @Test fun threeTypesUseNativeCategoryTagAndUserCallbacks() {

@@ -71,6 +71,12 @@ SearchUiTest 八项与搜索入口/主题样式/楼层定位五项回归共十�
 
 截图 search-post-results.png、search-category-tag-results.png、search-user-results.png、search-filters-dark-large.png 与 search-filters-short-window.png 已查看；根节点截图不包含独立系统键盘窗口。类别/标签截图中的灰色是点击波纹，非静止选中背景。
 
+## Follow-up: restore result position after topic navigation
+
+The search ViewModel now keeps the latest result-list index and pixel offset separately from search results. `SearchScreen` writes the position when its composition leaves and initializes the `LazyListState` from that pair when the route is recreated. A new search, kind change, account change, or clear resets the pair to the top, while loading more results keeps the current position. This preserves the exact search position when opening a topic and returning through the navigation back stack.
+
+`SearchUiTest.returningFromTopicRestoresTheSearchResultPosition` failed before this follow-up because the twentieth result disappeared after the simulated detail return; it passes with the ViewModel-backed position.
+
 ## Consequences
 
 历史依赖服务端搜索日志，可能延后出现；站点关闭日志时独立显示读取错误，不阻塞搜索。插件能力读取可能被验证页阻挡，提供重试。用户接口按网页最多二十项，标签请求有限额；这些结果不声称无限分页。真机仅使用覆盖安装，版本为2005/0.2.3，签名与已安装包匹配，保留账号及数据。线上接口已参考官方源码核对，真机使用离线夹具，尚未完成真实登录账号的跨设备最近搜索同步验收。
