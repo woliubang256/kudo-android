@@ -28,7 +28,15 @@ WebView 只在主文档、用户手势且非重定向的外部点击、当前模
 
 ## Testing
 
-外部链接策略、Linux.do 解析与原生下载管理的 JVM 专项测试通过（`artifacts/external-link-mode-unit.txt`），包含子域名和伪装域名边界、协议回退与下载原有行为。设置、系统 Intent 与真实网页手势的设备用例等待集中运行；尚未记为通过。提交前笔记门禁与 diff 检查通过。
+16 项 JVM 专项测试通过：策略 5、Linux.do 解析 7、原生下载 4（`artifacts/external-link-mode-unit.txt`）。Debug / AndroidTest 构建与 Lint 成功，0 errors、45 既有 warnings、1 hint（`artifacts/external-link-mode-build.txt`）。
+
+RMX2202 / Android 13 本轮共 34 项不同真机用例验证通过：启动器 5、设置保存 2、WebView 13、深链 4、原生下载 7、下载通知入口 1、设置面板关联回归 2。覆盖系统 Intent 无包名/组件、普通外站与夸克的原始地址、应用内不唤端、域名边界、缺失/未知配置回退、重新创建存储保持选择、真实触摸、切换不重载、scheme 网页回退、脚本/重定向/子框架隔离、网页历史与 Cookie、下载进度/完成通知和应用内完成事件。
+
+首轮 34 项中 32 项通过，2 项新夹具失败（`artifacts/external-link-mode-device.txt`）：LazyColumn 屏幕外设置项尚未生成，测试改为从列表 performScrollToNode；重载计数原本混入异步子资源，新增仅主文档的计数，仍断言模式切换不重载且不重建 WebView。没有修改产品代码来规避失败。修正后设置的 2 项和模式切换 1 项全部通过（`artifacts/external-link-mode-fixed-device.txt`）；重复项不另计用例数，未重复无关联已通过的测试。
+
+构建显式 versionCode=2005、versionName=0.2.3，与已安装版本相同。安装前回读包核对签名 SHA256 一致（95f95aff266413e4c3fb431bf7ae96552d0e5e601b986e4a53d2a116b6623e4f）；应用 adb install -r、测试包 -r -t，再 am instrument，保留用户数据。设置保存测试使用隔离 SharedPreferences，不修改真实偏好。`artifacts/external-link-mode-settings.png` 已实际查看，确认贴边选项面板与黄色选中态。产物 `artifacts/kudo-external-link-mode.apk`。
+
+系统启动器通过捕获生产 Intent 验证，不实际唤起第三方 App；此前外部夸克启动受自动审批拒绝的限制仍见旧笔记，没有改用测试绕过，也没有将 Intent 验证记为夸克分享页面端到端验收。提交前笔记门禁与 diff 检查通过。
 
 ## Consequences
 

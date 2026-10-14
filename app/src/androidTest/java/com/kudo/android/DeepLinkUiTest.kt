@@ -113,5 +113,7 @@ class DeepLinkUiTest {
         compose.onNodeWithText("网页：https://linux.do/guidelines").assertIsDisplayed()
         click("javascript:alert(1)")
         compose.onNodeWithText("网页：https://linux.do/guidelines").assertIsDisplayed()
+        click("https://connect.linux.do/t/123")
+        compose.onNodeWithText("网页：https://connect.linux.do/t/123").assertIsDisplayed()
     }
 }

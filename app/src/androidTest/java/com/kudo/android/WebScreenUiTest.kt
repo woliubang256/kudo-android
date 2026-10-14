@@ -18,6 +18,7 @@ import androidx.core.view.WindowCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.AndroidSessionCookies
 import com.kudo.android.data.DisplaySettings
+import com.kudo.android.data.ExternalLinkMode
 import com.kudo.android.data.ThemeMode
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.components.QuickScrollToTopHost
@@ -36,6 +37,7 @@ class WebScreenUiTest {
     private val views = mutableListOf<FixtureWebView>()
     private val loadedTitle = AtomicReference("")
     private val loads = AtomicInteger()
+    private val mainLoads = AtomicInteger()
     private val navigations = mutableListOf<String>()
     private var failFirst = false
     @Volatile private var responseGate: CountDownLatch? = null
@@ -200,6 +202,41 @@ class WebScreenUiTest {
             assertEquals(start, current().url)
         }
         compose.onNodeWithText("指南").assertIsDisplayed()
+        click("other")
+        compose.runOnIdle {
+            assertEquals("https://other-fixture.test/page", opened.last())
+            assertEquals(start, current().url)
+        }
+    }
+
+    @Test fun openingModeChangesApplyWithoutReloadAndInAppSharesNeverHandOff() {
+        var mode by mutableStateOf(ExternalLinkMode.SYSTEM)
+        val opened = mutableListOf<String>()
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            WebScreen(start, {}, {}, ::create, { opened += it; true }, externalLinkMode = mode)
+        } }
+        awaitPage("指南")
+        click("quark")
+        val previous = mainLoads.get()
+        compose.runOnIdle { assertEquals(1, opened.size); mode = ExternalLinkMode.IN_APP }
+        compose.runOnIdle { assertEquals(previous, mainLoads.get()); assertEquals(1, views.size) }
+        click("quark"); awaitPage("夸克网页")
+        compose.runOnIdle { assertEquals(1, opened.size) }
+        compose.onNodeWithContentDescription("返回").performClick(); awaitPage("指南")
+        javascript("document.querySelectorAll('a').forEach(a=>a.style.display='block')")
+        click("quark-scheme"); awaitPage("夸克网页")
+        compose.runOnIdle {
+            assertEquals(1, opened.size)
+            assertEquals("https://pan.quark.cn/s/Abc123?pwd=1234", current().url)
+        }
+        compose.onNodeWithContentDescription("返回").performClick(); awaitPage("指南")
+        compose.runOnIdle { mode = ExternalLinkMode.SYSTEM }
+        click("other")
+        compose.runOnIdle {
+            assertEquals(2, opened.size)
+            assertEquals("https://other-fixture.test/page", opened.last())
+            assertEquals(start, current().url)
+        }
     }
 
     @Test fun missingAppAndPublishedSchemeFallBackToTheShareWebPage() {
@@ -240,6 +277,7 @@ class WebScreenUiTest {
             assertFalse(client.shouldOverrideUrlLoading(view, request("https://pan.quark.cn/s/Abc123", redirect = true)))
             assertFalse(client.shouldOverrideUrlLoading(view, request("https://pan.quark.cn/s/Abc123", frame = false)))
             assertFalse(client.shouldOverrideUrlLoading(view, request("https://linux.do/t/123")))
+            assertFalse(client.shouldOverrideUrlLoading(view, request("https://connect.linux.do/help")))
             assertTrue(client.shouldOverrideUrlLoading(view, request("intent://evil")))
             assertTrue(client.shouldOverrideUrlLoading(view, request(
                 "qklink://www.uc.cn/b20b84fd735a8dd3f7541129bacc4e9a?action=open_url&url=https%3A%2F%2Fpan.quark.cn%2Fs%2FAbc123", gesture = false)))
@@ -329,6 +367,7 @@ class WebScreenUiTest {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                     if (request.isForMainFrame) responseGate?.await(10, TimeUnit.SECONDS)
                     val value = request.url.toString()
+                    if (request.isForMainFrame) mainLoads.incrementAndGet()
                     val attempt = loads.incrementAndGet()
                     val title = when {
                         value.contains("/redirect") -> "跳转中"
