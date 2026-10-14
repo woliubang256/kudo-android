@@ -24,22 +24,29 @@ private val CipherSuites = arrayOf("TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SH
     "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
     "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256")
 
-internal class DohTransport(server: DohServer, private val handshake: (String, Boolean) -> Unit = { _, _ -> }) : Closeable {
+internal class DohTransport(server: DohServer, private val addressLookup: Dns? = null,
+    private val handshake: (String, Boolean) -> Unit = { _, _ -> }) : Closeable {
     init { NativeAlpnPlatform.install() }
     private val profile = NativeDoh.createProfile(JSONObject().put("url", server.url).put("bootstrap", JSONArray(server.bootstrap)).toString())
     private val lock = Any()
     private var closed = false
     private val sockets = mutableSetOf<RustSocket>()
+    private val addressOrder = DohAddressOrder()
     val dns = object : Dns {
         override fun lookup(hostname: String): List<InetAddress> {
             synchronized(lock) { if (closed) throw UnknownHostException("DoH: profile_closed") }
-            val ips = JSONObject(NativeDoh.lookup(profile, hostname)).getJSONArray("ips")
-            return (0 until ips.length()).map { InetAddress.getByAddress(hostname, InetAddress.getByName(ips.getString(it)).address) }
+            val candidates = addressLookup?.lookup(hostname) ?: run {
+                val ips = JSONObject(NativeDoh.lookup(profile, hostname)).getJSONArray("ips")
+                (0 until ips.length()).map { InetAddress.getByAddress(hostname, InetAddress.getByName(ips.getString(it)).address) }
+            }
+            return addressOrder.order(hostname, candidates)
         }
     }
     private fun socket(): RustSocket = synchronized(lock) {
         if (closed) throw SocketException("DoH: profile_closed")
-        RustSocket(NativeDoh.openSocket(profile), dns) { socket -> synchronized(lock) { sockets.remove(socket) } }.also { sockets += it }
+        RustSocket(NativeDoh.openSocket(profile), dns, addressOrder::failed) { socket ->
+            synchronized(lock) { sockets.remove(socket) }
+        }.also { sockets += it }
     }
     private val socketFactory = object : SocketFactory() {
         override fun createSocket(): Socket = socket()
@@ -75,7 +82,8 @@ internal class DohTransport(server: DohServer, private val handshake: (String, B
     }
 }
 
-private class RustSocket(val handle: Long, private val dns: Dns, private val onClose: (RustSocket) -> Unit) : Socket() {
+private class RustSocket(val handle: Long, private val dns: Dns,
+    private val connectFailure: (String, InetAddress, IOException) -> Unit, private val onClose: (RustSocket) -> Unit) : Socket() {
     private val closed = AtomicBoolean(false)
     private var remote: InetSocketAddress? = null
     private var readTimeout = 0
@@ -108,7 +116,11 @@ private class RustSocket(val handle: Long, private val dns: Dns, private val onC
         if (closed.get()) throw SocketException("Socket closed")
         val address = endpoint as? InetSocketAddress ?: throw SocketException("Unsupported address")
         val ip = address.address ?: dns.lookup(address.hostString).first()
-        NativeDoh.connect(handle, ip.hostAddress.orEmpty(), address.port, timeout)
+        try { NativeDoh.connect(handle, ip.hostAddress.orEmpty(), address.port, timeout) }
+        catch (e: IOException) {
+            if (!closed.get()) connectFailure(address.hostString, ip, e)
+            throw e
+        }
         remote = InetSocketAddress(ip, address.port)
         NativeDoh.timeout(handle, readTimeout)
     }

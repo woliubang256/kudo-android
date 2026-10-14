@@ -18,6 +18,10 @@ import okio.Buffer
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 class ImageNetworkDeviceTest {
@@ -33,6 +37,36 @@ class ImageNetworkDeviceTest {
         }
     }
     private fun request(url: HttpUrl) = ImageRequest.Builder(context).data(url.toString()).build()
+
+    @Test fun nativeImageRetryUsesTheNextAddressAfterATcpConnectionFailure() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(InetAddress.getByName("127.0.0.1"), 0)
+            val addresses = listOf("127.0.0.2", "127.0.0.1").map {
+                InetAddress.getByAddress("image.fixture.invalid", InetAddress.getByName(it).address)
+            }
+            val transport = DohTransport(BuiltInDohServer, addressLookup = object : Dns {
+                override fun lookup(hostname: String) = addresses
+            })
+            val attempts = Collections.synchronizedList(mutableListOf<String>())
+            val http = transport.configure(createImageHttpClient(RequestCooldown(), cookies, "fixture", retryDelayMillis = 0)
+                .newBuilder()).connectTimeout(1, TimeUnit.SECONDS).callTimeout(5, TimeUnit.SECONDS)
+                .eventListener(object : EventListener() {
+                    override fun connectStart(call: Call, address: InetSocketAddress, proxy: Proxy) {
+                        attempts += address.address.hostAddress.orEmpty()
+                    }
+                }).build()
+            val loader = ImageLoader.Builder(context).memoryCache(null).diskCache(null)
+                .components { add(OkHttpNetworkFetcherFactory(callFactory = { http })) }.build()
+            try {
+                server.enqueue(MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(png())))
+                val url = server.url("/image.png").newBuilder().host("image.fixture.invalid").build()
+                val result = loader.execute(request(url))
+                assertTrue("Expected recovery, got $result; attempts=$attempts", result is SuccessResult)
+                assertEquals(listOf("127.0.0.2", "127.0.0.1"), attempts.toList())
+                assertEquals(1, server.requestCount)
+            } finally { loader.shutdown(); transport.close(); http.connectionPool.evictAll() }
+        }
+    }
 
     @Test fun coilHandles429AndRecoversOverTheNativeTransportWhileCachedImagesRemainAvailable() = runBlocking {
         MockWebServer().use { server ->

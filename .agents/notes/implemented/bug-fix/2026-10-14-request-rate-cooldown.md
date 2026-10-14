@@ -18,6 +18,8 @@ RequestCooldown 为主站调用提供统一冷却，DiscourseClient 在构造网
 
 原生 JNI 的非超时连接故障映射为普通 IOException，只有已知安全码 `DoH: connection_failed` 参与一次连接重试；profile_closed、tls_record_invalid、native_unavailable 等代码不猜成临时故障。响应头已返回后的正文读取失败释放许可证并交给现有界面处理，不自动重新下载部分正文。
 
+[DoH 地址恢复](2026-10-14-doh-image-address-recovery.md)补足首个地址失败后再次选择相同 IP 的缺口，仅短暂调整当前节点候选的顺序；本篇的一次恢复、并发及冷却边界继续生效。
+
 ## Existing note audit
 
 检索活跃笔记的限流、429、头像、首页刷新与图片。与[请求契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)部分重叠：新增冷却，保留同源与写请求不重放；与[首页推送](../../implemented/feature/2026-10-08-home-live-refresh.md)部分重叠：落实已有的页面不可见即暂停约束；与[头像展示](../../implemented/feature/2026-10-08-avatar-presentation.md)部分重叠：调整元数据缓存节奏，保留状态语义与账号隔离。与[DoH 网络](../../implemented/feature/2026-10-12-doh-network.md)及[图片容量](../../implemented/bug-fix/2026-10-13-image-capacity-resolution.md)边界相关，不改变路由及按需 HEAD。通知流、详情推送、阅读历史与各图像解码笔记无决定翻转。没有完全吸收或过时提案。

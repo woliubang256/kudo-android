@@ -16,6 +16,8 @@ Status: implemented
 
 生产接入保留 OkHttp 的 HTTP、连接池、Cookie 边界、流式请求/响应及取消机制，通过自定义 SocketFactory/SSLSocketFactory 将 DNS 与 TLS 交给独立编写的 Rust 模块。支持真实 ALPN 的 HTTP/2 与 HTTP/1.1；原生 Socket 的关闭必须可中断正在等待的读写，TLS 仍严格验证原域名及证书；`linux.do` 与子域、`ldstatic.com` 与子域必须真实接受 ECH，否则明确失败。
 
+[DoH 地址恢复](../bug-fix/2026-10-14-doh-image-address-recovery.md)补足 TCP 建连失败后的候选优先级；仅记忆当前通道的临时失败，保留 DNS/ECH、证书和写操作不重放契约。
+
 配置单元位于 `DohSettings.kt`，与界面显示偏好分开持久化。自定义服务器拥有稳定 ID；删除选中节点回退内置，内置不可编辑/删除；非法持久数据过滤并修复选中 ID。URL 中的私人参数仅留在应用私有配置，不进入普通日志。
 
 Rust DNS 单元位于 `native/doh/src/dns.rs`：标准 POST 并行读取 A/AAAA/HTTPS，校验 ID/问题/rcode/截断，按域名合并在途查询并按最小 TTL 缓存，CNAME/HTTPS alias 限制 8 跳。HTTPS 查询失败与缺少 ECH 区分；DNS 引导仅解析服务器自身，不复用业务请求或凭据。依赖锁定于 Cargo.lock；6 项离线边界测试通过。
