@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.material.icons.Icons
@@ -326,10 +327,8 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
             LiquidModal(threadVisibility, "评论回复", true, modalBackdrop, glass, { threadVisibility.targetState = false }) {
                 if (thread != null && detail != null) {
                     LazyColumn(state = threadList, modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).testTag("thread-posts")) {
-                        item("root") { ThreadPreviewPost(thread.root, threadEnabled, image, openLink, ::navigatePost,
-                            replyAuthorLabel(thread.root, thread.root.number, threadPosts), state, like, ::replyTo, ::choose) }
-                        items(thread.replies, key = { it.id }) { post ->
-                            HorizontalDivider()
+                        itemsIndexed(thread.replies, key = { _, post -> post.id }) { index, post ->
+                            if (index > 0) HorizontalDivider()
                             ThreadPreviewPost(post, threadEnabled, image, openLink, ::navigatePost,
                                 replyAuthorLabel(post, thread.root.number, threadPosts), state, like, ::replyTo, ::choose)
                         }

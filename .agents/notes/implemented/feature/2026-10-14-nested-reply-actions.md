@@ -33,6 +33,10 @@ RMX2202 / Android 13 上 23 个不同定向真机用例均已验证：9 项新�
 
 Debug 与 AndroidTest 构建和最终 Lint 通过（actions-heart-fixed-build.txt、actions-final-lint.txt）。版本显式使用真机已有的 2005 / 0.2.3，核对相同开发签名后以 adb install -r 覆盖主包、install -r -t 覆盖测试包，保留登录数据。已查看 nested-reply-actions-light.png、nested-reply-actions-dark-large.png，头像与正文对齐，底部时间/爱心/回复按钮和 #楼层/跳转图标在 280dp、130% 字号下仍可见。写入使用测试替身和本地服务器，不向真实社区发帖或点赞。
 
+## Follow-up decision
+
+The dialog rendering scope was refined by [Nested reply dialog shows replies only](./2026-10-15-nested-reply-dialog-replies-only.md): the root remains in the model for attribution and pagination, but its duplicate card is no longer rendered. The interaction contracts described here continue to apply to every reply card that is rendered.
+
 ## Consequences
 
 长作者名和大字号会减少正文宽度，需检查右侧按钮与跳楼入口不被挤出。计数只使用服务器状态，等待网络确认时保持旧计数并禁用重复操作。

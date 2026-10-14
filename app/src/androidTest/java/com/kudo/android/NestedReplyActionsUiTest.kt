@@ -42,10 +42,17 @@ class NestedReplyActionsUiTest {
     private fun open() = compose.onNodeWithText("查看 2 条回复").performScrollTo().performClick()
     private fun showFloor(number: Int) = compose.onNodeWithTag("thread-posts").performScrollToNode(hasTestTag("thread-preview-post-$number"))
 
+    @Test fun discussionDoesNotRepeatTheOriginalComment() {
+        compose.setContent { KudoTheme(DisplaySettings()) { Screen() } }
+        open()
+        compose.onNodeWithTag("thread-preview-post-2").assertDoesNotExist()
+        compose.onNodeWithTag("thread-preview-post-3").assertIsDisplayed()
+    }
+
     @Test fun discussionShowsTwoActionsAndFloorWithJumpIconForEachPost() {
         compose.setContent { KudoTheme(DisplaySettings()) { Screen() } }
         open()
-        for (number in 2..4) {
+        for (number in 3..4) {
             showFloor(number)
             compose.onNodeWithTag("thread-like-$number").assertIsDisplayed()
             compose.onNodeWithTag("thread-reply-$number").assertIsDisplayed()
@@ -131,10 +138,10 @@ class NestedReplyActionsUiTest {
         compose.onNodeWithTag("thread-reply-4").performClick()
         compose.onNodeWithTag("thread-posts").assertDoesNotExist()
         compose.runOnIdle { assertEquals(listOf(4), replied) }
-        open(); showFloor(2)
-        compose.onNodeWithTag("thread-reply-2").performClick()
+        open(); showFloor(3)
+        compose.onNodeWithTag("thread-reply-3").performClick()
         compose.onNodeWithTag("thread-posts").assertDoesNotExist()
-        compose.runOnIdle { assertEquals(listOf(4, 2), replied) }
+        compose.runOnIdle { assertEquals(listOf(4, 3), replied) }
     }
 
     @Test fun closedAndArchivedTopicsDisableReplyAndServerPermissionsDisableLikes() {
