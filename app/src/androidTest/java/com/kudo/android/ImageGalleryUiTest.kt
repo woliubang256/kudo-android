@@ -368,6 +368,39 @@ class ImageGalleryUiTest {
         compose.onNodeWithTag("article-image-post-11-1").assertIsDisplayed()
     }
 
+    @Test fun discussionImageReturnsToItsPreviewAndKeepsFloorAndActionsAvailable() {
+        val first = Post(10, 1, author, "<p>主帖正文</p>", "", 0, false, null, null, true)
+        val root = first.copy(id = 11, number = 2, cooked = "<p>原评论正文</p>", replyCount = 1)
+        val child = first.copy(id = 12, number = 3, cooked = html(pictures.take(2)), replyTo = 2)
+        val posts = listOf(first, root, child)
+        compose.setContent { KudoTheme(DisplaySettings()) { ImageGalleryHost({ emptyList() }, {}) {
+            val gallery = LocalImageGallery.current
+            SideEffect { observedGallery = gallery }
+            TopicScreen(TopicState(TopicDetail(5, "楼中楼图片", 1, posts, posts.map(Post::id), false), false,
+                replyLoads = mapOf(root.id to ReplyLoad(cursors = mapOf(root.id to ReplyCursor(3, true))))),
+                GlassMode.LIQUID, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+        } } }
+        compose.onNodeWithText("查看 1 条回复").performScrollTo().performClick()
+        compose.onNodeWithTag("thread-posts").performScrollToNode(hasTestTag("article-image-thread-preview-12-0"))
+        compose.waitUntil(5_000) { loaded.contains(pictures.first().url) }
+        compose.onNodeWithTag("article-image-thread-preview-12-0").performTouchInput { click() }
+        compose.onNodeWithText("1 / 2").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(pictures.first().originalUrl, observedGallery!!.session!!.current.originalUrl)
+            assertNotNull(observedGallery!!.openingAnchor?.painter)
+        }
+        compose.onNodeWithTag("gallery-page-0").performTouchInput { click() }
+        compose.onNodeWithTag("image-viewer").assertDoesNotExist()
+        compose.onNodeWithTag("article-image-thread-preview-12-0").assertIsDisplayed()
+        compose.onNodeWithTag("thread-posts").performScrollToNode(hasTestTag("thread-like-3"))
+        compose.onNodeWithTag("thread-like-3").assertIsEnabled()
+        compose.onNodeWithTag("thread-reply-3").assertIsEnabled()
+        compose.onNodeWithTag("thread-floor-3").performScrollTo().assertTextEquals("#3")
+        compose.onNodeWithTag("thread-jump-3").performClick()
+        compose.onNodeWithTag("thread-posts").assertDoesNotExist()
+        compose.onNodeWithTag("post-3").assertIsDisplayed()
+    }
+
     @Test fun listImageOpensTopicOnceWithoutPreviewOrAlbumRequest() {
         var topicOpens = 0
         var albumRequests = 0

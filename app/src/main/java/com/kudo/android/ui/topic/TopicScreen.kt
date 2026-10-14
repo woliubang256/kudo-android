@@ -317,6 +317,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
         val threadList = rememberLazyListState()
         LaunchedEffect(threadRootId) { threadList.scrollToItem(0) }
         val threadLoad = thread?.let { state.replyLoads[it.root.id] }
+        val threadEnabled = threadVisibility.targetState && !overlayShowing && !covered && !state.loading && !state.jumping
         AutomaticPostLoading(threadList, "more-replies", threadRootId to threadLoad?.cursors,
             threadVisibility.targetState && !overlayShowing && !covered && thread != null && state.hasMoreReplies(thread.root) &&
                 !state.loading && !state.jumping && !state.contextLoading && threadLoad?.loading != true && threadLoad?.error == null) { thread?.let { loadReplies(it.root, false) } }
@@ -325,12 +326,12 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
             LiquidModal(threadVisibility, "评论回复", true, modalBackdrop, glass, { threadVisibility.targetState = false }) {
                 if (thread != null && detail != null) {
                     LazyColumn(state = threadList, modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).testTag("thread-posts")) {
-                        item("root") { ThreadPreviewPost(thread.root, !overlayShowing, image, openLink, ::navigatePost,
-                            replyAuthorLabel(thread.root, thread.root.number, threadPosts)) }
+                        item("root") { ThreadPreviewPost(thread.root, threadEnabled, image, openLink, ::navigatePost,
+                            replyAuthorLabel(thread.root, thread.root.number, threadPosts), state, like, ::replyTo, ::choose) }
                         items(thread.replies, key = { it.id }) { post ->
                             HorizontalDivider()
-                            ThreadPreviewPost(post, !overlayShowing, image, openLink, ::navigatePost,
-                                replyAuthorLabel(post, thread.root.number, threadPosts))
+                            ThreadPreviewPost(post, threadEnabled, image, openLink, ::navigatePost,
+                                replyAuthorLabel(post, thread.root.number, threadPosts), state, like, ::replyTo, ::choose)
                         }
                         val load = state.replyLoads[thread.root.id]
                         if (load?.loading == true) item { LoadingRow() }

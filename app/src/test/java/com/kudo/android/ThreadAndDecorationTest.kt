@@ -13,9 +13,80 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ThreadAndDecorationTest {
+    @Test fun previewOnlyReplyCanBeLikedWithoutInsertingItIntoTheTimelineOrDuplicatingWrites() = runTest {
+        val writes = AtomicInteger()
+        val release = CountDownLatch(1)
+        withVm(dispatch = { request -> when (request.path) {
+            "/t/5.json" -> topic(json(1), json(2, 1, 1))
+            "/posts/2/replies.json?after=1" -> "[${reactionReply(2, false)}]"
+            "/session/csrf" -> """{"csrf":"test"}"""
+            "/discourse-reactions/posts/3/custom-reactions/heart/toggle.json" -> {
+                assertEquals("PUT", request.method)
+                writes.incrementAndGet()
+                check(release.await(5, TimeUnit.SECONDS))
+                reactionReply(27, true)
+            }
+            else -> null
+        } }) { vm -> try {
+            val root = vm.await { !it.loading }.detail!!.posts.last()
+            vm.loadReplies(root, true)
+            val cached = vm.await { it.replyLoads[root.id]?.loading == false && it.related.any { p -> p.id == 3 } }.related.single()
+            vm.like(cached)
+            vm.like(cached)
+            assertEquals(setOf(3), vm.state.value.busy)
+            assertEquals(2, vm.state.value.related.single().reactionCount)
+            release.countDown()
+            val confirmed = vm.await { it.busy.isEmpty() }
+            assertEquals(1, writes.get())
+            assertEquals(27, confirmed.related.single().reactionCount)
+            assertEquals("heart", confirmed.related.single().activeReaction)
+            assertEquals(listOf(1, 2), confirmed.detail!!.posts.map(Post::number))
+            assertEquals(27, confirmed.threads.last().replies.single().reactionCount)
+        } finally { release.countDown() } }
+    }
+
+    @Test fun discussionAndOriginalFloorShareConfirmedLikeAndUnlikeEvenWithAnOldPostSnapshot() = runTest {
+        val writes = AtomicInteger()
+        withVm(dispatch = { request -> when {
+            request.path == "/t/5.json" -> topic(json(1), json(2, 1, 1))
+            request.path == "/posts/2/replies.json?after=1" -> "[${reactionReply(2, false)}]"
+            request.path == "/session/csrf" -> """{"csrf":"test"}"""
+            request.path == "/discourse-reactions/posts/3/custom-reactions/heart/toggle.json" -> {
+                assertEquals("PUT", request.method)
+                val active = writes.incrementAndGet() == 1
+                reactionReply(if (active) 27 else 26, active)
+            }
+            request.requestUrl!!.encodedPath == "/t/5/posts.json" ->
+                """{"post_stream":{"posts":[${reactionReply(2, false)},${json(4)}]}}"""
+            else -> null
+        } }) { vm ->
+            val root = vm.await { !it.loading }.detail!!.posts.last()
+            vm.loadReplies(root, true)
+            val cached = vm.await { it.replyLoads[root.id]?.loading == false && it.related.any { p -> p.id == 3 } }.related.single()
+            vm.more()
+            val paged = vm.await { !it.loadingMore }
+            assertTrue(paged.detail!!.posts.any { it.id == 3 })
+            assertTrue(paged.related.any { it.id == 3 })
+            vm.like(cached)
+            val liked = vm.await { it.busy.isEmpty() }
+            assertEquals(27, liked.detail!!.posts.first { it.id == 3 }.reactionCount)
+            assertEquals("heart", liked.related.single().activeReaction)
+            assertEquals(liked.related.single(), liked.detail.posts.first { it.id == 3 })
+            vm.like(cached)
+            val unliked = vm.await { it.busy.isEmpty() }
+            assertEquals(2, writes.get())
+            assertNull(unliked.related.single().activeReaction)
+            assertEquals(26, unliked.detail!!.posts.first { it.id == 3 }.reactionCount)
+            assertEquals(unliked.related.single(), unliked.detail.posts.first { it.id == 3 })
+        }
+    }
+
+    private fun reactionReply(count: Int, active: Boolean) = """{"id":3,"post_number":3,"user_id":1,"username":"author","cooked":"<p>回复正文</p>","reply_to_post_number":2,"actions_summary":[{"id":2,"count":$count,"can_act":${!active},"can_undo":$active}],"reactions":[{"id":"heart","type":"emoji","count":$count}],"reaction_users_count":$count,"current_user_reaction":${if (active) """{"id":"heart","type":"emoji","can_undo":true}""" else "null"}}"""
+
     @Test fun previewOnlyCachedFloorBecomesAnOriginalTimelineItemWhenNavigated() = runTest {
         val paths = CopyOnWriteArrayList<String>()
         val releaseAuthor = CountDownLatch(1)

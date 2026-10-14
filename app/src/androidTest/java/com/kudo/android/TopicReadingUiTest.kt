@@ -88,7 +88,10 @@ class TopicReadingUiTest {
             CompositionLocalProvider(LocalReadingBlocked provides blocked) {
                 TopicScreen(state, GlassMode.TRANSLUCENT, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
                     onReadingBatch = { batches += it }, onPostsRead = { state = state.copy(readNumbers = state.readNumbers + it) },
-                    jumpTo = { state = state.copy(detail = detail.copy(posts = listOf(root, child)), targetNumber = it, targetRevision = state.targetRevision + 1) })
+                    jumpTo = {
+                        blocked = true // 到达原楼层后先暂停计时，检查未读状态再继续曝光。
+                        state = state.copy(detail = detail.copy(posts = listOf(root, child)), targetNumber = it, targetRevision = state.targetRevision + 1)
+                    })
             }
         } }
         compose.waitForIdle(); SystemClock.sleep(1300)
@@ -100,6 +103,8 @@ class TopicReadingUiTest {
         compose.runOnIdle { blocked = false }
         compose.waitForIdle(); SystemClock.sleep(1300)
         compose.runOnIdle { assertEquals(setOf(8), state.readNumbers); blocked = true }
+        compose.onNodeWithTag("thread-jump-9").assertIsNotEnabled()
+        compose.runOnIdle { blocked = false }
         compose.onNodeWithTag("thread-jump-9").performScrollTo().performClick()
         compose.onNodeWithTag("post-9").assertIsDisplayed()
         compose.onNodeWithTag("unread-post-9").assertIsDisplayed()

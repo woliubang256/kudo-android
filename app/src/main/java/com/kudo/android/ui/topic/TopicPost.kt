@@ -12,8 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -238,24 +240,48 @@ private fun ReplyPreviewImages(images: List<ArticleBlock.Image>, postId: Int, la
 
 @Composable
 internal fun ThreadPreviewPost(post: Post, enabled: Boolean, image: (String) -> Unit,
-    openLink: (String) -> Unit, navigate: (Int) -> Unit, authorLabel: String = post.author.displayName) {
+    openLink: (String) -> Unit, navigate: (Int) -> Unit, authorLabel: String, state: TopicState,
+    like: (Post) -> Unit, reply: (Post) -> Unit, choose: (Post) -> Unit) {
     val hidden = post.author.username.lowercase(Locale.ROOT) in LocalIgnoredUsers.current
-    Column(Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("thread-preview-post-${post.number}"),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Avatar(post.author, 24.dp)
-            Text(authorLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("#${post.number}", Modifier.testTag("thread-floor-${post.number}"), maxLines = 1,
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            IconButton(onClick = { navigate(post.number) }, enabled = enabled,
-                modifier = Modifier.testTag("thread-jump-${post.number}")) {
-                Icon(Icons.Rounded.OpenInNew, "跳到第 ${post.number} 楼", Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary)
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("thread-preview-post-${post.number}"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.padding(top = 10.dp)) { Avatar(post.author, 28.dp, presentation = AvatarPresentation.PUBLIC) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(authorLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("#${post.number}", Modifier.testTag("thread-floor-${post.number}"), maxLines = 1,
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = { navigate(post.number) }, enabled = enabled,
+                    modifier = Modifier.testTag("thread-jump-${post.number}")) {
+                    Icon(Icons.Rounded.OpenInNew, "跳到第 ${post.number} 楼", Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            if (hidden) Text("内容已忽略", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else RichContent(post.cooked, image, openLink, galleryKey = "thread-preview-${post.id}")
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).padding(end = 4.dp).testTag("thread-metadata-${post.number}")) {
+                    TopicAuthorMetadata(post.updatedAt, null, post.edited)
+                }
+                if (!hidden) {
+                    TopicReactionButton(post, enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canReact),
+                        choose = if (post.reactionsAvailable && state.detail?.validReactions?.isNotEmpty() == true) ({ choose(post) }) else null,
+                        click = { like(post) }, modifier = Modifier.testTag("thread-like-${post.number}"))
+                    val canReply = enabled && state.detail?.closed == false && state.detail.archived == false
+                    Row(Modifier.clip(RoundedCornerShape(50)).clickable(enabled = canReply, role = Role.Button,
+                        onClickLabel = "回复第 ${post.number} 楼") { reply(post) }
+                        .heightIn(min = 48.dp).widthIn(min = 48.dp).padding(horizontal = 8.dp)
+                        .testTag("thread-reply-${post.number}"), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Icon(Icons.Rounded.ChatBubbleOutline, "回复第 ${post.number} 楼", Modifier.size(19.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (canReply) .75f else .38f))
+                        if (post.replyCount > 0) Text(post.replyCount.toString(), style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (canReply) .75f else .38f))
+                    }
+                }
             }
         }
-        if (hidden) Text("内容已忽略", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        else RichContent(post.cooked, image, openLink, galleryKey = "thread-preview-${post.id}")
     }
 }
 
