@@ -34,13 +34,15 @@ class ExternalAppLinkPolicyTest {
         assertEquals("https://example.org/help", ExternalAppLinkPolicy.fallbackUrl("https://example.org/help"))
     }
 
-    @Test fun browsersAndThisAppAreExcludedButMatchingAppsRemain() {
-        val native = AppLinkCandidate("native.app", "ShareActivity", false)
-        assertEquals(listOf(native), appLinkCandidates(listOf(
-            AppLinkCandidate("chrome", "Main", true), AppLinkCandidate("com.quark.browser", "Main", true),
-            AppLinkCandidate("com.kudo.android", "Main", false), AppLinkCandidate("android", "Resolver", false),
-            native, native.copy(activityName = "Other")
-        ), "com.kudo.android"))
+    @Test fun siteBoundaryIncludesSubdomainsButExcludesLookalikesAndUnsafeUrls() {
+        listOf("/t/123", "https://linux.do/", "http://connect.linux.do/help",
+            "https://a.b.linux.do/", "https://LINUX.DO/").forEach {
+            assertTrue(it, ExternalAppLinkPolicy.isSiteUrl(it))
+        }
+        listOf("https://linux.do.evil.test/", "https://notlinux.do/", "https://example.org/?next=linux.do",
+            "https://user@linux.do/", "javascript:alert(1)", scheme).forEach {
+            assertFalse(it, ExternalAppLinkPolicy.isSiteUrl(it))
+        }
     }
 
     @Test fun onlyMainFrameUserClicksCanLeaveTheWebView() {

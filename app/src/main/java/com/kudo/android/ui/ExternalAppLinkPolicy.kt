@@ -39,4 +39,3 @@ internal object ExternalAppLinkPolicy {
 
     fun canOpenFromWeb(mainFrame: Boolean, gesture: Boolean, redirect: Boolean) = mainFrame && gesture && !redirect
 }
-

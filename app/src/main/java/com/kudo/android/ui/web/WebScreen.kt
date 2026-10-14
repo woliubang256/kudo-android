@@ -33,7 +33,6 @@ import com.kudo.android.ui.ExternalAppLinkPolicy
 import com.kudo.android.data.ExternalLinkMode
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 private class WebPageState(val saved: Bundle? = null) {
     var view: WebView? = null
