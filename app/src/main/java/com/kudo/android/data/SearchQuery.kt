@@ -71,8 +71,9 @@ internal fun searchTokens(query: String): List<String> {
 }
 
 private fun managed(token: String): Boolean {
-    if (token.startsWith('"') || token.contains('"')) return false
+    if (token.startsWith('"')) return false
     val key = token.substringBefore(':').lowercase()
+    if (token.contains('"') && key !in setOf("category", "categories")) return false
     return token.startsWith('@') || token.startsWith('#') || key in setOf("category", "categories", "tag", "tags", "status", "user",
         "before", "after", "min_posts", "max_posts", "min_views", "max_views", "assigned", "order") ||
         (key == "in" && token.substringAfter(':').lowercase() in SearchScopes.map { it.value }) ||
@@ -91,7 +92,7 @@ fun parseSearchFilters(query: String): SearchFilters {
                 "category", "categories" -> filters.copy(category = value)
                 "tag", "tags" -> filters.copy(tags = (filters.tags + value.split(',', '+')).distinct(), allTags = value.contains('+'))
                 "in" -> filters.copy(scopes = filters.scopes + value.lowercase())
-                "with" -> if (value == "images") filters.copy(scopes = filters.scopes + "images") else filters.copy(expertResponse = true)
+                "with" -> if (value.equals("images", true)) filters.copy(scopes = filters.scopes + "images") else filters.copy(expertResponse = true)
                 "status" -> filters.copy(status = value.lowercase())
                 "user" -> filters.copy(username = value)
                 "before", "after" -> filters.copy(timeWhen = token.substringBefore(':').lowercase(), date = value)

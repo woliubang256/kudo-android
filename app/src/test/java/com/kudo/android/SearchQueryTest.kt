@@ -5,6 +5,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SearchQueryTest {
+    @Test fun quotedCategoryArgumentIsReplacedWithoutDeletingQuotedLiteralText() {
+        val query = "\"category:literal\" linux category:\"开发 调优\""
+        assertEquals("\"开发 调优\"", parseSearchFilters(query).category)
+        assertEquals("\"category:literal\" linux category:4 order:relevance", withSearchFilters(query, SearchFilters(category = "4"), SearchSort.RELEVANCE))
+    }
+
+    @Test fun caseInsensitiveImageOperatorDoesNotBecomeExpertResponse() {
+        val filters = parseSearchFilters("关键词 WITH:IMAGES")
+        assertEquals(setOf("images"), filters.scopes)
+        assertFalse(filters.expertResponse)
+    }
+
     @Test fun allPanelFieldsUseWebsiteTokensAndRoundTrip() {
         val filters = SearchFilters("4", listOf("安卓", "开发"), true, setOf("seen", "images"), "solved", "neo",
             "after", "2026-10-01", "2", "20", "10", "300", "staff", true)
