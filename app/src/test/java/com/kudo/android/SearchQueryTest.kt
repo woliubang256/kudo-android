@@ -5,6 +5,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SearchQueryTest {
+    @Test fun websiteSortAliasesAreNotOverriddenOrKeptAsKeywords() {
+        assertEquals(SearchSort.LATEST, searchSort("关键词 l"))
+        assertEquals(SearchSort.READ, searchSort("关键词 r"))
+        assertEquals("关键词 order:likes", withSearchSort("关键词 l", SearchSort.LIKES))
+        assertEquals("\"l\" order:views", withSearchSort("\"l\" r", SearchSort.VIEWS))
+    }
+
+    @Test fun repeatedSingleTagFiltersRemainAnIntersection() {
+        val filters = parseSearchFilters("关键词 tag:安卓 tag:开发")
+        assertTrue(filters.allTags)
+        assertEquals("关键词 tags:安卓+开发 order:relevance", withSearchFilters("关键词 tag:安卓 tag:开发", filters, SearchSort.RELEVANCE))
+    }
+
+    @Test fun unchangedMixedTagClausesKeepTheirOriginalBooleanExpression() {
+        val query = "关键词 tags:安卓,开发 tag:教程 @old"
+        val filters = parseSearchFilters(query).copy(username = "new")
+        val rebuilt = withSearchFilters(query, filters, SearchSort.LIKES)
+        assertTrue(rebuilt.contains("tags:安卓,开发 tag:教程"))
+        assertTrue(rebuilt.contains("@new"))
+        assertFalse(rebuilt.contains("@old"))
+    }
+
     @Test fun quotedCategoryArgumentIsReplacedWithoutDeletingQuotedLiteralText() {
         val query = "\"category:literal\" linux category:\"开发 调优\""
         assertEquals("\"开发 调优\"", parseSearchFilters(query).category)

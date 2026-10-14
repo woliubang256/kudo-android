@@ -72,6 +72,7 @@ internal fun searchTokens(query: String): List<String> {
 
 private fun managed(token: String): Boolean {
     if (token.startsWith('"')) return false
+    if (token.lowercase() in setOf("l", "r")) return true
     val key = token.substringBefore(':').lowercase()
     if (token.contains('"') && key !in setOf("category", "categories")) return false
     return token.startsWith('@') || token.startsWith('#') || key in setOf("category", "categories", "tag", "tags", "status", "user",
@@ -90,7 +91,8 @@ fun parseSearchFilters(query: String): SearchFilters {
             token.startsWith('#') -> filters.copy(category = token.drop(1))
             else -> when (token.substringBefore(':').lowercase()) {
                 "category", "categories" -> filters.copy(category = value)
-                "tag", "tags" -> filters.copy(tags = (filters.tags + value.split(',', '+')).distinct(), allTags = value.contains('+'))
+                "tag", "tags" -> filters.copy(tags = (filters.tags + value.split(',', '+')).distinct(),
+                    allTags = filters.allTags || value.contains('+') || (filters.tags.isNotEmpty() && !value.contains(',')))
                 "in" -> filters.copy(scopes = filters.scopes + value.lowercase())
                 "with" -> if (value.equals("images", true)) filters.copy(scopes = filters.scopes + "images") else filters.copy(expertResponse = true)
                 "status" -> filters.copy(status = value.lowercase())
@@ -108,11 +110,24 @@ fun parseSearchFilters(query: String): SearchFilters {
     return filters
 }
 
-fun searchSort(query: String): SearchSort? = searchTokens(query).lastOrNull { it.startsWith("order:", true) && !it.contains('"') }
-    ?.substringAfter(':')?.let { value -> SearchSort.entries.firstOrNull { it.token.equals(value, true) } }
+fun searchSort(query: String): SearchSort? = searchTokens(query).lastOrNull {
+    (it.startsWith("order:", true) && !it.contains('"')) || it.lowercase() in setOf("l", "r")
+}?.let { token -> when (token.lowercase()) {
+    "l" -> SearchSort.LATEST
+    "r" -> SearchSort.READ
+    else -> SearchSort.entries.firstOrNull { it.token.equals(token.substringAfter(':'), true) }
+} }
 
-fun withSearchFilters(query: String, filters: SearchFilters, sort: SearchSort): String =
-    (searchTokens(query).filterNot(::managed) + filters.tokens() + "order:${sort.token}").joinToString(" ")
+fun withSearchFilters(query: String, filters: SearchFilters, sort: SearchSort): String {
+    val tokens = searchTokens(query)
+    val tagClauses = tokens.filter { managed(it) && it.substringBefore(':').lowercase() in setOf("tag", "tags") }
+    val original = parseSearchFilters(query)
+    // (a OR b) AND c cannot be flattened into one comma/plus list. Keep it when only other fields changed.
+    val preserveTags = tagClauses.size > 1 && tagClauses.any { it.contains(',') } &&
+        original.tags == filters.tags && original.allTags == filters.allTags
+    val filterTokens = if (preserveTags) filters.tokens().filterNot { it.startsWith("tags:") } + tagClauses else filters.tokens()
+    return (tokens.filterNot(::managed) + filterTokens + "order:${sort.token}").joinToString(" ")
+}
 
 fun withSearchSort(query: String, sort: SearchSort): String =
-    (searchTokens(query).filterNot { it.startsWith("order:", true) && !it.contains('"') } + "order:${sort.token}").joinToString(" ")
+    (searchTokens(query).filterNot { (it.startsWith("order:", true) && !it.contains('"')) || it.lowercase() in setOf("l", "r") } + "order:${sort.token}").joinToString(" ")

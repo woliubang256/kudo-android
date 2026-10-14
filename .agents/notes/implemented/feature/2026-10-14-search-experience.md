@@ -16,6 +16,10 @@ SearchQuery 以引号感知的 token 切分实现面板条件替换；排序只�
 
 完整被引号包围的 category: 文本是字面词语；category:"名称 含空格" 则是分类操作符，换分类必须替换它，不能保留为第二个互相冲突的条件。with:images 大小写不影响语义。两项边界先测试失败（artifacts/search-quoted-query-repro.txt）再修复。
 
+网页的 l/r 排序缩写映射为 latest/read，改变排序时移除旧缩写而不触及引号字面文本。多个单标签条件保持交集，避免面板重新应用时扩大结果；两项先失败（artifacts/search-alias-repro.txt）再修复。
+
+多个标签子句含逗号时可能表达“(a 或 b) 且 c”，不能压平成单一列表。未编辑标签条件时沿用原始子句，仅改变其他筛选字段；修改标签集合或所有标签选项才改为面板的新条件。混合标签用例先失败（artifacts/search-mixed-tags-repro.txt）再修复。
+
 SearchViewModel 从 FeedViewModel 分离。账号、搜索与标签建议各有代际令牌，取消后迟到的响应不能覆盖新状态。历史、元数据、标签错误独立于主结果。分页成功才推进 page，失败保留命中和下一页重试位置。换号同步取消四类任务并重置状态，forAccount 在 Compose effect 执行前也屏蔽旧账号数据。类别/用户请求仅提取词语，不携带帖子排序和筛选；帖子搜索成功后重新读取服务端历史，不伪造本地记录。
 
 SearchFiltersPanel 使用 Foundation 输入、自绘选项和黄色选中态；分类可搜索、标签建议来自服务器，范围/话题状态/日期方向在面板内展开，提供固定底部重置与应用。个人范围仅登录显示，已解决、指定给和专家回应由站点/账号能力决定；读取失败保留基本字段并可重试。
@@ -37,6 +41,8 @@ SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏�
 ## Testing
 
 SearchDataTest 六项通过（artifacts/search-data-tests.txt），覆盖命中顺序、多个楼层、真实作者、标签 slug、分页上限、访客零历史请求、严格历史字段、专用用户/标签接口和权限能力。测试不向真实社区写入内容，不卸载或清数据。
+
+SearchQueryTest 九项通过，覆盖所有面板 token、引号字面文本、带引号分类参数、未知操作符、范围与日期校验、排序缩写、重复与混合标签语义；相关失败复现日志与修复日志保留于 artifacts/。
 
 SearchUiTest 八项与搜索入口/主题样式/楼层定位五项回归共十三项真机通过（artifacts/search-verified-device.txt），覆盖历史登录隔离、三类原生跳转、真实命中楼层、排序与高级条件、深色130%字号、短窗口校验与固定底部动作、返回先收起筛选。初次重置断言把提示文字也当成输入，日志 EditableText 已为空；改为直接检查 EditableText，未改产品重置逻辑。
 
