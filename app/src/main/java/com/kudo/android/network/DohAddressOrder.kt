@@ -17,7 +17,8 @@ internal class DohAddressOrder(private val nowMillis: () -> Long = { System.nano
 
     @Synchronized
     fun failed(host: String, ip: InetAddress, error: IOException) {
-        if (error !is SocketTimeoutException && error.message !in setOf("DoH: connection_failed")) return
+        if (error !is SocketTimeoutException && error.message !in setOf("DoH: connection_failed",
+                "DoH: connect_refused", "DoH: connect_unreachable", "DoH: connect_reset", "DoH: connect_timeout", "DoH: connect_failed")) return
         expire()
         val key = Address(host.lowercase(), ip)
         failures.remove(key)

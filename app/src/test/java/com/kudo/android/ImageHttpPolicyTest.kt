@@ -158,15 +158,20 @@ class ImageHttpPolicyTest {
     @Test fun nativeConnectionErrorsRetryOnceButNativeProfileAndTlsErrorsDoNot() {
         MockWebServer().use { server ->
             server.start()
-            val attempts = AtomicInteger()
-            val http = http().newBuilder().addNetworkInterceptor { chain ->
-                if (attempts.incrementAndGet() == 1) throw IOException("DoH: connection_failed")
-                chain.proceed(chain.request())
-            }.build()
-            server.enqueue(MockResponse().setBody("image"))
-            http.newCall(image(server)).execute().use { assertEquals("image", it.body!!.string()) }
-            assertEquals(2, attempts.get())
-            for (code in listOf("profile_closed", "tls_record_invalid", "native_unavailable")) {
+            for (code in listOf("connection_failed", "connect_refused", "connect_unreachable", "connect_reset",
+                    "connect_timeout", "connect_failed", "read_reset", "read_timeout", "read_eof",
+                    "write_reset", "write_broken_pipe", "write_timeout", "socket_timeout", "dns_timeout")) {
+                val attempts = AtomicInteger()
+                val http = http().newBuilder().addNetworkInterceptor { chain ->
+                    if (attempts.incrementAndGet() == 1) throw IOException("DoH: $code")
+                    chain.proceed(chain.request())
+                }.build()
+                server.enqueue(MockResponse().setBody("image"))
+                http.newCall(image(server)).execute().use { assertEquals("image", it.body!!.string()) }
+                assertEquals(code, 2, attempts.get())
+                http.connectionPool.evictAll()
+            }
+            for (code in listOf("profile_closed", "tls_record_invalid", "native_unavailable", "read_failed", "write_failed")) {
                 val errors = AtomicInteger()
                 val failing = http().newBuilder().addNetworkInterceptor { errors.incrementAndGet(); throw IOException("DoH: $code") }.build()
                 assertTrue(runCatching { failing.newCall(image(server)).execute() }.exceptionOrNull() is IOException)
@@ -192,7 +197,7 @@ class ImageHttpPolicyTest {
             }.build()
             assertTrue(runCatching { failing.newCall(image(server)).execute() }.exceptionOrNull() is IOException)
             assertEquals(2, failingAttempts.get())
-            for (code in listOf(403, 429, 503)) {
+            for (code in listOf(403, 408, 429, 503)) {
                 val before = server.requestCount
                 server.enqueue(MockResponse().setResponseCode(code).setHeader("Retry-After", "0"))
                 server.enqueue(MockResponse().setBody("unexpected retry"))
@@ -201,6 +206,20 @@ class ImageHttpPolicyTest {
                 // Consume the sentinel only after proving the original request did not replay.
                 http().newCall(image(server, "/sentinel")).execute().close()
             }
+        }
+    }
+
+    @Test fun closedNativeProfilesDoNotRetryThroughSocketOrDnsExceptionTypes() {
+        MockWebServer().use { server ->
+            server.start()
+            for (failure in listOf(SocketException("DoH: profile_closed"), java.net.UnknownHostException("DoH: profile_closed"))) {
+                val attempts = AtomicInteger()
+                val http = http().newBuilder().addNetworkInterceptor { attempts.incrementAndGet(); throw failure }.build()
+                assertTrue(runCatching { http.newCall(image(server)).execute() }.exceptionOrNull() is IOException)
+                assertEquals(1, attempts.get())
+                http.connectionPool.evictAll()
+            }
+            assertEquals(0, server.requestCount)
         }
     }
 }

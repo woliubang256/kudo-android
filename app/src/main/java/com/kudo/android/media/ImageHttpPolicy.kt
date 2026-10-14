@@ -107,7 +107,11 @@ private class ImageRequestPolicy(private val cooldown: RequestCooldown, parallel
     private fun transient(failure: IOException): Boolean {
         if (failure is ImageCoolingDown || failure is SSLException || failure is ProtocolException ||
             (failure is InterruptedIOException && failure !is SocketTimeoutException)) return false
+        if (failure.message.orEmpty().startsWith("DoH: ")) return failure.message in setOf(
+                "DoH: connection_failed", "DoH: connect_refused", "DoH: connect_unreachable", "DoH: connect_reset",
+                "DoH: connect_timeout", "DoH: connect_failed", "DoH: read_reset", "DoH: read_timeout", "DoH: read_eof",
+                "DoH: write_reset", "DoH: write_broken_pipe", "DoH: write_timeout", "DoH: socket_timeout", "DoH: dns_timeout")
         return failure is SocketException || failure is SocketTimeoutException || failure is UnknownHostException ||
-            failure is EOFException || failure.cause is EOFException || failure.message == "DoH: connection_failed"
+            failure is EOFException || failure.cause is EOFException
     }
 }

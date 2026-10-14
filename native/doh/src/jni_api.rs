@@ -52,6 +52,22 @@ fn output(env: &mut JNIEnv, value: String) -> io::Result<jstring> {
         .map_err(|_| error("jni_allocation"))
 }
 
+fn java_exception<'a>(class: &'a str, error: &io::Error) -> (&'a str, String) {
+    let safe = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<crate::SafeCode>())
+        .map(|c| c.0);
+    // Only controlled codes cross JNI; raw platform details can contain private parameters.
+    let (class, code) = match error.kind() {
+        io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => (
+            "java/net/SocketTimeoutException",
+            safe.unwrap_or("socket_timeout"),
+        ),
+        _ => (class, safe.unwrap_or("connection_failed")),
+    };
+    (class, format!("DoH: {code}"))
+}
+
 fn guard<T: Default>(
     env: &mut JNIEnv,
     class: &str,
@@ -62,23 +78,7 @@ fn guard<T: Default>(
     match result {
         Ok(value) => value,
         Err(e) => {
-            let (class, message) = match e.kind() {
-                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => (
-                    "java/net/SocketTimeoutException",
-                    "DoH: socket_timeout".to_owned(),
-                ),
-                // Never expose platform error details, URLs, headers, or private node parameters.
-                _ => (
-                    class,
-                    format!(
-                        "DoH: {}",
-                        e.get_ref()
-                            .and_then(|s| s.downcast_ref::<crate::SafeCode>())
-                            .map(|c| c.0)
-                            .unwrap_or("connection_failed")
-                    ),
-                ),
-            };
+            let (class, message) = java_exception(class, &e);
             let _ = env.throw_new(class, message);
             T::default()
         }
@@ -260,5 +260,36 @@ pub extern "system" fn Java_com_kudo_android_network_NativeDoh_close(
         if let Some(socket) = sockets.remove(&id) {
             socket.close();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn timeout_stage_survives_jni_and_unknown_errors_hide_platform_details() {
+        let timeout = io::Error::new(io::ErrorKind::TimedOut, crate::SafeCode("read_timeout"));
+        assert_eq!(
+            java_exception("java/io/IOException", &timeout),
+            (
+                "java/net/SocketTimeoutException",
+                "DoH: read_timeout".to_owned()
+            )
+        );
+        let unknown = io::Error::other("https://private.node/path?token=secret Cookie: secret");
+        assert_eq!(
+            java_exception("java/io/IOException", &unknown),
+            ("java/io/IOException", "DoH: connection_failed".to_owned())
+        );
+        assert_eq!(
+            java_exception(
+                "javax/net/ssl/SSLHandshakeException",
+                &error("ech_rejected")
+            ),
+            (
+                "javax/net/ssl/SSLHandshakeException",
+                "DoH: ech_rejected".to_owned()
+            )
+        );
     }
 }

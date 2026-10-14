@@ -8,6 +8,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.*
 import com.kudo.android.data.*
 import com.kudo.android.media.createImageHttpClient
+import com.kudo.android.media.imageLoadErrorText
 import com.kudo.android.network.DohTransport
 import com.kudo.android.network.RequestCooldown
 import kotlinx.coroutines.*
@@ -98,6 +99,37 @@ class ImageNetworkDeviceTest {
                 assertEquals(FailureKind.RATE_LIMIT, (runCatching { sameOrigin.get("/site.json") }.exceptionOrNull() as ApiFailure).kind)
                 assertEquals(2, server.requestCount)
             } finally { loader.shutdown(); transport.close(); http.connectionPool.evictAll() }
+        }
+    }
+
+    @Test fun nativeFailedAddressesKeepOneReadRetryAndNeverReplayWrites() {
+        MockWebServer().use { server ->
+            server.start(InetAddress.getByName("127.0.0.1"), 0)
+            val addresses = listOf("127.0.0.2", "127.0.0.3").map {
+                InetAddress.getByAddress("image.fixture.invalid", InetAddress.getByName(it).address)
+            }
+            for (write in listOf(false, true)) {
+                val transport = DohTransport(BuiltInDohServer, addressLookup = object : Dns {
+                    override fun lookup(hostname: String) = addresses
+                })
+                val attempts = Collections.synchronizedList(mutableListOf<String>())
+                val http = transport.configure(createImageHttpClient(RequestCooldown(), cookies, "fixture", retryDelayMillis = 0)
+                    .newBuilder()).connectTimeout(1, TimeUnit.SECONDS).callTimeout(4, TimeUnit.SECONDS)
+                    .eventListener(object : EventListener() {
+                        override fun connectStart(call: Call, address: InetSocketAddress, proxy: Proxy) {
+                            attempts += address.address.hostAddress.orEmpty()
+                        }
+                    }).build()
+                try {
+                    val url = server.url("/image.png").newBuilder().host("image.fixture.invalid").build()
+                    val request = Request.Builder().url(url).apply { if (write) post(FormBody.Builder().add("fixture", "test").build()) }.build()
+                    val failure = runCatching { http.newCall(request).execute().close() }.exceptionOrNull()
+                    assertNotNull(failure)
+                    assertEquals(if (write) listOf("127.0.0.2") else listOf("127.0.0.2", "127.0.0.3"), attempts.toList())
+                    assertEquals("DoH connect_refused · 目标拒绝连接", imageLoadErrorText(failure!!))
+                    assertEquals(0, server.requestCount)
+                } finally { transport.close(); http.connectionPool.evictAll() }
+            }
         }
     }
 

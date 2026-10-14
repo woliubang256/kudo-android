@@ -16,7 +16,7 @@ RequestCooldown 为主站调用提供统一冷却，DiscourseClient 在构造网
 
 图片同时持有最多 4 个网络响应体，许可证在读取到 EOF、读取失败或关闭时只释放一次，不能只用 OkHttp Dispatcher 的回调并发数来约束实际下载。等待许可证每 100ms 检查取消，网络调用有 45 秒总超时；取消不触发重试。只有 GET/HEAD 的临时连接错误可在 300ms 短退避后再尝试一次，HTTP 错误、证书/协议错误、一般中断和冷却错误不重试。503 的 Retry-After:0 在网络拦截器中提升到 1 秒，阻止 OkHttp 自带的立即重放；不会排队重试该响应。
 
-原生 JNI 的非超时连接故障映射为普通 IOException，只有已知安全码 `DoH: connection_failed` 参与一次连接重试；profile_closed、tls_record_invalid、native_unavailable 等代码不猜成临时故障。响应头已返回后的正文读取失败释放许可证并交给现有界面处理，不自动重新下载部分正文。
+原生 JNI 的非超时连接故障映射为普通 IOException，已知临时 IO 安全码参与一次连接重试，包括旧码 connection_failed 及分阶段 connect/read/write 的明确临时原因；未知 read_failed/write_failed、profile_closed、tls_record_invalid、native_unavailable 等代码不猜成临时故障。响应头已返回后的正文读取失败释放许可证并交给现有界面处理，不自动重新下载部分正文。
 
 [DoH 地址恢复](2026-10-14-doh-image-address-recovery.md)补足首个地址失败后再次选择相同 IP 的缺口，仅短暂调整当前节点候选的顺序；本篇的一次恢复、并发及冷却边界继续生效。
 

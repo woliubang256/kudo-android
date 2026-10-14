@@ -88,6 +88,43 @@ pub struct Socket {
 fn other(code: &'static str) -> io::Error {
     crate::code_error(code)
 }
+
+#[derive(Clone, Copy)]
+enum IoStage {
+    Connect,
+    Read,
+    Write,
+}
+
+fn io_failure(stage: IoStage, error: io::Error) -> io::Error {
+    if error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<crate::SafeCode>())
+        .is_some()
+    {
+        return error;
+    }
+    use io::ErrorKind::*;
+    let code = match (stage, error.kind()) {
+        (IoStage::Connect, TimedOut | WouldBlock) => "connect_timeout",
+        (IoStage::Connect, ConnectionRefused) => "connect_refused",
+        (IoStage::Connect, ConnectionReset | ConnectionAborted) => "connect_reset",
+        (IoStage::Connect, NetworkUnreachable | HostUnreachable | AddrNotAvailable) => {
+            "connect_unreachable"
+        }
+        (IoStage::Connect, _) => "connect_failed",
+        (IoStage::Read, TimedOut | WouldBlock) => "read_timeout",
+        (IoStage::Read, ConnectionReset | ConnectionAborted) => "read_reset",
+        (IoStage::Read, UnexpectedEof) => "read_eof",
+        (IoStage::Read, _) => "read_failed",
+        (IoStage::Write, TimedOut | WouldBlock) => "write_timeout",
+        (IoStage::Write, ConnectionReset | ConnectionAborted) => "write_reset",
+        (IoStage::Write, BrokenPipe | NotConnected) => "write_broken_pipe",
+        (IoStage::Write, _) => "write_failed",
+    };
+    io::Error::new(error.kind(), crate::SafeCode(code))
+}
+
 impl Socket {
     pub fn new(resolver: Arc<Resolver>) -> Self {
         Self {
@@ -101,6 +138,10 @@ impl Socket {
         }
     }
     pub fn connect(&self, ip: &str, port: u16, millis: u64) -> io::Result<()> {
+        self.connect_inner(ip, port, millis)
+            .map_err(|e| io_failure(IoStage::Connect, e))
+    }
+    fn connect_inner(&self, ip: &str, port: u16, millis: u64) -> io::Result<()> {
         if self.closed.load(Ordering::SeqCst) {
             return Err(other("socket_closed"));
         }
@@ -210,6 +251,10 @@ impl Socket {
         Ok(metadata)
     }
     pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
+        self.read_inner(buf)
+            .map_err(|e| io_failure(IoStage::Read, e))
+    }
+    fn read_inner(&self, buf: &mut [u8]) -> io::Result<usize> {
         let _reader = self.read_lock.lock().map_err(|_| other("socket_lock"))?;
         let mut tcp = self.tcp()?;
         loop {
@@ -252,6 +297,10 @@ impl Socket {
         }
     }
     pub fn write(&self, buf: &[u8]) -> io::Result<()> {
+        self.write_inner(buf)
+            .map_err(|e| io_failure(IoStage::Write, e))
+    }
+    fn write_inner(&self, buf: &[u8]) -> io::Result<()> {
         let _writer = self.write_lock.lock().map_err(|_| other("socket_lock"))?;
         let mut tcp = self.tcp()?;
         {
@@ -313,6 +362,43 @@ impl Drop for Socket {
 mod tests {
     use super::*;
     use std::{net::TcpListener, thread, time::Instant};
+    #[test]
+    fn io_codes_preserve_stages_kinds_and_controlled_failures() {
+        use io::ErrorKind::*;
+        let cases = [
+            (IoStage::Connect, ConnectionRefused, "connect_refused"),
+            (IoStage::Connect, ConnectionReset, "connect_reset"),
+            (IoStage::Connect, NetworkUnreachable, "connect_unreachable"),
+            (IoStage::Connect, TimedOut, "connect_timeout"),
+            (IoStage::Connect, Other, "connect_failed"),
+            (IoStage::Read, ConnectionReset, "read_reset"),
+            (IoStage::Read, WouldBlock, "read_timeout"),
+            (IoStage::Read, UnexpectedEof, "read_eof"),
+            (IoStage::Read, Other, "read_failed"),
+            (IoStage::Write, ConnectionReset, "write_reset"),
+            (IoStage::Write, BrokenPipe, "write_broken_pipe"),
+            (IoStage::Write, TimedOut, "write_timeout"),
+            (IoStage::Write, Other, "write_failed"),
+        ];
+        for (stage, kind, code) in cases {
+            let error = io_failure(
+                stage,
+                io::Error::new(kind, "private URL / Cookie / node parameter"),
+            );
+            assert_eq!(error.kind(), kind);
+            assert_eq!(error.to_string(), code);
+        }
+        for stage in [IoStage::Connect, IoStage::Read, IoStage::Write] {
+            assert_eq!(
+                io_failure(stage, other("socket_closed")).to_string(),
+                "socket_closed"
+            );
+            assert_eq!(
+                io_failure(stage, other("tls_record_invalid")).to_string(),
+                "tls_record_invalid"
+            );
+        }
+    }
     fn connected() -> (Arc<Socket>, TcpStream) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let socket = Arc::new(Socket::new(Arc::new(
@@ -323,6 +409,29 @@ mod tests {
             .unwrap();
         let peer = listener.accept().unwrap().0;
         (socket, peer)
+    }
+    #[test]
+    fn connect_failure_has_a_safe_stage_and_reason() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let socket = Socket::new(Arc::new(
+            Resolver::new(r#"{"url":"https://dns.test/query"}"#).unwrap(),
+        ));
+        let error = socket.connect("127.0.0.1", port, 1000).unwrap_err();
+        // Windows can report a refused local connect as a timeout.
+        let expected = match error.kind() {
+            io::ErrorKind::ConnectionRefused => "connect_refused",
+            io::ErrorKind::TimedOut => "connect_timeout",
+            kind => panic!("unexpected local connect error: {kind:?}"),
+        };
+        assert_eq!(
+            error
+                .get_ref()
+                .and_then(|e| e.downcast_ref::<crate::SafeCode>())
+                .map(|c| c.0),
+            Some(expected)
+        );
     }
     #[test]
     fn close_interrupts_a_blocking_read_without_waiting_for_state_lock() {

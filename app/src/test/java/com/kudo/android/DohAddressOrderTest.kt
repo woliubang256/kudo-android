@@ -43,10 +43,18 @@ class DohAddressOrderTest {
     }
 
     @Test fun configurationTlsAndUnknownErrorsDoNotChangeAddressOrder() {
-        for (code in listOf("profile_closed", "socket_closed", "ech_rejected", "tls_record_invalid", "unknown")) {
+        for (code in listOf("profile_closed", "socket_closed", "ech_rejected", "tls_record_invalid", "unknown", "read_reset", "write_reset")) {
             val order = DohAddressOrder()
             order.failed("image.test", first, IOException("DoH: $code"))
             assertEquals(candidates, order.order("image.test", candidates))
+        }
+    }
+
+    @Test fun newNativeConnectCodesStillPreferTheOtherAddress() {
+        for (code in listOf("connect_refused", "connect_unreachable", "connect_reset", "connect_timeout", "connect_failed")) {
+            val order = DohAddressOrder()
+            order.failed("image.test", first, IOException("DoH: $code"))
+            assertEquals(listOf(second, first), order.order("image.test", candidates))
         }
     }
 

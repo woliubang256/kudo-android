@@ -18,6 +18,8 @@ ImageLoadError 将 Coil 的失败异常转为可分享的短诊断：HTTP 使用
 
 列表封面保留 onError.result.throwable 的短诊断，放在“加载失败，点击重试”下方；居中小字最多三行，不改变封面尺寸。失败时点提示、诊断或封面均只重试图片。开始重试、收到加载或成功回调、替换 URL 时同步清空旧诊断；标题点击继续进入主题。诊断仅在失败期间存在，不增加自动网络请求。
 
+分阶段原生 IO 码的来源与恢复边界见[DoH 图片诊断](../bug-fix/2026-10-14-doh-image-address-recovery.md)，展示仍使用受控码及固定中文原因，不暴露原始异常串。
+
 ## Existing note audit
 
 - [相册会话](../../implemented/feature/2026-10-09-image-gallery-and-transitions.md)与[来源过渡](../../implemented/feature/2026-10-09-image-origin-animation.md)：部分取代列表直接预览约定；正文相册、过渡和恢复仍有效。

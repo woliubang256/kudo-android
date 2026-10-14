@@ -37,6 +37,21 @@ class ImageLoadErrorTest {
         assertEquals("DoH new_safe_code · 原生网络请求失败", imageLoadErrorText(IOException("DoH: new_safe_code")))
     }
 
+    @Test fun nativeIoFailuresIdentifyStageAndReasonWithoutRawMessages() {
+        val cases = mapOf(
+            "connect_refused" to "目标拒绝连接", "connect_unreachable" to "目标网络不可达",
+            "connect_reset" to "建连时连接被重置", "connect_timeout" to "建立连接超时", "connect_failed" to "建立连接失败",
+            "read_reset" to "读取时连接被重置", "read_timeout" to "读取图片超时",
+            "read_eof" to "图片传输提前结束", "read_failed" to "读取网络数据失败",
+            "write_reset" to "发送时连接被重置", "write_broken_pipe" to "发送时连接已断开",
+            "write_timeout" to "发送请求超时", "write_failed" to "发送网络数据失败"
+        )
+        for ((code, reason) in cases) {
+            assertEquals("DoH $code · $reason", imageLoadErrorText(IOException("DoH: $code")))
+            assertEquals("IOException · 图片读取失败", imageLoadErrorText(IOException("DoH: $code private URL Cookie: secret")))
+        }
+    }
+
     @Test fun localCooldownRetainsRemainingSecondsWithoutClaimingANew429Response() {
         assertEquals("COOLDOWN · 请求较频繁，请在 12 秒后重试", imageLoadErrorText(IOException("请求较频繁，请在 12 秒后重试")))
     }
