@@ -34,12 +34,6 @@ class AppContainer(context: Context) {
         }.build()), cookies, userAgent, keepAlive = {
             context.startForegroundService(android.content.Intent(context, com.kudo.android.media.DownloadService::class.java))
         })
-    val imageHttpClient: okhttp3.Call.Factory = network.client(OkHttpClient.Builder().addNetworkInterceptor { chain ->
-        val request = chain.request()
-        val builder = request.newBuilder().removeHeader("Cookie")
-        if (request.url.isHttps && request.url.host == "linux.do") {
-            builder.header("Cookie", cookies.get(request.url.toString())).header("User-Agent", userAgent)
-        }
-        chain.proceed(builder.build())
-    }.build())
+    val imageHttpClient: okhttp3.Call.Factory = network.client(
+        com.kudo.android.media.createImageHttpClient(client.cooldown, cookies, userAgent))
 }
