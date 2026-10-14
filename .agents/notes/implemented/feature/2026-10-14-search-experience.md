@@ -12,6 +12,8 @@ Status: implemented
 
 SearchData 独立承载三类结果、排序枚举与能力元数据，保留既有 repository.search 的兼容契约。排序枚举使用网页相关性、latest、likes、views、latest_topic、read；read 仅登录可用。插件能力按 HTML siteSettings/currentUser 判断，不以未知能力猜测权限。
 
+SearchQuery 以引号感知的 token 切分实现面板条件替换；排序只替换 order:，筛选只替换已知面板操作符，保留引号中的字面文本、未知语法及 in:replies 等面板未管理的条件。标签 AND 使用 +、OR 使用逗号；数字必须非负且最小值不超过最大值，日期按 LocalDate 校验，用户名/群组拒绝空格和操作符注入。
+
 ## Related decisions
 
 检索 proposed、implemented、rejected 搜索相关笔记，无专属搜索决策。与[数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)、[主题展示](../../implemented/feature/2026-10-09-topic-presentation.md)、[酷安表单](../../implemented/feature/2026-10-10-coolapk-forms.md)、[快速回顶](../../implemented/feature/2026-10-11-quick-scroll-to-top.md)部分重叠：沿用同源凭据隔离、标签 slug、全局列表样式、自绘控件、滚动注册；这些旧篇仍各有独立职责。其余命中是页面布局、导航和过去测试记录，非本方案归属，无完全吸收或过时提案。
