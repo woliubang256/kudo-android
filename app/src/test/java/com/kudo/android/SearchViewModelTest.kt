@@ -183,7 +183,12 @@ class SearchViewModelTest {
             val vm = SearchViewModel(repository).also(models::add)
             try {
                 vm.search("old"); assertTrue(oldEntered.await(3, TimeUnit.SECONDS))
-                vm.search("new"); assertEquals("new", vm.finished().query)
+                vm.search("new")
+                withContext(Dispatchers.IO) {
+                    withTimeout(5000) {
+                        vm.state.first { it.searched && !it.loading && it.query == "new" && it.hits.posts.isNotEmpty() }
+                    }
+                }
             } finally { release.countDown() }
             assertEquals("new order:relevance", vm.state.value.hits.posts.single().topic.title)
         }
