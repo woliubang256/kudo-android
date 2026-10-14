@@ -22,6 +22,8 @@ SearchFiltersPanel 使用 Foundation 输入、自绘选项和黄色选中态；�
 
 SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏；三类标签、横向排序和固定右侧筛选图标保持紧凑。筛选向下展开，占剩余高度最多 72%，内部滚动、底部按钮固定，并接收 IME 避让。信息流沿用 TopicCard，传统列表补充命中摘要，两者保留真实楼层入口；用户显示头像/昵称/用户名，分类与标签进入原生列表。普通搜索与用户限定搜索均连接账号变更，继续注册快速回顶，不显示假热门数据。
 
+搜索提交、历史词条与控件切换收起输入焦点；短提示避免大字号将顶栏撑成两行。分类/标签结果仅在主文字区显示名称，前导使用图标，避免重复朗读；先用真机断言复现两个分类名称节点（artifacts/search-entity-repro-device.txt）。系统返回先收起筛选，再允许退出搜索。
+
 ## Related decisions
 
 检索 proposed、implemented、rejected 搜索相关笔记，无专属搜索决策。与[数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)、[主题展示](../../implemented/feature/2026-10-09-topic-presentation.md)、[酷安表单](../../implemented/feature/2026-10-10-coolapk-forms.md)、[快速回顶](../../implemented/feature/2026-10-11-quick-scroll-to-top.md)部分重叠：沿用同源凭据隔离、标签 slug、全局列表样式、自绘控件、滚动注册；这些旧篇仍各有独立职责。其余命中是页面布局、导航和过去测试记录，非本方案归属，无完全吸收或过时提案。
@@ -34,8 +36,12 @@ SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏�
 
 ## Testing
 
-SearchDataTest 六项通过（artifacts/search-data-tests.txt），覆盖命中顺序、多个楼层、真实作者、标签 slug、分页上限、访客零历史请求、严格历史字段、专用用户/标签接口和权限能力。界面与状态验证随对应实现补充，测试不向真实社区写入内容，不卸载或清数据。
+SearchDataTest 六项通过（artifacts/search-data-tests.txt），覆盖命中顺序、多个楼层、真实作者、标签 slug、分页上限、访客零历史请求、严格历史字段、专用用户/标签接口和权限能力。测试不向真实社区写入内容，不卸载或清数据。
+
+SearchUiTest 八项与搜索入口/主题样式/楼层定位五项回归共十三项真机通过（artifacts/search-verified-device.txt），覆盖历史登录隔离、三类原生跳转、真实命中楼层、排序与高级条件、深色130%字号、短窗口校验与固定底部动作、返回先收起筛选。初次重置断言把提示文字也当成输入，日志 EditableText 已为空；改为直接检查 EditableText，未改产品重置逻辑。
+
+截图 search-post-results.png、search-category-tag-results.png、search-user-results.png、search-filters-dark-large.png 与 search-filters-short-window.png 已查看；根节点截图不包含独立系统键盘窗口。类别/标签截图中的灰色是点击波纹，非静止选中背景。
 
 ## Consequences
 
-历史依赖服务端搜索日志，可能延后出现；站点关闭日志时需独立显示读取错误，不阻塞搜索。插件能力读取可能被验证页阻挡，需可重试。用户接口按网页最多二十项，标签请求有限额；这些结果不声称无限分页。真机验收需保留安装版本及签名。
+历史依赖服务端搜索日志，可能延后出现；站点关闭日志时独立显示读取错误，不阻塞搜索。插件能力读取可能被验证页阻挡，提供重试。用户接口按网页最多二十项，标签请求有限额；这些结果不声称无限分页。真机仅使用覆盖安装，版本为2005/0.2.3，签名与已安装包匹配，保留账号及数据。线上接口已参考官方源码核对，真机使用离线夹具，尚未完成真实登录账号的跨设备最近搜索同步验收。

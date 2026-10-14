@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -43,21 +44,23 @@ fun SearchScreen(
     var query by rememberSaveable(state.accountId) { mutableStateOf(state.query) }
     var filtersOpen by remember(state.accountId) { mutableStateOf(false) }
     var draft by remember(state.accountId) { mutableStateOf(SearchFilters()) }
+    androidx.activity.compose.BackHandler(enabled = filtersOpen) { filtersOpen = false }
     LaunchedEffect(state.query, state.accountId) { query = state.query }
     val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
     val scroll = rememberLazyListState()
     LaunchedEffect(state.query, state.kind) { scroll.scrollToItem(0) }
     val ignored = com.kudo.android.ui.topic.LocalIgnoredUsers.current
     val posts = state.hits.posts.filterNot { it.topic.author?.username?.lowercase(Locale.ROOT) in ignored }
     val users = state.hits.users.filterNot { it.username.lowercase(Locale.ROOT) in ignored }
-    val submit = { keyboard?.hide(); filtersOpen = false; search(query, false) }
+    val submit = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; search(query, false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()) {
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Search, null, Modifier.padding(start = 12.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                 CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp).testTag("search-query"),
-                    placeholder = "搜索帖子、分类、标签、用户", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
+                    placeholder = "搜索社区", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
                 if (query.isNotEmpty()) CommunityIconButton(Icons.Rounded.Close, "清空搜索", { query = ""; clear(); filtersOpen = false })
             }
@@ -66,7 +69,7 @@ fun SearchScreen(
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             SearchKind.entries.forEach { kind ->
-                Column(Modifier.weight(1f).clickable(role = Role.Tab) { filtersOpen = false; keyboard?.hide(); changeKind(kind) }
+                Column(Modifier.weight(1f).clickable(role = Role.Tab) { filtersOpen = false; focus.clearFocus(); keyboard?.hide(); changeKind(kind) }
                     .semantics { selected = state.kind == kind }.testTag("search-kind-${kind.name}"), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(kind.label, Modifier.padding(horizontal = 4.dp, vertical = 12.dp), style = MaterialTheme.typography.titleSmall,
                         color = if (state.kind == kind) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -78,7 +81,7 @@ fun SearchScreen(
         if (state.kind == SearchKind.POSTS) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 SearchSort.available(state.accountId != null).forEach { sort ->
-                    Text(sort.label, Modifier.clickable(role = Role.Button) { keyboard?.hide(); changeSort(sort) }.semantics { selected = state.sort == sort }
+                    Text(sort.label, Modifier.clickable(role = Role.Button) { focus.clearFocus(); keyboard?.hide(); changeSort(sort) }.semantics { selected = state.sort == sort }
                         .testTag("search-sort-${sort.name}").padding(horizontal = 10.dp, vertical = 14.dp), style = MaterialTheme.typography.bodySmall,
                         color = if (state.sort == sort) LogoYellow else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (state.sort == sort) FontWeight.Bold else FontWeight.Normal)
@@ -86,7 +89,7 @@ fun SearchScreen(
             }
             Box {
                 CommunityIconButton(Icons.Rounded.Tune, "高级筛选", {
-                    keyboard?.hide()
+                    focus.clearFocus(); keyboard?.hide()
                     if (!filtersOpen) { draft = parseSearchFilters(query); loadMetadata() }
                     filtersOpen = !filtersOpen
                 }, Modifier.testTag("search-filter-toggle"))
@@ -98,7 +101,7 @@ fun SearchScreen(
             val panelHeight = maxHeight * .72f
             Column {
                 if (filtersOpen) SearchFiltersPanel(state, draft, { draft = it }, suggestTags, loadMetadata,
-                    apply = { keyboard?.hide(); filtersOpen = false; applyFilters(query, draft) }, dismiss = { filtersOpen = false },
+                    apply = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; applyFilters(query, draft) }, dismiss = { filtersOpen = false },
                     modifier = Modifier.heightIn(max = panelHeight))
                 LazyColumn(state = scroll, modifier = Modifier.weight(1f).quickScrollTarget(scroll).testTag("search-results"),
                     contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (listStyle == TopicListStyle.FEED) 8.dp else 0.dp)) {
@@ -109,7 +112,7 @@ fun SearchScreen(
                             if (state.historyError != null) item { ErrorState(state.historyError, refreshHistory, login) }
                             if (state.recent.isNotEmpty()) item {
                                 FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    state.recent.forEach { term -> SearchChip(term, false) { query = term; keyboard?.hide(); search(term, false) } }
+                                    state.recent.forEach { term -> SearchChip(term, false) { query = term; focus.clearFocus(); keyboard?.hide(); search(term, false) } }
                                 }
                             } else if (!state.historyLoading && state.historyError == null) item {
                                 Text("暂无最近搜索", Modifier.padding(horizontal = 18.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -132,11 +135,13 @@ fun SearchScreen(
                         SearchKind.CATEGORIES_TAGS -> {
                             if (state.hits.categories.isNotEmpty()) item { SectionLabel("分类") }
                             items(state.hits.categories, key = { "category-${it.id}" }) { category ->
-                                SearchEntityRow(category.name, category.description.ifBlank { "${compactNumber(category.count)} 个话题" }, { openCategory(category.id) }) { CategoryInline(category) }
+                                SearchEntityRow(category.name, category.description.ifBlank { "${compactNumber(category.count)} 个话题" }, { openCategory(category.id) }) {
+                                    Icon(CategoryIcons.get(category.icon), "分类图标：${category.name}", Modifier.size(24.dp))
+                                }
                             }
                             if (state.hits.tags.isNotEmpty()) item { SectionLabel("标签") }
                             items(state.hits.tags, key = { "tag-${it.name}" }) { tag ->
-                                SearchEntityRow(tag.name, "查看此标签下的话题", { openTag(tag) }) { TopicTagChip(tag) }
+                                SearchEntityRow(tag.name, "查看此标签下的话题", { openTag(tag) }) { Icon(Icons.Rounded.Tag, null, Modifier.size(24.dp)) }
                             }
                         }
                         SearchKind.USERS -> items(users, key = { "user-${it.id}-${it.username}" }) { user ->
