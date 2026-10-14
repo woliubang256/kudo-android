@@ -42,6 +42,8 @@ class CommitMessageTest(unittest.TestCase):
         triggers = workflow.split("permissions:", 1)[0]
         self.assertIn("    branches:\n      - main", triggers)
         self.assertNotIn("    tags:", triggers)
+        self.assertIn("group: commit-messages-${{ github.ref }}", workflow)
+        self.assertIn("cancel-in-progress: true", workflow)
         block = workflow.split("        run: |\n", 1)[1]
         shell = "\n".join(line[10:] for line in block.splitlines())
         self.assertNotIn('REF_TYPE" == "tag"', shell)
