@@ -1,5 +1,6 @@
 package com.kudo.android.ui.feed
 
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,10 +18,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -29,7 +32,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
+import com.kudo.android.ui.components.liquid.LiquidModal
+import com.kudo.android.ui.components.liquid.LiquidModalAction
+import com.kudo.android.ui.theme.LocalDisplaySettings
 import com.kudo.android.ui.theme.LogoYellow
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import java.util.Locale
 
 @Composable
@@ -40,11 +48,19 @@ fun SearchScreen(
     changeKind: (SearchKind) -> Unit = {}, changeSort: (SearchSort) -> Unit = {}, clear: () -> Unit = {},
     refreshHistory: () -> Unit = {}, loadMetadata: () -> Unit = {}, suggestTags: (String) -> Unit = {},
     applyFilters: (String, SearchFilters) -> Unit = { _, _ -> },
+    clearHistory: () -> Unit = {},
 ) {
     var query by rememberSaveable(state.accountId) { mutableStateOf(state.query) }
     var filtersOpen by remember(state.accountId) { mutableStateOf(false) }
     var draft by remember(state.accountId) { mutableStateOf(SearchFilters()) }
-    androidx.activity.compose.BackHandler(enabled = filtersOpen) { filtersOpen = false }
+    val clearVisibility = remember(state.accountId) { MutableTransitionState(false) }
+    val backdrop = rememberLayerBackdrop()
+    val showing = clearVisibility.currentState || clearVisibility.targetState
+    fun dismissClear() { if (!state.historyClearing) clearVisibility.targetState = false }
+    androidx.activity.compose.BackHandler(enabled = filtersOpen && !showing) { filtersOpen = false }
+    LaunchedEffect(state.accountId, state.searched, state.recent.isEmpty()) {
+        if (state.accountId == null || state.searched || state.recent.isEmpty()) clearVisibility.targetState = false
+    }
     LaunchedEffect(state.query, state.accountId) { query = state.query }
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
@@ -54,7 +70,10 @@ fun SearchScreen(
     val posts = state.hits.posts.filterNot { it.topic.author?.username?.lowercase(Locale.ROOT) in ignored }
     val users = state.hits.users.filterNot { it.username.lowercase(Locale.ROOT) in ignored }
     val submit = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; search(query, false) }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()) {
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background).imePadding()
+        .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
+        .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
         Row(Modifier.fillMaxWidth().statusBarsPadding().padding(end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
             Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
@@ -67,16 +86,8 @@ fun SearchScreen(
             Text("搜索", Modifier.clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.padding(start = 14.dp, top = 14.dp, bottom = 14.dp).testTag("search-submit"),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SearchKind.entries.forEach { kind ->
-                Column(Modifier.weight(1f).clickable(role = Role.Tab) { filtersOpen = false; focus.clearFocus(); keyboard?.hide(); changeKind(kind) }
-                    .semantics { selected = state.kind == kind }.testTag("search-kind-${kind.name}"), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(kind.label, Modifier.padding(horizontal = 4.dp, vertical = 12.dp), style = MaterialTheme.typography.titleSmall,
-                        color = if (state.kind == kind) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (state.kind == kind) FontWeight.Bold else FontWeight.Normal)
-                    Box(Modifier.width(24.dp).height(3.dp).background(if (state.kind == kind) LogoYellow else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(2.dp)))
-                }
-            }
+        FeedTabBar(SearchKind.entries.map { it.name to it.label }, state.kind.name) { value ->
+            filtersOpen = false; focus.clearFocus(); keyboard?.hide(); changeKind(SearchKind.valueOf(value))
         }
         if (state.kind == SearchKind.POSTS) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -103,21 +114,26 @@ fun SearchScreen(
                 if (filtersOpen) SearchFiltersPanel(state, draft, { draft = it }, suggestTags, loadMetadata,
                     apply = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; applyFilters(query, draft) }, dismiss = { filtersOpen = false },
                     modifier = Modifier.heightIn(max = panelHeight))
-                LazyColumn(state = scroll, modifier = Modifier.weight(1f).quickScrollTarget(scroll).testTag("search-results"),
+                LazyColumn(state = scroll, modifier = Modifier.weight(1f).quickScrollTarget(scroll, enabled = !showing).testTag("search-results"),
                     contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (listStyle == TopicListStyle.FEED) 8.dp else 0.dp)) {
                     if (!state.searched) {
-                        if (state.accountId != null) {
-                            item { SectionLabel("最近搜索") }
+                        if (state.accountId != null && (state.recent.isNotEmpty() || state.historyLoading || state.historyError != null)) {
+                            item {
+                                Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("最近搜索", Modifier.weight(1f).padding(vertical = 14.dp), style = MaterialTheme.typography.titleMedium)
+                                    if (state.recent.isNotEmpty()) CommunityIconButton(Icons.Rounded.DeleteOutline, "清空最近搜索", {
+                                        focus.clearFocus(); keyboard?.hide(); filtersOpen = false; clearVisibility.targetState = true
+                                    }, Modifier.testTag("search-clear-history"), enabled = !state.historyClearing)
+                                }
+                            }
                             if (state.historyLoading) item { LoadingRow() }
                             if (state.historyError != null) item { ErrorState(state.historyError, refreshHistory, login) }
                             if (state.recent.isNotEmpty()) item {
                                 FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     state.recent.forEach { term -> SearchChip(term, false) { query = term; focus.clearFocus(); keyboard?.hide(); search(term, false) } }
                                 }
-                            } else if (!state.historyLoading && state.historyError == null) item {
-                                Text("暂无最近搜索", Modifier.padding(horizontal = 18.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                        } else item { EmptyState("搜索社区内容", "输入关键词开始搜索，也支持 Discourse 搜索语法。", Icons.Rounded.Search) }
+                        } else if (state.accountId == null) item { EmptyState("搜索社区内容", "输入关键词开始搜索，也支持 Discourse 搜索语法。", Icons.Rounded.Search) }
                     }
                     when (state.kind) {
                         SearchKind.POSTS -> items(posts, key = { "post-${it.postId}" }) { hit ->
@@ -167,6 +183,21 @@ fun SearchScreen(
                 }
             }
         }
+    }
+    LiquidModal(clearVisibility, "清空最近搜索？", false, backdrop, LocalDisplaySettings.current.glass, ::dismissClear,
+        actions = {
+            if (state.historyClearing) Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
+                Text("正在清空…", style = MaterialTheme.typography.labelLarge)
+            } else {
+                LiquidModalAction("取消", ::dismissClear, Modifier.weight(1f))
+                LiquidModalAction("清空", {
+                    if (clearVisibility.targetState && !state.historyClearing) clearHistory()
+                }, Modifier.weight(1f).testTag("search-confirm-clear-history"), primary = true)
+            }
+        }) {
+        Text("清空后，最近搜索记录将从账号中删除。", style = MaterialTheme.typography.bodyMedium)
+        state.historyClearError?.let { Text(it.message ?: "清空失败，请稍后重试", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+    }
     }
 }
 

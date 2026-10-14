@@ -27,6 +27,7 @@ import org.junit.*
 import org.junit.Assert.*
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 
 class SearchUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -38,20 +39,27 @@ class SearchUiTest {
     private val openedCategories = mutableListOf<Int>()
     private val openedTags = mutableListOf<TopicTag>()
     private var backCount = 0
+    private val recentTerms = CopyOnWriteArrayList(listOf("开发", "安卓"))
+    private val failClear = AtomicBoolean(false)
     private val preload = JSONObject().put("siteSettings", JSONObject().put("tagging_enabled", true).put("solved_enabled", true)
         .put("enable_category_experts", true).put("show_category_expert_advanced_search_filters", true))
         .put("currentUser", JSONObject().put("id", 7).put("can_assign_globally", true))
     private val http = OkHttpClient.Builder().addInterceptor { chain ->
         val request = chain.request(); requests += request
+        var code = 200
         val body = when (request.url.encodedPath) {
-            "/u/recent-searches.json" -> """{"recent_searches":["开发","安卓"]}"""
+            "/session/csrf" -> """{"csrf":"test-token"}"""
+            "/u/recent-searches.json" -> if (request.method == "DELETE") {
+                if (failClear.getAndSet(false)) { code = 503; """{"errors":["清空失败，请稍后重试"]}""" }
+                else { recentTerms.clear(); """{"success":true}""" }
+            } else JSONObject().put("recent_searches", org.json.JSONArray(recentTerms)).toString()
             "/site.json" -> """{"categories":[{"id":4,"name":"开发调优","slug":"dev","description":"讨论技术"}]}"""
             "/tags/filter/search" -> """{"results":[{"text":"开发","slug":"123-tag"}]}"""
             "/u/search/users.json" -> """{"users":[{"id":8,"username":"developer","name":"开发者","avatar_template":""}]}"""
             "/latest" -> "<html><div data-preloaded='$preload'></div></html>"
             else -> """{"topics":[{"id":3,"title":"开发工具介绍","posts_count":10,"views":100}],"posts":[{"id":32,"topic_id":3,"post_number":9,"username":"author","user_id":8,"blurb":"命中第九楼的摘要"},{"id":31,"topic_id":3,"post_number":2,"username":"other","user_id":9,"blurb":"另一个命中摘要"}],"grouped_search_result":{"more_full_page_results":false}}"""
         }
-        Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+        Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(code).message(if (code == 200) "OK" else "Unavailable")
             .body(body.toResponseBody((if (request.url.encodedPath == "/latest") "text/html" else "application/json").toMediaType())).build()
     }.build()
 
@@ -77,7 +85,7 @@ class SearchUiTest {
                 SearchScreen(state.forAccount(accountId), vm!!::search, { backCount++ }, { id, number -> openedTopics += id to number }, openedUsers::add, {},
                     listStyle = TopicListStyle.TITLE, openCategory = openedCategories::add, openTag = openedTags::add,
                     changeKind = vm!!::changeKind, changeSort = vm!!::changeSort, clear = vm!!::clear, refreshHistory = vm!!::refreshHistory,
-                    loadMetadata = vm!!::loadMetadata, suggestTags = vm!!::suggestTags, applyFilters = vm!!::applyFilters)
+                    loadMetadata = vm!!::loadMetadata, suggestTags = vm!!::suggestTags, applyFilters = vm!!::applyFilters, clearHistory = vm!!::clearHistory)
             }
         } }
         compose.waitUntil(5000) { !vm!!.state.value.historyLoading }
@@ -106,6 +114,54 @@ class SearchUiTest {
         accountId = null; show(); search()
         assertTrue(requests.none { it.url.encodedPath == "/u/recent-searches.json" })
         compose.onNodeWithText("最近搜索").assertDoesNotExist()
+        compose.onNodeWithContentDescription("清空最近搜索").assertDoesNotExist()
+    }
+
+    @Test fun historyClearUsesLiquidConfirmationCanCancelAndHidesTheWholeSection() {
+        show()
+        compose.onNodeWithContentDescription("清空最近搜索").performClick()
+        compose.onNodeWithTag("liquid-dialog").assertIsDisplayed()
+        compose.onNodeWithText("清空最近搜索？").assertIsDisplayed()
+        capture("search-clear-history-dialog-light.png")
+        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("最近搜索").assertIsDisplayed()
+        compose.onNodeWithText("安卓").assertIsDisplayed()
+        assertTrue(requests.none { it.method == "DELETE" })
+        compose.onNodeWithContentDescription("清空最近搜索").performClick()
+        compose.onNodeWithTag("search-confirm-clear-history").performClick()
+        compose.waitUntil(5000) { !vm!!.state.value.historyClearing && vm!!.state.value.recent.isEmpty() }
+        compose.onNodeWithText("最近搜索").assertDoesNotExist()
+        compose.onNodeWithContentDescription("清空最近搜索").assertDoesNotExist()
+        compose.onNodeWithText("暂无最近搜索").assertDoesNotExist()
+        compose.onNodeWithTag("liquid-dialog").assertDoesNotExist()
+        assertEquals(1, requests.count { it.method == "DELETE" && it.url.encodedPath == "/u/recent-searches.json" })
+        compose.runOnIdle { vm!!.refreshHistory() }
+        compose.waitUntil(5000) { !vm!!.state.value.historyLoading }
+        compose.onNodeWithText("最近搜索").assertDoesNotExist()
+        capture("search-history-cleared.png")
+    }
+
+    @Test fun historyClearFailureKeepsEntriesAndShowsErrorInTheDarkLiquidDialog() {
+        failClear.set(true)
+        show(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f))
+        compose.onNodeWithContentDescription("清空最近搜索").performClick()
+        compose.onNodeWithTag("search-confirm-clear-history").performClick()
+        compose.waitUntil(5000) { vm!!.state.value.historyClearError != null }
+        compose.onNodeWithTag("liquid-dialog").assertIsDisplayed()
+        compose.onNodeWithText("清空失败，请稍后重试").assertIsDisplayed()
+        assertEquals(listOf("开发", "安卓"), vm!!.state.value.recent)
+        assertEquals(1, requests.count { it.method == "DELETE" })
+        capture("search-clear-history-dialog-dark-error.png")
+        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("最近搜索").assertIsDisplayed()
+        compose.onNodeWithText("安卓").assertIsDisplayed()
+    }
+
+    @Test fun emptyServerHistoryDoesNotShowTheHistorySection() {
+        recentTerms.clear(); show()
+        compose.onNodeWithText("最近搜索").assertDoesNotExist()
+        compose.onNodeWithContentDescription("清空最近搜索").assertDoesNotExist()
+        compose.onNodeWithText("暂无最近搜索").assertDoesNotExist()
     }
 
     @Test fun matchingFloorsKeepTheirOwnSummaryAndNavigationTarget() {
@@ -119,18 +175,20 @@ class SearchUiTest {
 
     @Test fun threeTypesUseNativeCategoryTagAndUserCallbacks() {
         show(); search()
-        compose.onNodeWithTag("search-kind-CATEGORIES_TAGS").performClick()
+        compose.onNodeWithText("类别与标签").performClick()
         compose.waitUntil(5000) { vm!!.state.value.kind == SearchKind.CATEGORIES_TAGS && !vm!!.state.value.loading }
         compose.onAllNodesWithText("开发调优", useUnmergedTree = true).assertCountEquals(1)
         compose.onNodeWithText("讨论技术").performClick()
         compose.onNodeWithText("查看此标签下的话题").performClick()
         assertEquals(listOf(4), openedCategories)
         assertEquals("123-tag", openedTags.single().slug)
+        compose.onNodeWithText("类别与标签").assertIsSelected()
         capture("search-category-tag-results.png")
-        compose.onNodeWithTag("search-kind-USERS").performClick()
+        compose.onNodeWithText("用户").performClick()
         compose.waitUntil(5000) { vm!!.state.value.kind == SearchKind.USERS && !vm!!.state.value.loading }
         compose.onNodeWithText("@developer").performClick()
         assertEquals(listOf("developer"), openedUsers)
+        compose.onNodeWithText("用户").assertIsSelected()
         compose.onNodeWithContentDescription("高级筛选").assertDoesNotExist()
         capture("search-user-results.png")
     }

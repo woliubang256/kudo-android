@@ -10,6 +10,10 @@ Status: implemented
 
 最近搜索支持账号同步清空：`clearRecentSearches` 调用网页对应的 `DELETE /u/recent-searches.json`，沿用同源会话和 CSRF 写请求，访客不写。请求成功才清空当前状态；失败保留词条和独立错误，不自动重放删除。历史读取与删除共用互斥状态和独立代际令牌，删除期间不启动历史刷新，旧读取或旧账号的迟到响应不能复活历史。
 
+标题右侧提供垃圾桶图标，先打开居中的 LiquidModal 并使用统一的胶囊确认按钮；发送期间仅显示“正在清空…”，防止重复点击。弹窗显示时隔离底层焦点与可访问语义，禁用快速回顶；账号切换、开始搜索或清空成功都会关闭弹窗。成功后最近搜索标题与词条整块隐藏，初始空历史也不展示“暂无最近搜索”；读取中及读取失败仍提供加载和重试反馈。失败则在弹窗中显示独立错误，取消后保留历史。
+
+三个结果类型直接复用首页 FeedTabBar，靠左紧凑排列，选中文字加粗并略放大，文字底部绘制 LogoYellow 渐变指示器；保留原生 Tab 选中语义、搜索类型切换时收起键盘和筛选的行为，不改变排序与筛选契约。
+
 帖子沿用 GET /search.json?q=&page=，保留 posts 的顺序、摘要、作者及 post_number，关联 topics，不按主题去重。分页最多十页。类别与标签组合 /site.json 分类目录和 /tags/filter/search?q=；标签搜索及高级筛选建议共用 searchTags，不传 limit，由服务端采用站点默认数量。用户按网页 /u/search/users.json?term=&limit=20，不伪造这两类的分页。服务端 /u/recent-searches.json 仅登录请求，不落盘；账号变化取消请求并立即清空旧状态。
 
 标签接口的 limit 是可选参数，[Tags::Search](https://github.com/discourse/discourse/blob/main/app/services/tags/search.rb)拒绝超过 SiteSetting.max_tag_search_results 的值；[站点默认配置](https://github.com/discourse/discourse/blob/main/config/site_settings.yml)为5，但站点可自行调整。初次请求固定20会被较低上限拒绝，导致类别/标签结果和标签建议失败；省略该参数避免把站点限额写死，也不依赖筛选元数据先成功加载。
@@ -34,6 +38,8 @@ SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏�
 
 ## Related decisions
 
+顶部标签复用[首页标签与吸顶](2026-10-08-home-tabs-and-collapse.md)的 FeedTabBar 样式；只复用标签组件，不把首页滚动折叠行为引入搜索页。
+
 检索 proposed、implemented、rejected 搜索相关笔记，无专属搜索决策。与[数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)、[主题展示](../../implemented/feature/2026-10-09-topic-presentation.md)、[酷安表单](../../implemented/feature/2026-10-10-coolapk-forms.md)、[快速回顶](../../implemented/feature/2026-10-11-quick-scroll-to-top.md)部分重叠：沿用同源凭据隔离、标签 slug、全局列表样式、自绘控件、滚动注册；这些旧篇仍各有独立职责。其余命中是页面布局、导航和过去测试记录，非本方案归属，无完全吸收或过时提案。
 
 ## Alternatives considered
@@ -48,6 +54,10 @@ SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏�
 ## Testing
 
 清空接口与状态定向 18 项 JVM 测试通过（`artifacts/search-history-state-tests.txt`），覆盖 CSRF DELETE、访客不写、成功前保留历史、重复提交及刷新隔离、失败保留词条后手动重试、取消在途读取与换号隔离；所有请求使用 MockWebServer，不清空真实账号历史。
+
+最近搜索清空与首页同款 Tab 的 SearchUiTest 11 项真机通过（`artifacts/search-history-ui-device.txt`），新增液态确认、取消不发 DELETE、成功后整个板块隐藏且再次读取仍为空、错误弹窗保留历史、初始空列表隐藏；既有三类原生跳转、排序、筛选、深色大字号和短窗口继续通过。确认按钮统一为胶囊后两项弹窗用例复跑通过（`artifacts/search-history-dialog-final-device.txt`）。Debug 和测试 APK 构建通过，Lint 0 errors / 45 既有 warnings / 1 hint。
+
+同机浅色与深色130%字号确认弹窗、清空后页面和三类结果截图已查看，保存于 `artifacts/search-history-ui/`；Tab 与垃圾桶点击后的灰面是瞬时波纹。使用2005/0.2.3与既有Debug签名覆盖安装，未卸载或清数据。普通搜索与用户限定搜索均接入清空回调，真机离线 HTTP 夹具不修改真实账号的历史。
 
 标签限额的两项复现先失败，均为 ApiFailure: limit 无效（artifacts/search-limit-repro-tests.txt）：类别/标签组合搜索夹具模拟上限5，直接标签建议夹具模拟上限1，验证固定20会被400拒绝。修复后 SearchDataTest 七项与 SearchViewModelTest 六项共13项通过（artifacts/search-limit-fixed-build.txt），请求保留中文/空格查询及标签 slug，且不发送 limit。RMX2202 / Android13 的三类原生跳转与排序/下拉筛选两项真机回归通过（artifacts/search-limit-fixed-device.txt）；显式2005 / 0.2.3同签名覆盖安装，保留数据。本次为离线服务契约复现，未以真实登录会话请求标签接口。
 
@@ -64,3 +74,5 @@ SearchUiTest 八项与搜索入口/主题样式/楼层定位五项回归共十�
 ## Consequences
 
 历史依赖服务端搜索日志，可能延后出现；站点关闭日志时独立显示读取错误，不阻塞搜索。插件能力读取可能被验证页阻挡，提供重试。用户接口按网页最多二十项，标签请求有限额；这些结果不声称无限分页。真机仅使用覆盖安装，版本为2005/0.2.3，签名与已安装包匹配，保留账号及数据。线上接口已参考官方源码核对，真机使用离线夹具，尚未完成真实登录账号的跨设备最近搜索同步验收。
+
+清空操作需要服务器确认；网络失败保留本地显示供用户核对，不假报完成。接口与网页同步，可能影响其他设备上的账号历史；本轮测试只清空离线夹具，不删除用户真实搜索记录。
