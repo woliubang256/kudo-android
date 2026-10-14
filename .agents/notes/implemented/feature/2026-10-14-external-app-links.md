@@ -38,6 +38,14 @@ RichContentLinkUiTest 两项真机用例通过，正文中的受支持夸克分�
 
 12 项 JVM 用例通过，覆盖准确域名/分享路径、提取码保留、协议限制、浏览器排除与站内解析。RMX2202 / Android 13 的 11 项真机用例通过，覆盖已安装匹配 App、多个候选、未安装/启动失败返回网页分支，以及原生站内导航；真实包可见性找到 com.quark.browser，并捕获生产跳转器发送的原始分享 URL。日志 artifacts/app-link-policy-build.txt、app-link-native-build.txt、app-link-native-device.txt。构建显式 2005 / 0.2.3，与已安装版本相同，安装前回读签名 SHA256 与构建一致，以 adb install -r 覆盖保留数据。最终 APK 上又通过同一跳转器的 7 项用例，日志 artifacts/app-link-final-launcher-device.txt；重复运行不另计用例数，本轮共 26 项不同真机用例。
 
+## System matching audit
+
+用户质疑是否必须为其他 App 逐个写包名后，再次只读核查 RMX2202 / Android 13（`artifacts/app-link-system-audit.txt`）：未指定包的夸克分享 HTTP 与 HTTPS 均只查询到 Chrome；指定 com.quark.browser 能匹配 MainActivity；qklink 的 www.uc.cn / Android appkey 路径无需包名也能查询到夸克。后者仅验证系统匹配，不等于实际分享页面唤起验收。
+
+默认浏览器角色是 com.android.chrome。`pm get-app-links --user 0` 中夸克没有域名记录；本 App 的 linux.do 自动验证状态为 1024（并非 verified），但用户选择的 Enabled 包含 linux.do。无包名的 linux.do VIEW 查询确实能找到本 App、另一个已安装论坛 App 与 Chrome。因此接收端声明和系统域名打开设置能建立匹配，发送端无需预先知道本 App 包名；仅增加 HTTP(S) scheme 或 queries 不能让未建立域名关联的夸克接管网盘链接。
+
+当前其他 HTTP(S) App 使用通用匹配而非包名清单；夸克包名是其浏览器角色下的精确分享兜底。多个候选的面板由 Intent.createChooser 请求系统提供，厂商、系统版本和默认打开设置会影响外观及是否显示；没有读取一加 13，不能把两台手机的差别归因到某个具体设置。本次调查不改变运行时策略，也不尝试绕过此前受拒的外部启动操作。
+
 ## Consequences
 
 第三方 App 版本决定 URL 是否进入原生网盘或其内部分享网页，无法保证每个分享有效。域名关联和厂商系统设置可能隐藏候选，回退网页。夸克协议来自当前公开分享页脚本及真机 intent filter，其他命令和任意 App scheme 不在支持范围。
