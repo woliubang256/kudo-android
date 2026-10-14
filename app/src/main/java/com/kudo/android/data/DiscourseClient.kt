@@ -56,6 +56,7 @@ class DiscourseClient(
         .readTimeout(35, TimeUnit.SECONDS).callTimeout(50, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build(),
     route: (OkHttpClient) -> Call.Factory = { it },
+    val cooldown: com.kudo.android.network.RequestCooldown = com.kudo.android.network.RequestCooldown(),
 ) {
     private val calls = route(http)
     private var csrf: String? = null
@@ -87,6 +88,7 @@ class DiscourseClient(
 
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(), body: RequestBody? = null, token: String? = null, redirects: Int = 0, arrayResponse: Boolean = false, htmlResponse: Boolean = false, collectionResponse: Boolean = false, verificationAttempt: Int = 0): JSONObject {
         val url = resolve(path).newBuilder().apply { query.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
+        cooldown.remainingSeconds(url).takeIf { it > 0 }?.let { throw rateLimitFailure(it) }
         val request = Request.Builder().url(url).method(method, body)
             .header("Accept", if (htmlResponse) "text/html" else "application/json")
             .header("User-Agent", userAgent()).header("Referer", baseUrl.toString())
@@ -119,7 +121,7 @@ class DiscourseClient(
             val notFound = it.code == 404 || url.encodedPath.trimEnd('/') == "/404" || json?.stringField("error_type") == "not_found"
             when {
                 it.code == 401 || (it.code == 403 && json?.text("error_type") == "not_logged_in") -> throw ApiFailure(FailureKind.SIGN_IN, "请先登录 Linux.do")
-                it.code == 429 -> throw ApiFailure(FailureKind.RATE_LIMIT, reason ?: "请求较频繁，请稍后再试", it.header("Retry-After")?.toIntOrNull())
+                it.code == 429 -> throw rateLimitFailure(cooldown.record(it, text), reason)
                 isCloudflareChallenge(it, text) -> {
                     if (method == "GET" && verificationAttempt == 0) {
                         it.close()
@@ -147,6 +149,9 @@ class DiscourseClient(
             }
         }
     }
+
+    private fun rateLimitFailure(seconds: Int, reason: String? = null) = ApiFailure(FailureKind.RATE_LIMIT,
+        "${reason ?: "请求较频繁"}\n请在 ${seconds} 秒后重试", seconds)
 }
 
 private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->

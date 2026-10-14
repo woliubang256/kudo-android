@@ -82,12 +82,15 @@ class FeedSessionTest {
             }
         }
         server.start()
-        val vm = FeedViewModel(CommunityRepository(DiscourseClient(NoCookies, server.url("/"))), initialUser = alice)
+        val vm = FeedViewModel(CommunityRepository(DiscourseClient(NoCookies, server.url("/"),
+            cooldown = com.kudo.android.network.RequestCooldown({ testScheduler.currentTime }))), initialUser = alice)
         try {
             vm.idle()
             assertEquals(listOf(2), vm.state.value.topics.map(Topic::id))
             assertNull(vm.state.value.error)
             assertNull(vm.state.value.newCount)
+            // Auxiliary 429 preserves the loaded page, but subsequent navigation waits for cooldown.
+            advanceTimeBy(15_000)
             vm.more()
             runCurrent()
             assertTrue(withContext(Dispatchers.IO) { pageStarted.await(3, TimeUnit.SECONDS) })

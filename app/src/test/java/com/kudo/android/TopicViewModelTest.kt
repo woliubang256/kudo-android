@@ -189,6 +189,7 @@ class TopicViewModelTest {
             val initial = loaded.detail!!.posts.single()
             vm.react(initial, "distorted_face")
             assertEquals(initial, vm.awaitState { it.busy.isEmpty() }.detail!!.posts.single())
+            advanceTimeBy(15_000)
             vm.follow()
             assertFalse(vm.awaitState { !it.followBusy }.authorProfile!!.isFollowed)
             vm.follow()
@@ -258,7 +259,8 @@ class TopicViewModelTest {
                 }
             }
             server.start()
-            val vm = TopicViewModel(CommunityRepository(DiscourseClient(NoCookies, server.url("/"))), 5, number, viewerId = 99)
+            val vm = TopicViewModel(CommunityRepository(DiscourseClient(NoCookies, server.url("/"),
+                cooldown = com.kudo.android.network.RequestCooldown({ testScheduler.currentTime }))), 5, number, viewerId = 99)
             try { block(vm, server) } finally { vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); Dispatchers.resetMain() }
         }
     }

@@ -101,6 +101,41 @@ class DiscourseClientTest {
         assertEquals(30, failure.retryAfter)
         assertEquals(1, server.requestCount)
     }
+    @Test fun rateLimitStopsOtherEndpointsAndSessionChecksDuringCooldown() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "30"))
+        server.enqueue(MockResponse().setBody("{}"))
+        assertEquals(FailureKind.RATE_LIMIT, (runCatching { client.get("/latest.json") }.exceptionOrNull() as ApiFailure).kind)
+        client.resetSession()
+        val failure = runCatching { client.get("/site.json") }.exceptionOrNull()
+        assertTrue("冷却期间分类请求必须在本地失败", failure is ApiFailure && failure.kind == FailureKind.RATE_LIMIT)
+        assertEquals("其他接口不能继续加重限流", 1, server.requestCount)
+    }
+    @Test fun rateLimitStopsCsrfAndMutationsInsteadOfQueuingOrReplayingThem() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "30"))
+        server.enqueue(MockResponse().setBody("""{"csrf":"token"}"""))
+        server.enqueue(MockResponse().setBody("{}"))
+        runCatching { client.get("/latest.json") }
+        val failure = runCatching { client.write("POST", "/posts.json", mapOf("raw" to "body")) }.exceptionOrNull()
+        assertTrue("冷却中不能发 CSRF 或写入", failure is ApiFailure && failure.kind == FailureKind.RATE_LIMIT)
+        assertEquals(1, server.requestCount)
+    }
+    @Test fun jsonCooldownExpiresAndRetryReportsTheRemainingSecondsWithoutNetwork() = runBlocking {
+        var now = 0L
+        val sharedClient = DiscourseClient(NoCookies, server.url("/"),
+            cooldown = com.kudo.android.network.RequestCooldown({ now }))
+        server.enqueue(MockResponse().setResponseCode(429).setBody("""{"extras":{"wait_seconds":30}}"""))
+        server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+        val first = runCatching { sharedClient.get("/latest.json") }.exceptionOrNull() as ApiFailure
+        assertEquals(30, first.retryAfter)
+        now = 12_100
+        val retry = runCatching { sharedClient.get("/site.json") }.exceptionOrNull() as ApiFailure
+        assertEquals(18, retry.retryAfter)
+        assertTrue(retry.message.contains("18 秒"))
+        assertEquals(1, server.requestCount)
+        now = 30_000
+        assertTrue(sharedClient.get("/site.json").getBoolean("ok"))
+        assertEquals(2, server.requestCount)
+    }
     @Test fun unauthorizedRequiresLogin() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
         assertEquals(FailureKind.SIGN_IN, (runCatching { client.get("/notifications") }.exceptionOrNull() as ApiFailure).kind)

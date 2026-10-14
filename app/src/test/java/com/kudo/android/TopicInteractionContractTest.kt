@@ -109,10 +109,15 @@ class TopicInteractionContractTest {
             server.enqueue(MockResponse().setBody("""{"csrf":"test-token"}"""))
             server.enqueue(MockResponse().setResponseCode(429).setBody("""{"errors":["slow down"]}"""))
             server.enqueue(MockResponse().setBody("{}"))
-            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            var now = 0L
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/"),
+                cooldown = com.kudo.android.network.RequestCooldown({ now })))
             val failure = runCatching { repository.like(DiscourseParser.post(JSONObject(reactedJson))) }.exceptionOrNull()
             assertEquals(FailureKind.RATE_LIMIT, (failure as ApiFailure).kind)
             assertEquals(2, server.requestCount)
+            assertTrue(runCatching { repository.follow(Member(2, "author", "", "", canFollow = true)) }.isFailure)
+            assertEquals("限流中关注不能发送", 2, server.requestCount)
+            now = 15_000
             assertTrue(runCatching { repository.follow(Member(2, "author", "", "", canFollow = true)) }.isFailure)
             assertEquals(3, server.requestCount)
         }
