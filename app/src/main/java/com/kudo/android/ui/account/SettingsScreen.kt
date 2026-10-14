@@ -123,8 +123,11 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                             val action = if (Build.VERSION.SDK_INT >= 31) Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS else Settings.ACTION_APPLICATION_DETAILS_SETTINGS
                             context.startActivity(Intent(action, Uri.parse("package:${context.packageName}")))
                         }
+                        SettingsDivider()
+                        SettingRow("外部链接打开方式", settings.externalLinkMode.label, !showing) { show("external-links") }
                     }
                 }
+                item { Text("外部链接不包含 linux.do 及其子域名。系统打开会使用浏览器或关联应用。", Modifier.padding(horizontal = 9.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                 if (user != null) item {
                     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
                         .clickable(enabled = !showing) { show("logout") }.heightIn(min = 48.dp)
@@ -132,10 +135,11 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                 }
             }
         }
-        val actionSheet = dialog in listOf("theme", "glass", "font", "list", "navigation")
+        val actionSheet = dialog in listOf("theme", "glass", "font", "list", "navigation", "external-links")
         val title = when (dialog) {
             "theme" -> "主题风格"; "glass" -> "界面材质效果"; "font" -> "字体大小"
             "list" -> "主题列表样式"; "navigation" -> "底栏中间按钮"
+            "external-links" -> "外部链接打开方式"
             "logout" -> "退出登录？"; else -> "酷DO"
         }
         LiquidModal(visibility, title, actionSheet, backdrop, settings.glass, ::dismiss,
@@ -153,10 +157,11 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                     "glass" -> GlassMode.entries.map { it.label }
                     "list" -> TopicListStyle.entries.map { it.label }
                     "navigation" -> NavigationAction.entries.map { it.label }
+                    "external-links" -> ExternalLinkMode.entries.map { it.label }
                     else -> listOf("较小 · 85%", "跟随系统", "较大 · 115%", "大号 · 130%")
                 }
                 val selected = when (dialog) {
-                    "theme" -> settings.theme.ordinal; "glass" -> settings.glass.ordinal; "list" -> settings.topicListStyle.ordinal; "navigation" -> settings.navigationAction.ordinal; else -> scales.indexOf(settings.fontScale)
+                    "theme" -> settings.theme.ordinal; "glass" -> settings.glass.ordinal; "list" -> settings.topicListStyle.ordinal; "navigation" -> settings.navigationAction.ordinal; "external-links" -> settings.externalLinkMode.ordinal; else -> scales.indexOf(settings.fontScale)
                 }
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface)) {
                     options.forEachIndexed { index, label ->
@@ -169,6 +174,7 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                                     "glass" -> settings.copy(glass = GlassMode.entries[index])
                                     "list" -> settings.copy(topicListStyle = TopicListStyle.entries[index])
                                     "navigation" -> settings.copy(navigationAction = NavigationAction.entries[index])
+                                    "external-links" -> settings.copy(externalLinkMode = ExternalLinkMode.entries[index])
                                     else -> settings.copy(fontScale = scales[index])
                                 })
                                 dismiss()
