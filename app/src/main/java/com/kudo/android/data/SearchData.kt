@@ -71,6 +71,11 @@ suspend fun CommunityRepository.recentSearches(accountId: Int?): List<String> {
     }
 }
 
+suspend fun CommunityRepository.clearRecentSearches(accountId: Int?) {
+    if (accountId == null) return
+    client.write("DELETE", "/u/recent-searches.json")
+}
+
 internal fun parseSearchCapabilities(html: String, accountId: Int?): SearchCapabilities {
     val settings = siteSettings(html)
     val document = Jsoup.parse(html)

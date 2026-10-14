@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+最近搜索支持账号同步清空：`clearRecentSearches` 调用网页对应的 `DELETE /u/recent-searches.json`，沿用同源会话和 CSRF 写请求，访客不写。请求成功才清空当前状态；失败保留词条和独立错误，不自动重放删除。历史读取与删除共用互斥状态和独立代际令牌，删除期间不启动历史刷新，旧读取或旧账号的迟到响应不能复活历史。
+
 帖子沿用 GET /search.json?q=&page=，保留 posts 的顺序、摘要、作者及 post_number，关联 topics，不按主题去重。分页最多十页。类别与标签组合 /site.json 分类目录和 /tags/filter/search?q=；标签搜索及高级筛选建议共用 searchTags，不传 limit，由服务端采用站点默认数量。用户按网页 /u/search/users.json?term=&limit=20，不伪造这两类的分页。服务端 /u/recent-searches.json 仅登录请求，不落盘；账号变化取消请求并立即清空旧状态。
 
 标签接口的 limit 是可选参数，[Tags::Search](https://github.com/discourse/discourse/blob/main/app/services/tags/search.rb)拒绝超过 SiteSetting.max_tag_search_results 的值；[站点默认配置](https://github.com/discourse/discourse/blob/main/config/site_settings.yml)为5，但站点可自行调整。初次请求固定20会被较低上限拒绝，导致类别/标签结果和标签建议失败；省略该参数避免把站点限额写死，也不依赖筛选元数据先成功加载。
@@ -36,12 +38,16 @@ SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏�
 
 ## Alternatives considered
 
+- 只清空内存历史实现最简单且无需写接口，但重新进入或在网页打开仍会恢复；采用与网页相同的账号删除接口，成功后同步更新界面。
+- 先隐藏历史再异步删除能更快响应，但失败会误报成功并在下一次读取时突然恢复；保留历史直到服务器确认，弹窗展示处理中与错误。
 - /search/query.json 可以一次返回用户、分类和标签，实现最少；但顶部搜索每类只有五项，网页完整页面实际使用专用用户和标签接口，因此不用它充当完整结果页。
 - 客户端本地排序最容易复用现有列表；只能排列当前页，无法实现网页全站排序，故使用服务端 order:。
 - 底部筛选面板可复用已有 CommunitySheet；用户明确要求图标点击下拉，因此采用排序条下方的展开面板，限制高度并支持内部滚动。
 - 将标签 limit 改成5能匹配 Discourse 默认上限且只改一处，但站点允许把上限设为1，仍会失败；采用可选参数省略时的服务器默认。先读取 max_tag_search_results 再发送可以显式匹配配置，但需要额外元数据依赖，完整搜索原本不依赖高级筛选加载，因此不增加这项前置请求。
 
 ## Testing
+
+清空接口与状态定向 18 项 JVM 测试通过（`artifacts/search-history-state-tests.txt`），覆盖 CSRF DELETE、访客不写、成功前保留历史、重复提交及刷新隔离、失败保留词条后手动重试、取消在途读取与换号隔离；所有请求使用 MockWebServer，不清空真实账号历史。
 
 标签限额的两项复现先失败，均为 ApiFailure: limit 无效（artifacts/search-limit-repro-tests.txt）：类别/标签组合搜索夹具模拟上限5，直接标签建议夹具模拟上限1，验证固定20会被400拒绝。修复后 SearchDataTest 七项与 SearchViewModelTest 六项共13项通过（artifacts/search-limit-fixed-build.txt），请求保留中文/空格查询及标签 slug，且不发送 limit。RMX2202 / Android13 的三类原生跳转与排序/下拉筛选两项真机回归通过（artifacts/search-limit-fixed-device.txt）；显式2005 / 0.2.3同签名覆盖安装，保留数据。本次为离线服务契约复现，未以真实登录会话请求标签接口。
 

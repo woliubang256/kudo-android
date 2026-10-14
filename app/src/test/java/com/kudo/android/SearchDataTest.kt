@@ -53,6 +53,23 @@ class SearchDataTest {
         }
     }
 
+    @Test fun clearingRecentSearchesUsesTheWebsiteDeleteWithCsrfAndGuestsNeverWrite() = runBlocking {
+        MockWebServer().use { server ->
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            repository.clearRecentSearches(null)
+            assertEquals(0, server.requestCount)
+            server.enqueue(MockResponse().setBody("""{"csrf":"test-token"}"""))
+            server.enqueue(MockResponse().setBody("""{"success":true}"""))
+            repository.clearRecentSearches(7)
+            assertEquals("/session/csrf", server.takeRequest().path)
+            val cleared = server.takeRequest()
+            assertEquals("DELETE", cleared.method)
+            assertEquals("/u/recent-searches.json", cleared.path)
+            assertEquals("test-token", cleared.getHeader("X-CSRF-Token"))
+            assertEquals(2, server.requestCount)
+        }
+    }
+
     @Test fun categoryAndTagSearchKeepsSlugAndDoesNotInventMorePages() = runBlocking {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {

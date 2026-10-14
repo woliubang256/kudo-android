@@ -14,6 +14,7 @@ data class SearchState(
     val hits: SearchResults = SearchResults(), val loading: Boolean = false, val searched: Boolean = false,
     val hasMore: Boolean = false, val page: Int = 1, val error: Throwable? = null, val moreError: Throwable? = null,
     val recent: List<String> = emptyList(), val historyLoading: Boolean = false, val historyError: Throwable? = null,
+    val historyClearing: Boolean = false, val historyClearError: Throwable? = null,
     val categories: List<Category> = emptyList(), val capabilities: SearchCapabilities = SearchCapabilities(),
     val metadataLoading: Boolean = false, val metadataLoaded: Boolean = false, val metadataError: Throwable? = null,
     val tagSuggestions: List<TopicTag> = emptyList(), val tagsLoading: Boolean = false, val tagsError: Throwable? = null,
@@ -33,13 +34,14 @@ class SearchViewModel(
     private var tagsJob: Job? = null
     private var generation = 0
     private var searchGeneration = 0
+    private var historyGeneration = 0
     private var tagGeneration = 0
 
     init { refreshHistory(); if (initialQuery.isNotBlank()) search(initialQuery) }
 
     fun useAccount(id: Int?) {
         if (id == _state.value.accountId) return
-        generation++; searchGeneration++; tagGeneration++
+        generation++; searchGeneration++; historyGeneration++; tagGeneration++
         searchJob?.cancel(); historyJob?.cancel(); metadataJob?.cancel(); tagsJob?.cancel()
         _state.value = SearchState(accountId = id)
         refreshHistory()
@@ -48,15 +50,39 @@ class SearchViewModel(
 
     fun refreshHistory() {
         val id = _state.value.accountId ?: return
+        if (_state.value.historyClearing) return
         historyJob?.cancel()
         val token = generation
+        val historyToken = ++historyGeneration
         _state.update { it.copy(historyLoading = true, historyError = null) }
         historyJob = viewModelScope.launch {
             try {
                 val recent = withContext(Dispatchers.IO) { repository.recentSearches(id) }
-                if (token == generation) _state.update { it.copy(recent = recent, historyLoading = false) }
+                if (token == generation && historyToken == historyGeneration) _state.update { it.copy(recent = recent, historyLoading = false) }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (token == generation) _state.update { it.copy(historyLoading = false, historyError = e) } }
+            catch (e: Exception) { if (token == generation && historyToken == historyGeneration) _state.update { it.copy(historyLoading = false, historyError = e) } }
+        }
+    }
+
+    fun clearHistory() {
+        val id = _state.value.accountId ?: return
+        if (_state.value.historyClearing) return
+        historyJob?.cancel()
+        val token = generation
+        val historyToken = ++historyGeneration
+        _state.update { it.copy(historyLoading = false, historyClearing = true, historyClearError = null) }
+        historyJob = viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.clearRecentSearches(id) }
+                if (token == generation && historyToken == historyGeneration) _state.update {
+                    it.copy(recent = emptyList(), historyClearing = false, historyError = null)
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                if (token == generation && historyToken == historyGeneration) _state.update {
+                    it.copy(historyClearing = false, historyClearError = e)
+                }
+            }
         }
     }
 

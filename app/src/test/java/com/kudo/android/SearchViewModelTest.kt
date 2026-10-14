@@ -19,6 +19,107 @@ class SearchViewModelTest {
     private val result = """{"topics":[{"id":3,"title":"主题"}],"posts":[{"id":31,"topic_id":3,"post_number":2}],"grouped_search_result":{"more_full_page_results":true}}"""
     private suspend fun SearchViewModel.finished() = withContext(Dispatchers.IO) { withTimeout(5000) { state.first { it.searched && !it.loading } } }
     private suspend fun SearchViewModel.historyFinished() = withContext(Dispatchers.IO) { withTimeout(5000) { state.first { !it.historyLoading } } }
+    private suspend fun SearchViewModel.clearHistoryFinished() = withContext(Dispatchers.IO) { withTimeout(5000) { state.first { !it.historyClearing } } }
+
+    @Test fun clearingHistoryWaitsForServerAndBlocksDuplicateDeletesAndRefreshes() = runTest {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        fixture(response = { request ->
+            when {
+                request.method == "DELETE" -> { entered.countDown(); release.await(5, TimeUnit.SECONDS); MockResponse().setBody("""{"success":true}""") }
+                request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test-token"}""")
+                else -> MockResponse().setBody("""{"recent_searches":["server-history"]}""")
+            }
+        }) { repository, requests, models ->
+            val vm = SearchViewModel(repository, 7).also(models::add)
+            assertEquals(listOf("server-history"), vm.historyFinished().recent)
+            try {
+                vm.clearHistory(); assertTrue(entered.await(3, TimeUnit.SECONDS))
+                assertEquals(listOf("server-history"), vm.state.value.recent)
+                vm.clearHistory(); vm.refreshHistory()
+                assertTrue(vm.state.value.historyClearing)
+            } finally { release.countDown() }
+            val state = vm.clearHistoryFinished()
+            assertTrue(state.recent.isEmpty()); assertNull(state.historyClearError)
+            assertEquals(1, requests.count { it.method == "DELETE" })
+            assertEquals(1, requests.count { it.method == "GET" && it.path == "/u/recent-searches.json" })
+        }
+    }
+
+    @Test fun failedClearKeepsHistoryAndExplicitRetryCanClearIt() = runTest {
+        val fail = AtomicBoolean(true)
+        fixture(response = { request ->
+            when {
+                request.method == "DELETE" && fail.getAndSet(false) -> MockResponse().setResponseCode(503).setBody("{}")
+                request.method == "DELETE" -> MockResponse().setBody("""{"success":true}""")
+                request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test-token"}""")
+                else -> MockResponse().setBody("""{"recent_searches":["server-history"]}""")
+            }
+        }) { repository, requests, models ->
+            val vm = SearchViewModel(repository, 7).also(models::add)
+            vm.historyFinished(); vm.clearHistory()
+            val failed = vm.clearHistoryFinished()
+            assertEquals(listOf("server-history"), failed.recent)
+            assertNotNull(failed.historyClearError)
+            assertNull(failed.historyError)
+            assertEquals(1, requests.count { it.method == "DELETE" })
+            vm.clearHistory()
+            assertTrue(vm.clearHistoryFinished().recent.isEmpty())
+            assertNull(vm.state.value.historyClearError)
+            assertEquals(2, requests.count { it.method == "DELETE" })
+        }
+    }
+
+    @Test fun cancelledHistoryReadCannotRestoreEntriesAfterClearing() = runTest {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val blockRead = AtomicBoolean(false)
+        fixture(response = { request ->
+            when {
+                request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test-token"}""")
+                request.method == "DELETE" -> MockResponse().setBody("""{"success":true}""")
+                else -> {
+                    if (blockRead.get()) { entered.countDown(); release.await(5, TimeUnit.SECONDS) }
+                    MockResponse().setBody("""{"recent_searches":["server-history"]}""")
+                }
+            }
+        }) { repository, _, models ->
+            val vm = SearchViewModel(repository, 7).also(models::add)
+            vm.historyFinished(); blockRead.set(true); vm.refreshHistory()
+            try {
+                assertTrue(entered.await(3, TimeUnit.SECONDS))
+                vm.clearHistory()
+                assertTrue(vm.clearHistoryFinished().recent.isEmpty())
+            } finally { release.countDown() }
+            assertTrue(vm.state.value.recent.isEmpty())
+        }
+    }
+
+    @Test fun switchingAccountsDuringDeletionKeepsTheNewAccountsHistoryAndGuestCannotDelete() = runTest {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val newAccount = AtomicBoolean(false)
+        fixture(response = { request ->
+            when {
+                request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test-token"}""")
+                request.method == "DELETE" -> { entered.countDown(); release.await(5, TimeUnit.SECONDS); MockResponse().setBody("""{"success":true}""") }
+                else -> MockResponse().setBody(if (newAccount.get()) """{"recent_searches":["new-account-history"]}""" else """{"recent_searches":["server-history"]}""")
+            }
+        }) { repository, requests, models ->
+            val vm = SearchViewModel(repository, 7).also(models::add)
+            vm.historyFinished()
+            try {
+                vm.clearHistory(); assertTrue(entered.await(3, TimeUnit.SECONDS))
+                newAccount.set(true); vm.useAccount(8)
+                assertEquals(listOf("new-account-history"), vm.historyFinished().recent)
+                assertFalse(vm.state.value.historyClearing)
+            } finally { release.countDown() }
+            assertEquals(8, vm.state.value.accountId)
+            assertEquals(listOf("new-account-history"), vm.state.value.recent)
+            vm.useAccount(null); vm.clearHistory()
+            assertEquals(1, requests.count { it.method == "DELETE" })
+        }
+    }
 
     @Test fun guestSearchDoesNotReadHistoryAndSortIsSentToServer() = runTest {
         fixture { repository, requests, models ->
