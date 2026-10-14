@@ -20,14 +20,26 @@ import kotlinx.coroutines.CancellationException
 @Composable
 internal fun UpdateSheet(visibility: MutableTransitionState<Boolean>, check: suspend () -> GitHubRelease,
     external: (String) -> Unit, dismiss: () -> Unit) {
-    var release by remember { mutableStateOf<GitHubRelease?>(null) }
-    var newer by remember { mutableStateOf(false) }
+    UpdateSheetContent(visibility, check, external, dismiss, null)
+}
+
+@Composable
+internal fun UpdateSheet(visibility: MutableTransitionState<Boolean>, release: GitHubRelease,
+    external: (String) -> Unit, dismiss: () -> Unit) {
+    UpdateSheetContent(visibility, { release }, external, dismiss, release)
+}
+
+@Composable
+private fun UpdateSheetContent(visibility: MutableTransitionState<Boolean>, check: suspend () -> GitHubRelease,
+    external: (String) -> Unit, dismiss: () -> Unit, initialRelease: GitHubRelease?) {
+    var release by remember(initialRelease) { mutableStateOf(initialRelease) }
+    var newer by remember(initialRelease) { mutableStateOf(initialRelease?.isNewerThan(BuildConfig.VERSION_NAME) ?: false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
     val latestCheck by rememberUpdatedState(check)
     LaunchedEffect(visibility.targetState, retry) {
-        if (!visibility.targetState) return@LaunchedEffect
+        if (!visibility.targetState || initialRelease != null) return@LaunchedEffect
         loading = true; error = null; release = null
         try {
             val value = latestCheck()

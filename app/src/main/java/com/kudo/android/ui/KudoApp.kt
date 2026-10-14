@@ -88,6 +88,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         ArticleFootnoteHost {
         QuickScrollToTopHost {
         val account = model("account") { AccountViewModel(app) }
+        val homeUpdate = model("home-update") { HomeUpdateViewModel(GitHubUpdates()::latest) }
         val nav = rememberNavController()
         LaunchedEffect(incomingDownloads, linkSequence) {
             if (incomingDownloads) { nav.navigate("downloads") { launchSingleTop = true }; consumeDownloads() }
@@ -190,6 +191,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         }
                         CompositionLocalProvider(LocalQuickScrollBottomPadding provides
                             (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 88.dp)) {
+                        HomeUpdateHost(homeUpdate, selected == 0, ::openBrowser) {
                         Box(Modifier.fillMaxSize()) {
                             Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)) {
                                 when (selected) {
@@ -215,6 +217,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 selected = it
                                 if (it == 0 && state.forUser(account.user).hasUpdates) feed.refreshFromNavigation()
                             }, { if (display.navigationAction == NavigationAction.SEARCH) nav.navigate("search") else editor() }, backdrop, display.glass, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp).widthIn(max = 530.dp).fillMaxWidth(), homeHasUpdates = state.forUser(account.user).hasUpdates, action = display.navigationAction, unreadCount = account.unreadCount)
+                        }
                         }
                         }
                     }
