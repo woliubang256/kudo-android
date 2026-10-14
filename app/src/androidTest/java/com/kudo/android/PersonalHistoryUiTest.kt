@@ -1,0 +1,92 @@
+package com.kudo.android
+
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewModelScope
+import com.kudo.android.data.*
+import com.kudo.android.ui.account.PersonalTopicsScreen
+import com.kudo.android.ui.account.PersonalTopicsViewModel
+import com.kudo.android.ui.theme.KudoTheme
+import kotlinx.coroutines.cancel
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+
+class PersonalHistoryUiTest {
+    @get:Rule val compose = createComposeRule()
+    private val requests = AtomicInteger()
+    private val visited = AtomicBoolean(false)
+    private var vm: PersonalTopicsViewModel? = null
+    private lateinit var owner: FixtureOwner
+    private val http = OkHttpClient.Builder().addInterceptor { chain ->
+        val request = chain.request()
+        requests.incrementAndGet()
+        val topics = if (request.url.queryParameter("page") == "1")
+            """[{"id":3,"title":"更早的历史"}]"""
+        else if (visited.get()) """[{"id":2,"title":"刚浏览的新帖子"},{"id":1,"title":"旧历史"}]"""
+        else """[{"id":1,"title":"旧历史"}]"""
+        Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+            .body("""{"topic_list":{"topics":$topics,"more_topics_url":"/read.json?page=1"}}""".toResponseBody("application/json".toMediaType())).build()
+    }.build()
+
+    @After fun dispose() {
+        compose.runOnIdle { vm?.viewModelScope?.cancel(); owner.lifecycle.currentState = Lifecycle.State.DESTROYED }
+        http.dispatcher.executorService.shutdown()
+        http.connectionPool.evictAll()
+    }
+
+    private fun show(destination: AccountDestination) {
+        compose.runOnIdle {
+            owner = FixtureOwner()
+            val repository = CommunityRepository(DiscourseClient(object : SessionCookies {
+                override fun get(url: String) = ""
+                override fun set(url: String, cookie: String) {}
+            }, http = http))
+            vm = PersonalTopicsViewModel(repository, "fixture", destination)
+        }
+        compose.setContent { CompositionLocalProvider(LocalLifecycleOwner provides owner) {
+            KudoTheme(DisplaySettings()) {
+                PersonalTopicsScreen(vm!!, emptyList(), TopicListStyle.TITLE, {}, {}, { _, _ -> }, {}, {})
+            }
+        } }
+        compose.waitUntil(5000) { vm!!.topics.size == 1 && !vm!!.loading }
+    }
+
+    @Test fun historyResumeRefreshesServerResultsWithoutDuplicatingInitialRequest() {
+        show(AccountDestination.HISTORY)
+        compose.runOnIdle { assertEquals(1, requests.get()); owner.lifecycle.currentState = Lifecycle.State.STARTED }
+        visited.set(true)
+        compose.runOnIdle { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
+        compose.waitUntil(3000) { vm!!.topics.firstOrNull()?.id == 2 && !vm!!.loading }
+        compose.onNodeWithText("刚浏览的新帖子").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(2, requests.get()) }
+    }
+
+    @Test fun otherPersonalListsKeepTheirLoadedPaginationWhenResuming() {
+        show(AccountDestination.TOPICS)
+        compose.runOnIdle { vm!!.load(true) }
+        compose.waitUntil(5000) { vm!!.topics.size == 2 && !vm!!.loading }
+        compose.runOnIdle { assertEquals(2, requests.get()); owner.lifecycle.currentState = Lifecycle.State.STARTED }
+        visited.set(true)
+        compose.runOnIdle { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
+        compose.runOnIdle {
+            assertEquals(2, requests.get())
+            assertEquals(listOf(1, 3), vm!!.topics.map { it.id })
+        }
+    }
+
+    private class FixtureOwner : LifecycleOwner {
+        override val lifecycle = LifecycleRegistry(this).apply { currentState = Lifecycle.State.RESUMED }
+    }
+}

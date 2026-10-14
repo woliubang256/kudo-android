@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
@@ -41,7 +42,13 @@ internal class PersonalTopicsViewModel(private val repository: CommunityReposito
     var mailbox by mutableStateOf("inbox"); private set
     private var request: Job? = null
     private var generation = 0
+    private var historyWasShown = false
     init { load() }
+    fun resumeHistory() {
+        if (destination != AccountDestination.HISTORY) return
+        if (historyWasShown) load()
+        historyWasShown = true
+    }
     fun selectMailbox(value: String) {
         if (value == mailbox) return
         mailbox = value; topics = emptyList(); next = null; load()
@@ -96,6 +103,10 @@ internal fun AccountTabs(labels: List<String>, selection: Int, select: (Int) -> 
 internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<Category>, style: TopicListStyle,
     back: () -> Unit, login: () -> Unit, open: (Int, Int?) -> Unit, user: (String) -> Unit,
     composeMessage: () -> Unit, drafts: () -> Unit = {}) {
+    if (vm.destination == AccountDestination.HISTORY) LifecycleResumeEffect(vm) {
+        vm.resumeHistory()
+        onPauseOrDispose {}
+    }
     val scroll = rememberLazyListState()
     Column(Modifier.fillMaxSize()) {
         AccountPageTopBar(vm.destination.title, back) {

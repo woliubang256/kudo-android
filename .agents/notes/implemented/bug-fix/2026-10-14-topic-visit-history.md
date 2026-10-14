@@ -10,6 +10,8 @@ Status: implemented
 
 仓库 detail 提供默认 false 的 trackVisit，仅登录用户的 TopicViewModel 首次打开请求传 true；刷新、续读补窗、跳楼、邻页预取及摘要补全保持无访问标记。失败后显式重试仍属于首次打开，成功后不重复标记；每次重新进入创建新的导航上下文仍记录访问。访问不改本地 readNumbers，也不代替真实曝光 timings。
 
+HISTORY 屏幕通过 LifecycleResumeEffect 在返回 RESUMED 时刷新。ViewModel 首次展示跳过额外加载（init 已经请求），后续返回重新读取第一页；旧条目保留到成功响应，沿用取消旧请求、代次核验及分页。其他个人列表不接入此生命周期刷新。
+
 ## Existing note audit
 
 [阅读同步](../../implemented/bug-fix/2026-10-10-topic-reading-sync.md)部分取代“不用 track_visit”的决定，保留 timings、真实曝光、账号隔离和缓存规则；本篇把访问与读完分开。[续读](../../implemented/feature/2026-10-11-topic-resume-reading.md)保留最高已读及补窗规则，补窗不记访问。[个人中心](../../implemented/feature/2026-10-10-member-account-dashboard.md)及[账号列表](../../implemented/feature/2026-10-07-account-and-composer.md)部分重叠，只修复历史返回刷新，保留分页和账号边界。没有完全取代或同主题的其他 proposed/rejected。
@@ -24,6 +26,8 @@ Status: implemented
 
 TopicVisitHistoryTest 使用真实 ViewModel 和 MockWebServer，4 项中 3 项先因缺少 track_visit 失败，访客及仓库预览排除用例原本通过（`artifacts/topic-visit-history-repro.txt`）。补上参数后 4 项通过（`artifacts/topic-visit-history-fixed.txt`），验证登录访问后读取服务端模拟历史、不提前标读、刷新不重复、重新进入再次访问和明确楼层目标不变。
 
+PersonalHistoryUiTest 使用真实屏幕、ViewModel、受控 LifecycleRegistry 与离线 HTTP 响应。旧实现返回历史后等待新条目超时，其他个人列表分页保留用例通过（`artifacts/history-return-repro-device.txt`）；修复后的集中设备验证尚待运行。
+
 ## Consequences
 
-登录用户打开帖子可以独立记录访问，短文与长文不再依赖读完门槛才进入历史。历史返回刷新尚未接入，另一个小单元处理。Discourse 访问写入是延后任务，历史查询可能短暂滞后；离线或失败的打开没有可确认的服务端记录。过去未上报的访问无法完整恢复，重新打开后才能记录。真实服务器部署与上游源码仍可能有差异，离线测试不等于真实账号端到端同步验收。
+登录用户打开帖子可以独立记录访问，短文与长文不再依赖读完门槛才进入历史；返回历史时能读取新列表。Discourse 访问写入是延后任务，历史查询可能短暂滞后；离线或失败的打开没有可确认的服务端记录。过去未上报的访问无法完整恢复，重新打开后才能记录。真实服务器部署与上游源码仍可能有差异，离线测试不等于真实账号端到端同步验收。

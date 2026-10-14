@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+[访问历史修复](../bug-fix/2026-10-14-topic-visit-history.md)补全 track_visit 与返回历史刷新；本篇 /read.json 读取、其他列表和账号边界继续有效。
+
 编辑器的页面呈现与回复承载由[酷安式表单](2026-10-10-coolapk-forms.md)部分替代，以下登录、上传与草稿契约继续成立。
 
 AccountViewModel 通过 /session/current.json 确认用户，LoginScreen 提供 HTTPS 官网 WebView，关闭文件和内容访问，并使用[有界视口](../bug-fix/2026-10-10-webview-viewport.md)避免验证 iframe 被零高度限制隐藏。通知和收藏按需分页，成功标记已读后更新界面。退出登录清除本机 Cookie 和账号草稿，账号代次阻止过期通知请求重新写回。
