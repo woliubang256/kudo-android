@@ -28,6 +28,8 @@ TopicVisitHistoryTest 使用真实 ViewModel 和 MockWebServer，4 项中 3 项�
 
 PersonalHistoryUiTest 使用真实屏幕、ViewModel、受控 LifecycleRegistry 与离线 HTTP 响应。旧实现返回历史后等待新条目超时，其他个人列表分页保留用例通过（`artifacts/history-return-repro-device.txt`）；修复后的集中设备验证尚待运行。
 
+70 项关联 JVM 测试通过（`artifacts/topic-history-final-build.txt`）：访问历史 4、续读 12、楼层导航 12、实时回复 11、主题 ViewModel 9、阅读曝光计算 6、上报队列 3、账号数据 6、楼中楼与签名 7。既有详情夹具按 encodedPath 匹配路由，保留完整请求参数日志并新增首次/续读补窗/访客参数断言；未删除实际传输检查。首轮 51 项中一个延迟续读夹具仍用完整 path 分支而未触发阻塞，修正同类匹配后相关 12 项全部通过（初次日志 `artifacts/topic-history-unit-regression.txt`），不是修改产品逻辑绕过失败。
+
 ## Consequences
 
 登录用户打开帖子可以独立记录访问，短文与长文不再依赖读完门槛才进入历史；返回历史时能读取新列表。Discourse 访问写入是延后任务，历史查询可能短暂滞后；离线或失败的打开没有可确认的服务端记录。过去未上报的访问无法完整恢复，重新打开后才能记录。真实服务器部署与上游源码仍可能有差异，离线测试不等于真实账号端到端同步验收。

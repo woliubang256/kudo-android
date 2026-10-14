@@ -212,7 +212,7 @@ class TopicUpdatesTest {
             Dispatchers.setMain(main)
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = when {
-                    request.path == "/t/5.json" -> {
+                    request.requestUrl!!.encodedPath == "/t/5.json" -> {
                         snapshots.incrementAndGet()
                         nextSnapshot.getAndSet(null) ?: MockResponse().setBody(topic(total.get()))
                     }

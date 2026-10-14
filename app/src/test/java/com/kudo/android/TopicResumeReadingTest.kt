@@ -27,7 +27,7 @@ class TopicResumeReadingTest {
             val result = vm.loaded()
             assertEquals(8, result.targetNumber)
             assertTrue(result.detail!!.posts.any { it.number == 8 })
-            assertEquals(listOf("GET /t/5.json"), paths.filter { it.contains("/t/") })
+            assertEquals(listOf("GET /t/5.json?track_visit=true"), paths.filter { it.contains("/t/") })
             assertTrue(result.readNumbers.isEmpty())
             assertTrue(paths.all { it.startsWith("GET ") })
         }
@@ -35,13 +35,14 @@ class TopicResumeReadingTest {
 
     @Test fun farResumeLoadsOnlyTheTargetAndAdjacentPagesAndSupportsBackwardPaging() = runTest {
         withTopic(progress = 499, response = { request ->
-            if (request.path == "/t/5/500.json") MockResponse().setBody(topic(490..509, 499)) else null
+            if (request.requestUrl!!.encodedPath == "/t/5/500.json") MockResponse().setBody(topic(490..509, 499)) else null
         }) { vm, paths, _ ->
             val result = vm.loaded()
             assertEquals(500, result.targetNumber)
             assertEquals((470..529).toList(), result.detail!!.posts.map(Post::number))
             val pages = paths.filter { it.contains("/posts.json") }
             assertEquals(2, pages.size)
+            assertEquals(1, paths.count { "track_visit=true" in it })
             assertTrue(pages.any { it.contains("post_ids%5B%5D=10470") })
             assertTrue(pages.any { it.contains("post_ids%5B%5D=10510") })
             assertTrue(result.readNumbers.isEmpty())
@@ -56,7 +57,7 @@ class TopicResumeReadingTest {
 
     @Test fun completedTopicResumesAtTheLastAvailableFloor() = runTest {
         withTopic(progress = 600, response = { request ->
-            if (request.path == "/t/5/600.json") MockResponse().setBody(topic(590..600, 600)) else null
+            if (request.requestUrl!!.encodedPath == "/t/5/600.json") MockResponse().setBody(topic(590..600, 600)) else null
         }) { vm, paths, _ ->
             assertEquals(600, vm.loaded().targetNumber)
             assertEquals(1, paths.count { it.contains("/posts.json") })
@@ -68,7 +69,7 @@ class TopicResumeReadingTest {
         listOf(1, 17).forEach { target ->
             withTopic(number = target, progress = 499) { vm, paths, _ ->
                 assertEquals(target, vm.loaded().targetNumber)
-                assertEquals(listOf("GET /t/5/$target.json"), paths.filter { it.contains("/t/") })
+                assertEquals(listOf("GET /t/5/$target.json?track_visit=true"), paths.filter { it.contains("/t/") })
             }
         }
     }
@@ -78,13 +79,14 @@ class TopicResumeReadingTest {
         withTopic(viewerId = null, progress = 499) { vm, paths, _ ->
             assertNull(vm.loaded().targetNumber)
             assertFalse(paths.any { it.contains("/500.json") })
+            assertFalse(paths.any { "track_visit" in it })
         }
     }
 
     @Test fun reopeningReadsFreshProgressWhileRefreshKeepsTheExistingTarget() = runTest {
         var progress = 7
         withTopic(response = { request ->
-            if (request.path == "/t/5.json" || request.path == "/t/5/8.json") MockResponse().setBody(topic(progress = progress)) else null
+            if (request.requestUrl!!.encodedPath == "/t/5.json" || request.requestUrl!!.encodedPath == "/t/5/8.json") MockResponse().setBody(topic(progress = progress)) else null
         }) { vm, paths, reopen ->
             assertEquals(8, vm.loaded().targetNumber)
             progress = 13
@@ -97,7 +99,7 @@ class TopicResumeReadingTest {
 
     @Test fun deletedResumeFloorUsesTheNearestAccessibleFloorInTheReturnedWindow() = runTest {
         withTopic(progress = 499, response = { request ->
-            if (request.path == "/t/5/500.json") MockResponse().setBody(topic(501..520, 499)) else null
+            if (request.requestUrl!!.encodedPath == "/t/5/500.json") MockResponse().setBody(topic(501..520, 499)) else null
         }) { vm, _, _ ->
             val result = vm.loaded()
             assertEquals(501, result.targetNumber)
@@ -109,7 +111,7 @@ class TopicResumeReadingTest {
     @Test fun unavailableResumeWindowFallsBackToTheLoadedFirstPage() = runTest {
         listOf(403, 404, 503).forEach { code ->
             withTopic(progress = 499, response = { request ->
-                if (request.path == "/t/5/500.json") MockResponse().setResponseCode(code).setBody("{}") else null
+                if (request.requestUrl!!.encodedPath == "/t/5/500.json") MockResponse().setResponseCode(code).setBody("{}") else null
             }) { vm, _, _ ->
                 val result = vm.loaded()
                 assertNull(result.error)
@@ -123,7 +125,7 @@ class TopicResumeReadingTest {
     @Test fun neighboringPageFailureDoesNotBlockTheResumeTargetAndCanBeRetried() = runTest {
         var failPrevious = true
         withTopic(progress = 499, response = { request -> when {
-            request.path == "/t/5/500.json" -> MockResponse().setBody(topic(490..509, 499))
+            request.requestUrl!!.encodedPath == "/t/5/500.json" -> MockResponse().setBody(topic(490..509, 499))
             request.path?.contains("post_ids%5B%5D=10470") == true && failPrevious -> MockResponse().setResponseCode(503).setBody("{}")
             else -> null
         } }) { vm, _, _ ->
@@ -143,7 +145,7 @@ class TopicResumeReadingTest {
 
     @Test fun emptyResumeWindowFallsBackWithoutLeavingAnUnreachableTarget() = runTest {
         withTopic(progress = 499, response = { request ->
-            if (request.path == "/t/5/500.json") MockResponse().setBody(topic(IntRange.EMPTY, 499)) else null
+            if (request.requestUrl!!.encodedPath == "/t/5/500.json") MockResponse().setBody(topic(IntRange.EMPTY, 499)) else null
         }) { vm, _, _ ->
             val result = vm.loaded()
             assertNull(result.targetNumber)
@@ -156,7 +158,7 @@ class TopicResumeReadingTest {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
         var progress = 499
-        withTopic(response = { request -> when (request.path) {
+        withTopic(response = { request -> when (request.requestUrl!!.encodedPath) {
             "/t/5.json" -> MockResponse().setBody(topic(progress = progress))
             "/t/5/500.json" -> {
                 started.countDown()
@@ -179,7 +181,7 @@ class TopicResumeReadingTest {
 
     @Test fun cloudflareOnTheResumeRequestKeepsTheVerificationMessage() = runTest {
         withTopic(progress = 499, response = { request ->
-            if (request.path == "/t/5/500.json") MockResponse().setResponseCode(403)
+            if (request.requestUrl!!.encodedPath == "/t/5/500.json") MockResponse().setResponseCode(403)
                 .setHeader("cf-mitigated", "challenge").setHeader("Content-Type", "text/html")
                 .setBody("<html><title>Just a moment...</title></html>") else null
         }) { vm, _, _ ->
@@ -209,7 +211,7 @@ class TopicResumeReadingTest {
                             val numbers = request.requestUrl!!.queryParameterValues("post_ids[]").orEmpty().map { it!!.toInt() - 10_000 }
                             MockResponse().setBody("""{"post_stream":{"posts":[${numbers.joinToString(",") { post(it) }}]}}""")
                         }
-                        request.path == "/t/5.json" || request.path == "/t/5/$number.json" || request.path == "/t/5/1.json" -> MockResponse().setBody(topic(progress = progress))
+                        request.requestUrl!!.encodedPath == "/t/5.json" || request.requestUrl!!.encodedPath == "/t/5/$number.json" || request.requestUrl!!.encodedPath == "/t/5/1.json" -> MockResponse().setBody(topic(progress = progress))
                         request.path!!.startsWith("/u/") -> MockResponse().setBody("""{"user":{"id":2,"username":"author"}}""")
                         else -> MockResponse().setResponseCode(404).setBody("{}")
                     }

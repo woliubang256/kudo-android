@@ -19,7 +19,7 @@ class TopicViewModelTest {
     @Test fun refreshAfterDeletionRemovesCachedBodyAndPostActions() = runTest {
         var unavailable = false
         withTopic(response = { request ->
-            if (unavailable && request.path == "/t/5.json") MockResponse().setResponseCode(404).setBody("{}") else null
+            if (unavailable && request.requestUrl!!.encodedPath == "/t/5.json") MockResponse().setResponseCode(404).setBody("{}") else null
         }) { vm, _ ->
             vm.awaitState { !it.loading && it.authorProfile != null }
             assertNotNull(vm.state.value.detail)
@@ -43,7 +43,7 @@ class TopicViewModelTest {
         val gate = CountDownLatch(1)
         val writes = AtomicInteger()
         withTopic(response = { request -> when {
-            request.path == "/t/5.json" -> MockResponse().setBody(topic.replace("\"post_number\":1", "\"post_number\":1,\"can_boost\":true"))
+            request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(topic.replace("\"post_number\":1", "\"post_number\":1,\"can_boost\":true"))
             request.path == "/emojis.json" -> MockResponse().setBody("""{"custom":[{"name":"test","url":"/test.png"}]}""")
             request.path!!.contains("/boosts") -> {
                 writes.incrementAndGet(); gate.await(5, TimeUnit.SECONDS)
@@ -95,7 +95,7 @@ class TopicViewModelTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = when {
-                    request.path == "/t/5.json" -> MockResponse().setBody(topic)
+                    request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(topic)
                     request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test"}""")
                     request.path!!.endsWith("/toggle.json") -> MockResponse().setBody(postJson(27, true))
                     request.path!!.startsWith("/u/") -> MockResponse().setBody("""{"user":{"id":2,"username":"author","can_follow":true,"is_followed":false}}""")
@@ -121,7 +121,7 @@ class TopicViewModelTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = when {
-                    request.path == "/t/5.json" -> MockResponse().setBody(topic)
+                    request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(topic)
                     request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test"}""")
                     request.path!!.endsWith("/toggle.json") -> MockResponse().setBody(postJson(27, true))
                     request.path!!.contains("/posts.json") -> {
@@ -201,7 +201,7 @@ class TopicViewModelTest {
     @Test fun deepLinkLoadsOriginalForActionsWithoutInsertingItIntoTheReadingStream() = runTest {
         withTopic(number = 3, response = { request ->
             when {
-                request.path == "/t/5/3.json" -> MockResponse().setBody("""{"id":5,"title":"深链","details":{"created_by":{"id":2,"username":"author"}},"post_stream":{"stream":[10,11,12],"posts":[{"id":12,"post_number":3,"user_id":3,"username":"reply"}]}}""")
+                request.requestUrl!!.encodedPath == "/t/5/3.json" -> MockResponse().setBody("""{"id":5,"title":"深链","details":{"created_by":{"id":2,"username":"author"}},"post_stream":{"stream":[10,11,12],"posts":[{"id":12,"post_number":3,"user_id":3,"username":"reply"}]}}""")
                 request.path!!.contains("/posts.json") -> MockResponse().setBody("""{"post_stream":{"posts":[$original]}}""")
                 request.path!!.startsWith("/u/") -> MockResponse().setResponseCode(500).setBody("{}")
                 else -> null
@@ -220,7 +220,7 @@ class TopicViewModelTest {
         val releasePage = CountDownLatch(1)
         withTopic(number = 3, response = { request ->
             when {
-                request.path == "/t/5/3.json" -> MockResponse().setBody("""{"id":5,"details":{"created_by":{"id":2,"username":"author"}},"post_stream":{"stream":[10,11,12],"posts":[{"id":12,"post_number":3,"user_id":3,"username":"reply"}]}}""")
+                request.requestUrl!!.encodedPath == "/t/5/3.json" -> MockResponse().setBody("""{"id":5,"details":{"created_by":{"id":2,"username":"author"}},"post_stream":{"stream":[10,11,12],"posts":[{"id":12,"post_number":3,"user_id":3,"username":"reply"}]}}""")
                 request.path!!.endsWith("/toggle.json") -> MockResponse().setBody(postJson(27, true))
                 request.path!!.contains("/posts.json") -> {
                     if (pages.incrementAndGet() > 1) releasePage.await(5, TimeUnit.SECONDS)
@@ -251,7 +251,7 @@ class TopicViewModelTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = response(request) ?: when {
-                    request.path == "/t/5.json" -> MockResponse().setBody(topic)
+                    request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(topic)
                     request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test"}""")
                     request.path!!.startsWith("/u/") -> MockResponse().setBody("""{"user":{"id":2,"username":"author","can_follow":true,"is_followed":false}}""")
                     else -> MockResponse().setResponseCode(404)
