@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import com.kudo.android.media.DownloadStatus
 import com.kudo.android.media.DownloadTask
 import com.kudo.android.media.NativeDownloadManager
+import com.kudo.android.media.DOWNLOAD_VERIFICATION_MESSAGE
 import com.kudo.android.ui.components.CommunityIconButton
+import com.kudo.android.ui.components.CommunityButton
 import com.kudo.android.ui.components.EmptyState
 import com.kudo.android.ui.components.showKudoToast
 import kotlin.math.roundToInt
@@ -57,6 +59,7 @@ internal fun DownloadsScreen(manager: NativeDownloadManager, back: () -> Unit) {
 
 @Composable
 private fun DownloadTaskRow(task: DownloadTask, manager: NativeDownloadManager, context: Context) {
+    val verification = LocalWebVerification.current
     val progress = task.totalBytes?.takeIf { it > 0 }?.let { (task.bytes * 100f / it).coerceIn(0f, 100f) }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)
         .padding(horizontal = 16.dp, vertical = 13.dp).testTag("download-${task.id}"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -73,27 +76,34 @@ private fun DownloadTaskRow(task: DownloadTask, manager: NativeDownloadManager, 
             })
             Text(task.fileName, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyLarge)
-            IconButton(onClick = { manager.remove(task.id) }) { Icon(Icons.Rounded.DeleteOutline, "删除下载记录") }
+            CommunityIconButton(Icons.Rounded.DeleteOutline, "删除下载记录", { manager.remove(task.id) })
         }
         when (task.status) {
             DownloadStatus.DOWNLOADING -> {
-                LinearProgressIndicator(progress = { progress?.div(100f) ?: 0f }, Modifier.fillMaxWidth())
+                if (progress == null) LinearProgressIndicator(Modifier.fillMaxWidth())
+                else LinearProgressIndicator(progress = { progress / 100f }, Modifier.fillMaxWidth())
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(progress?.let { "${it.roundToInt()}%" } ?: "下载中", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = { manager.cancel(task.id) }) { Text("取消") }
+                    CommunityButton("取消", { manager.cancel(task.id) }, compact = true)
                 }
             }
             DownloadStatus.COMPLETED -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("下载完成", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = {
+                CommunityButton("打开", {
                     val intent = manager.openIntent(task)
                     if (intent == null) showKudoToast(context, "文件已不可用")
                     else try { context.startActivity(intent) } catch (_: ActivityNotFoundException) { showKudoToast(context, "没有可打开此文件的应用") }
-                }) { Text("打开") }
+                    catch (_: SecurityException) { showKudoToast(context, "文件已不可用") }
+                }, compact = true)
             }
-            DownloadStatus.FAILED, DownloadStatus.CANCELED -> Text(task.error ?: "下载未完成", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            DownloadStatus.FAILED, DownloadStatus.CANCELED -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(task.error ?: "下载未完成", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (task.error == DOWNLOAD_VERIFICATION_MESSAGE && verification != null) {
+                    CommunityButton("验证", { verification { manager.retry(task.id) } }, compact = true)
+                } else CommunityButton("重试", { manager.retry(task.id) }, compact = true)
+            }
         }
     }
 }

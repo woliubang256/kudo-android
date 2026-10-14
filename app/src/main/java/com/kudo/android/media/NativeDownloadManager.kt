@@ -1,6 +1,8 @@
 package com.kudo.android.media
 
 import android.Manifest
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,12 +18,14 @@ import android.provider.MediaStore
 import com.kudo.android.MainActivity
 import com.kudo.android.R
 import com.kudo.android.data.SessionCookies
+import com.kudo.android.data.isCloudflareChallenge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +47,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.net.URLDecoder
 
 internal enum class DownloadStatus { DOWNLOADING, COMPLETED, FAILED, CANCELED }
+internal const val DOWNLOAD_VERIFICATION_MESSAGE = "网站要求验证，请在设置中手动过盾后重试"
 
 internal data class DownloadTask(
     val id: String,
@@ -68,17 +73,20 @@ internal class NativeDownloadManager(
     private val http: Call.Factory,
     private val cookies: SessionCookies,
     private val userAgent: String,
+    private val failureObserver: (Exception) -> Unit = {},
+    private val keepAlive: () -> Unit = {},
+    notificationChannel: String = "downloads",
 ) {
     private val app = context.applicationContext
     private val preferences = app.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val calls = ConcurrentHashMap<String, Call>()
-    private val cancelRequested = ConcurrentHashMap.newKeySet<String>()
-    private val notifier = DownloadNotifier(app)
+    private val notifier = DownloadNotifier(app, notificationChannel)
     private val store = DownloadFileStore(app)
     private val state = MutableStateFlow(loadTasks())
     val tasks: StateFlow<List<DownloadTask>> = state.asStateFlow()
-    val events = MutableSharedFlow<DownloadEvent>(extraBufferCapacity = 8)
+    private val completionEvents = Channel<DownloadEvent>(Channel.UNLIMITED)
+    val events = completionEvents.receiveAsFlow()
 
     fun isLikelyDownload(value: String): Boolean {
         return isDownloadUrl(value)
@@ -91,25 +99,36 @@ internal class NativeDownloadManager(
         val id = UUID.randomUUID().toString()
         val task = DownloadTask(id, url.toString(), filenameFromUrl(url.toString()), DownloadStatus.DOWNLOADING)
         updateTasks { listOf(task) + this }
-        notifier.progress(task)
+        keepAlive()
         scope.launch { run(task) }
         return id
     }
 
-    fun cancel(id: String) {
+    @Synchronized fun cancel(id: String) {
         val task = state.value.firstOrNull { it.id == id } ?: return
         if (task.status != DownloadStatus.DOWNLOADING) return
-        cancelRequested += id
         calls[id]?.cancel()
         updateTask(id) { it.copy(status = DownloadStatus.CANCELED, error = "已取消") }
         notifier.cancel(task)
     }
 
-    fun remove(id: String) {
+    @Synchronized fun remove(id: String, deleteFile: Boolean = false) {
         val task = state.value.firstOrNull { it.id == id } ?: return
         if (task.status == DownloadStatus.DOWNLOADING) cancel(id)
-        task.fileUri?.let(store::delete)
+        if (deleteFile) task.fileUri?.let(store::delete)
         updateTasks { filterNot { it.id == id } }
+        notifier.cancel(task)
+    }
+
+    @Synchronized fun retry(id: String): String? {
+        val task = state.value.firstOrNull { it.id == id } ?: return null
+        if (task.status == DownloadStatus.DOWNLOADING || task.status == DownloadStatus.COMPLETED) return null
+        remove(id)
+        return enqueue(task.url)
+    }
+
+    private fun checkActive(id: String) {
+        if (state.value.none { it.id == id && it.status == DownloadStatus.DOWNLOADING }) throw CancellationException("下载已取消")
     }
 
     fun openIntent(task: DownloadTask): Intent? {
@@ -122,81 +141,111 @@ internal class NativeDownloadManager(
 
     private suspend fun run(initial: DownloadTask) {
         val url = initial.url.toHttpUrlOrNull() ?: return fail(initial, "下载地址无效")
-        val request = Request.Builder().url(url)
+        val request = downloadRequest(Request.Builder().url(url)
             .header("Accept-Encoding", "identity")
             .header("User-Agent", userAgent)
             .header("Referer", "https://linux.do/")
-            .apply { cookies.get(url.toString()).takeIf(String::isNotBlank)?.let { header("Cookie", it) } }
-            .build()
-        val call = http.newCall(request)
-        calls[initial.id] = call
+            .build(), cookies, userAgent)
         try {
+            checkActive(initial.id)
+            val call = http.newCall(request)
+            synchronized(this) {
+                checkActive(initial.id)
+                calls[initial.id] = call
+            }
             call.execute().use { response ->
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+                checkActive(initial.id)
+                if (!response.isSuccessful) {
+                    if (isCloudflareChallenge(response, response.peekBody(8192).string())) throw IOException(DOWNLOAD_VERIFICATION_MESSAGE)
+                    throw IOException("HTTP ${response.code}")
+                }
                 val body = response.body ?: throw IOException("下载内容为空")
                 val name = response.header("Content-Disposition")?.let(::filenameFromContentDisposition)
                     ?: initial.fileName
                 val mime = response.header("Content-Type")?.substringBefore(';')?.trim()
                     ?.takeIf(String::isNotBlank) ?: initial.mimeType
                 val total = body.contentLength().takeIf { it >= 0 }
+                val source = body.source()
+                source.request(512)
+                val prefix = source.peek().readByteArray(minOf(512, source.buffer.size)).toString(Charsets.UTF_8).trimStart()
+                if (mime.equals("text/html", true) || mime.equals("application/xhtml+xml", true) ||
+                    response.header("cf-mitigated") == "challenge" || prefix.startsWith("<!doctype html", true) || prefix.startsWith("<html", true)) {
+                    throw IOException(DOWNLOAD_VERIFICATION_MESSAGE)
+                }
                 val target = store.create(name, mime)
                 var bytes = 0L
-                var lastPublished = 0L
+                var lastPublished = System.nanoTime()
                 try {
+                    synchronized(this) {
+                        checkActive(initial.id)
+                        updateTask(initial.id) { it.copy(fileName = name, totalBytes = total, mimeType = mime, fileUri = target.uri) }
+                    }
                     body.byteStream().use { input ->
                         target.output.use { output ->
                             val buffer = ByteArray(64 * 1024)
                             while (true) {
                                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                                checkActive(initial.id)
                                 val count = input.read(buffer)
                                 if (count < 0) break
                                 output.write(buffer, 0, count)
                                 bytes += count
-                                if (bytes - lastPublished >= 256 * 1024 || (total != null && bytes == total)) {
-                                    lastPublished = bytes
-                                    val progress = initial.copy(fileName = name, bytes = bytes, totalBytes = total, mimeType = mime)
-                                    updateTask(initial.id) { progress }
-                                    notifier.progress(progress)
+                                if (System.nanoTime() - lastPublished >= 500_000_000L) {
+                                    lastPublished = System.nanoTime()
+                                    synchronized(this) {
+                                        checkActive(initial.id)
+                                        updateTask(initial.id, persist = false) { it.copy(bytes = bytes) }
+                                    }
                                 }
                             }
                         }
                     }
-                    target.commit()
+                    if (total != null && bytes != total) throw IOException("文件传输不完整，请重试")
                     val completed = initial.copy(fileName = name, bytes = bytes, totalBytes = total, mimeType = mime,
                         status = DownloadStatus.COMPLETED, fileUri = target.uri)
-                    updateTask(initial.id) { completed }
-                    notifier.completed(completed)
-                    if (!notifier.enabled()) events.tryEmit(DownloadEvent.Completed(name))
+                    synchronized(this) {
+                        checkActive(initial.id)
+                        target.commit()
+                        updateTask(initial.id) { completed }
+                        if (!notifier.completed(completed)) completionEvents.trySend(DownloadEvent.Completed(name))
+                    }
                 } catch (error: Throwable) {
                     target.delete()
                     throw error
                 }
             }
         } catch (cancelled: CancellationException) {
-            if (!cancelRequested.contains(initial.id)) fail(initial, "下载已取消")
-        } catch (_: Throwable) {
-            if (cancelRequested.contains(initial.id)) updateTask(initial.id) { it.copy(status = DownloadStatus.CANCELED, error = "已取消") }
-            else fail(initial, "下载失败，请稍后重试")
+            synchronized(this) { updateTask(initial.id) { it.copy(status = DownloadStatus.CANCELED, fileUri = null, error = "已取消") } }
+        } catch (failure: Exception) {
+            failureObserver(failure)
+            synchronized(this) {
+                if (state.value.any { it.id == initial.id && it.status == DownloadStatus.DOWNLOADING }) {
+                    fail(initial, when {
+                        failure.message.orEmpty().startsWith("HTTP ") -> "下载失败（${failure.message}）"
+                        failure.message.orEmpty().contains("DoH:") -> com.kudo.android.network.dohErrorMessage(failure as? IOException ?: IOException(failure))
+                        failure.message == DOWNLOAD_VERIFICATION_MESSAGE -> DOWNLOAD_VERIFICATION_MESSAGE
+                        else -> "下载失败，请稍后重试"
+                    })
+                } else updateTask(initial.id) { it.copy(fileUri = null) }
+            }
         } finally {
             calls.remove(initial.id)
-            cancelRequested.remove(initial.id)
         }
     }
 
     private fun fail(task: DownloadTask, message: String) {
         val failed = task.copy(status = DownloadStatus.FAILED, error = message)
         updateTask(task.id) { failed }
-        notifier.failed(failed)
-        if (!notifier.enabled()) events.tryEmit(DownloadEvent.Failed(task.fileName))
+        if (!notifier.failed(failed)) completionEvents.trySend(DownloadEvent.Failed(task.fileName))
     }
 
-    private fun updateTask(id: String, transform: (DownloadTask) -> DownloadTask) =
-        updateTasks { map { if (it.id == id) transform(it) else it } }
+    private fun updateTask(id: String, persist: Boolean = true, transform: (DownloadTask) -> DownloadTask) =
+        updateTasks(persist) { map { if (it.id == id) transform(it) else it } }
 
-    private fun updateTasks(transform: List<DownloadTask>.() -> List<DownloadTask>) {
+    @Synchronized private fun updateTasks(persist: Boolean = true, transform: List<DownloadTask>.() -> List<DownloadTask>) {
         state.update { it.transform() }
-        saveTasks(state.value)
+        if (persist) saveTasks(state.value)
     }
 
     private fun loadTasks(): List<DownloadTask> = runCatching {
@@ -205,11 +254,12 @@ internal class NativeDownloadManager(
             for (index in 0 until values.length()) {
                 val value = values.getJSONObject(index)
                 val status = DownloadStatus.valueOf(value.optString("status"))
+                if (status != DownloadStatus.COMPLETED) value.optString("fileUri").takeIf(String::isNotBlank)?.let { runCatching { store.delete(it) } }
                 add(DownloadTask(value.getString("id"), value.getString("url"), value.getString("fileName"),
                     if (status == DownloadStatus.DOWNLOADING) DownloadStatus.FAILED else status,
                     value.optLong("bytes"), value.optLong("totalBytes").takeIf { it > 0 },
-                    value.optString("mimeType", "application/octet-stream"), value.optString("fileUri").takeIf(String::isNotBlank),
-                    value.optString("error").takeIf(String::isNotBlank), value.optLong("createdAt")))
+                    value.optString("mimeType", "application/octet-stream"), if (status != DownloadStatus.COMPLETED) null else value.optString("fileUri").takeIf(String::isNotBlank),
+                    if (status == DownloadStatus.DOWNLOADING) "下载已中断，请重试" else value.optString("error").takeIf(String::isNotBlank), value.optLong("createdAt")))
             }
         }
     }.getOrDefault(emptyList())
@@ -222,17 +272,13 @@ internal class NativeDownloadManager(
                 put("fileUri", task.fileUri.orEmpty()); put("error", task.error.orEmpty()); put("createdAt", task.createdAt)
             })
         } }
-        preferences.edit().putString(KEY_TASKS, values.toString()).apply()
+        preferences.edit { putString(KEY_TASKS, values.toString()) }
     }
 
     companion object {
         private const val PREFERENCES = "native_downloads"
         private const val KEY_TASKS = "tasks"
         private const val MAX_TASKS = 100
-        private val DOWNLOAD_EXTENSIONS = setOf(
-            ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".apk", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-            ".txt", ".csv", ".json", ".xml", ".mp3", ".m4a", ".wav", ".mp4", ".mkv", ".mov",
-        )
     }
 }
 
@@ -248,17 +294,26 @@ internal fun isDownloadUrl(value: String): Boolean {
 
 internal fun filenameFromUrl(value: String): String {
     val segment = value.toHttpUrlOrNull()?.pathSegments?.lastOrNull().orEmpty()
-    return sanitizeDownloadFilename(decodeFilename(segment)).ifBlank { "download-${System.currentTimeMillis()}" }
+    return sanitizeDownloadFilename(segment).ifBlank { "download-${System.currentTimeMillis()}" }
 }
 
 internal fun filenameFromContentDisposition(value: String): String? {
-    val encoded = Regex("filename\\*\\s*=\\s*UTF-8''([^;]+)", RegexOption.IGNORE_CASE).find(value)?.groupValues?.get(1)
+    val encoded = Regex("filename\\*\\s*=\\s*UTF-8'[^']*'([^;]+)", RegexOption.IGNORE_CASE).find(value)?.groupValues?.get(1)
     val plain = Regex("filename\\s*=\\s*\\\"([^\\\"]+)\\\"|filename\\s*=\\s*([^;]+)", RegexOption.IGNORE_CASE)
         .find(value)?.let { it.groupValues[1].ifBlank { it.groupValues[2] } }
-    return sanitizeDownloadFilename(decodeFilename(encoded ?: plain.orEmpty())).ifBlank { null }
+    return sanitizeDownloadFilename(if (encoded != null) decodeFilename(encoded.trim().trim('"')) else plain.orEmpty()).ifBlank { null }
 }
 
-private fun decodeFilename(value: String): String = runCatching { URLDecoder.decode(value, Charsets.UTF_8.name()) }.getOrDefault(value)
+private fun decodeFilename(value: String): String = runCatching { URLDecoder.decode(value.replace("+", "%2B"), Charsets.UTF_8.name()) }.getOrDefault(value)
+
+/** Re-evaluated on every redirect hop, so community credentials never follow a CDN redirect. */
+internal fun downloadRequest(request: Request, cookies: SessionCookies, userAgent: String): Request {
+    val builder = request.newBuilder().removeHeader("Cookie").header("User-Agent", userAgent)
+    if (request.url.isHttps && request.url.host == "linux.do" && request.url.port == 443) {
+        cookies.get(request.url.toString()).takeIf(String::isNotBlank)?.let { builder.header("Cookie", it) }
+    }
+    return builder.build()
+}
 
 internal fun sanitizeDownloadFilename(value: String): String = value
     .substringAfterLast('/')
@@ -277,12 +332,18 @@ private class DownloadFileStore(private val context: Context) {
             }
             val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                 ?: throw IOException("无法创建下载文件")
-            val output = context.contentResolver.openOutputStream(uri) ?: run {
-                context.contentResolver.delete(uri, null, null)
-                throw IOException("无法打开下载文件")
+            val output = try {
+                context.contentResolver.openOutputStream(uri) ?: throw IOException("无法打开下载文件")
+            } catch (failure: Exception) {
+                runCatching { context.contentResolver.delete(uri, null, null) }
+                throw failure
             }
             return Target(uri.toString(), output,
-                onCommit = { context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null) },
+                onCommit = {
+                    if (context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null) == 0) {
+                        throw IOException("无法完成文件保存")
+                    }
+                },
                 onDelete = { context.contentResolver.delete(uri, null, null) })
         }
         val directory = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
@@ -295,7 +356,7 @@ private class DownloadFileStore(private val context: Context) {
     }
 
     fun delete(value: String) {
-        val uri = Uri.parse(value)
+        val uri = value.toUri()
         if (uri.authority == "${context.packageName}.image-files") {
             uri.lastPathSegment?.let { File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, it).delete() }
         } else if (uri.scheme == "content") context.contentResolver.delete(uri, null, null) else uri.path?.let(::File)?.delete()
@@ -307,43 +368,48 @@ private class DownloadFileStore(private val context: Context) {
     }
 }
 
-private class DownloadNotifier(private val context: Context) {
+internal class DownloadNotifier(private val context: Context, private val channel: String = "downloads") {
     private val manager = context.getSystemService(NotificationManager::class.java)
 
-    init { manager.createNotificationChannel(NotificationChannel(CHANNEL, "文件下载", NotificationManager.IMPORTANCE_LOW)) }
+    init { manager.createNotificationChannel(NotificationChannel(channel, "文件下载", NotificationManager.IMPORTANCE_LOW)) }
 
     fun enabled(): Boolean = manager.areNotificationsEnabled() &&
-        (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+        (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+        manager.getNotificationChannel(channel)?.importance != NotificationManager.IMPORTANCE_NONE
 
-    fun progress(task: DownloadTask) {
-        if (!enabled()) return
-        val total = task.totalBytes?.takeIf { it > 0 }
-        val value = Notification.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification).setContentTitle(task.fileName)
-            .setContentText(total?.let { "下载中 ${(task.bytes * 100 / it).toInt().coerceIn(0, 100)}%" } ?: "下载中")
+    fun progressNotification(task: DownloadTask?, count: Int): Notification {
+        val percent = task?.downloadPercent()
+        return Notification.Builder(context, channel)
+            .setSmallIcon(R.drawable.ic_notification).setContentTitle(task?.fileName ?: "文件下载")
+            .setContentText(if (task == null) "准备下载" else "下载中${percent?.let { " $it%" }.orEmpty()} · $count 项任务")
             .setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_PROGRESS)
-            .setProgress(total?.toInt() ?: 0, if (total == null) 0 else task.bytes.coerceAtMost(total).toInt(), total == null)
+            .setProgress(100, percent ?: 0, percent == null)
             .setContentIntent(pendingIntent()).build()
-        manager.notify(task.id.hashCode(), value)
     }
 
-    fun completed(task: DownloadTask) {
-        if (!enabled()) return
-        manager.notify(task.id.hashCode(), Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_notification)
+    fun completed(task: DownloadTask): Boolean = post(task, Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(task.fileName).setContentText("下载完成").setAutoCancel(true).setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent()).build())
-    }
 
-    fun failed(task: DownloadTask) {
-        if (!enabled()) return
-        manager.notify(task.id.hashCode(), Notification.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(task.fileName).setContentText(task.error ?: "下载失败").setAutoCancel(true).build())
+    fun failed(task: DownloadTask): Boolean = post(task, Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(task.fileName).setContentText(task.error ?: "下载失败").setAutoCancel(true).setContentIntent(pendingIntent()).build())
+
+    private fun post(task: DownloadTask, value: Notification): Boolean {
+        if (!enabled()) return false
+        return try { manager.notify(task.id.hashCode(), value); true } catch (_: SecurityException) { false }
     }
 
     fun cancel(task: DownloadTask) { manager.cancel(task.id.hashCode()) }
 
-    private fun pendingIntent(): PendingIntent = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
+    private fun pendingIntent(): PendingIntent = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).setAction(ACTION)
+        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-    companion object { private const val CHANNEL = "downloads" }
+    companion object {
+        const val ACTION = "com.kudo.android.OPEN_DOWNLOADS"
+    }
+}
+
+internal fun DownloadTask.downloadPercent(): Int? = totalBytes?.takeIf { it > 0 }?.let {
+    (bytes.toDouble() / it * 100).toInt().coerceIn(0, 100)
 }

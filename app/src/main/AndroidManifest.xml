@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <queries>
         <intent>
@@ -19,6 +21,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Kudo"
         android:usesCleartextTraffic="true">
+        <service android:name=".media.DownloadService" android:exported="false" android:foregroundServiceType="dataSync" />
         <provider
             android:name=".media.ImageFileProvider"
             android:authorities="${applicationId}.image-files"

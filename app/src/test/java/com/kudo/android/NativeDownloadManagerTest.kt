@@ -3,6 +3,9 @@ package com.kudo.android
 import com.kudo.android.media.filenameFromContentDisposition
 import com.kudo.android.media.filenameFromUrl
 import com.kudo.android.media.isDownloadUrl
+import com.kudo.android.media.downloadRequest
+import com.kudo.android.data.SessionCookies
+import okhttp3.Request
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -23,5 +26,28 @@ class NativeDownloadManagerTest {
         assertEquals("report final.zip", filenameFromContentDisposition("attachment; filename*=UTF-8''report%20final.zip"))
         assertEquals("name_.zip", filenameFromContentDisposition("attachment; filename=\"bad:/name?.zip\""))
         assertNull(filenameFromContentDisposition("attachment"))
+    }
+
+    @Test fun credentialsOnlyApplyToCommunityHttpsOrigin() {
+        var reads = 0
+        val cookies = object : SessionCookies {
+            override fun get(url: String): String { reads++; return "_t=fixture" }
+            override fun set(url: String, cookie: String) {}
+        }
+        val origin = Request.Builder().url("https://linux.do/file.zip").header("Cookie", "untrusted").build()
+        assertEquals("_t=fixture", downloadRequest(origin, cookies, "Fixture/1").header("Cookie"))
+        listOf("https://cdn.example.test/file.zip", "https://linux.do.evil.test/file.zip", "https://linux.do:444/file.zip", "http://linux.do/file.zip").forEach { value ->
+            val request = downloadRequest(origin.newBuilder().url(value).build(), cookies, "Fixture/1")
+            assertNull(request.header("Cookie"))
+            assertEquals("Fixture/1", request.header("User-Agent"))
+        }
+        assertEquals(1, reads)
+    }
+
+    @Test fun filenamesPreserveLiteralPlusAndOnlyDecodeOnce() {
+        assertEquals("C++.zip", filenameFromUrl("https://linux.do/files/C%2B%2B.zip"))
+        assertEquals("100%20.zip", filenameFromUrl("https://linux.do/files/100%2520.zip"))
+        assertEquals("C++.zip", filenameFromContentDisposition("attachment; filename*=UTF-8'en'C++.zip"))
+        assertEquals("100%20.zip", filenameFromContentDisposition("attachment; filename=\"100%20.zip\""))
     }
 }

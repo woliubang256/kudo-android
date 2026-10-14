@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,7 +79,8 @@ internal fun ObserveTopicUpdates(topic: TopicViewModel) {
 
 @Composable
 fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long = 0L, consumeLink: () -> Unit = {},
-    incomingNotification: NotificationTarget? = null, consumeNotification: () -> Unit = {}) {
+    incomingNotification: NotificationTarget? = null, consumeNotification: () -> Unit = {},
+    incomingDownloads: Boolean = false, consumeDownloads: () -> Unit = {}) {
     val display by app.settings.display.collectAsStateWithLifecycle()
     var darkStatusIcons by remember { mutableStateOf<Boolean?>(null) }
     KudoTheme(display, darkStatusIcons) {
@@ -87,6 +89,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         QuickScrollToTopHost {
         val account = model("account") { AccountViewModel(app) }
         val nav = rememberNavController()
+        LaunchedEffect(incomingDownloads, linkSequence) {
+            if (incomingDownloads) { nav.navigate("downloads") { launchSingleTop = true }; consumeDownloads() }
+        }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         fun showMessage(text: String) { showKudoToast(context, text) }
@@ -126,12 +131,15 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         }
         fun editor(id: Int? = null, number: Int? = null, categoryId: Int? = null) { authenticated { nav.navigate("compose?topic=${id ?: 0}&reply=${number ?: 0}&category=${categoryId ?: 0}") } }
         LaunchedEffect(account) { account.events.collect { showMessage(it) } }
-        LaunchedEffect(app.downloads) {
-            app.downloads.events.collect { event ->
-                showMessage(when (event) {
-                    is com.kudo.android.media.DownloadEvent.Completed -> "${event.fileName} 下载完成"
-                    is com.kudo.android.media.DownloadEvent.Failed -> "${event.fileName} 下载失败"
-                })
+        val downloadLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+        LaunchedEffect(app.downloads, downloadLifecycle) {
+            downloadLifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.downloads.events.collect { event ->
+                    showMessage(when (event) {
+                        is com.kudo.android.media.DownloadEvent.Completed -> "${event.fileName} 下载完成"
+                        is com.kudo.android.media.DownloadEvent.Failed -> "${event.fileName} 下载失败"
+                    })
+                }
             }
         }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { account.checkSession() } }
