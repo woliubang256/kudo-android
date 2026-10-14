@@ -90,6 +90,21 @@ class TopicViewModelTest {
         }
     }
 
+    @Test fun paginationPromotesAcceptedAnswerPostIntoTopicSolutions() = runTest {
+        val initial = """{"id":5,"title":"分页解决方案","post_stream":{"stream":[10,11,12],"posts":[$original]}}"""
+        withTopic(initial = initial, response = { request ->
+            if (request.path!!.contains("/posts.json")) MockResponse().setBody(
+                """{"post_stream":{"posts":[{"id":11,"post_number":2,"user_id":3,"username":"reply"},{"id":12,"post_number":3,"user_id":4,"username":"helper","accepted_answer":true}]}}"""
+            ) else null
+        }) { vm, _ ->
+            vm.awaitState { !it.loading }
+            vm.more()
+            val loaded = vm.awaitState { !it.loadingMore }
+            assertEquals(listOf(3), loaded.detail!!.solutions.map { it.postNumber })
+            assertTrue(loaded.detail.posts.single { it.number == 3 }.isSolution)
+        }
+    }
+
     @Test fun reactionUsesTheServerConfirmedPostInsteadOfLocalArithmetic() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         MockWebServer().use { server ->
@@ -245,6 +260,7 @@ class TopicViewModelTest {
 
     private suspend fun TestScope.withTopic(
         number: Int? = null,
+        initial: String = topic,
         response: (RecordedRequest) -> MockResponse?,
         block: suspend (TopicViewModel, MockWebServer) -> Unit,
     ) {
@@ -252,7 +268,7 @@ class TopicViewModelTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = response(request) ?: when {
-                    request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(topic)
+                    request.requestUrl!!.encodedPath == "/t/5.json" -> MockResponse().setBody(initial)
                     request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test"}""")
                     request.path!!.startsWith("/u/") -> MockResponse().setBody("""{"user":{"id":2,"username":"author","can_follow":true,"is_followed":false}}""")
                     else -> MockResponse().setResponseCode(404)

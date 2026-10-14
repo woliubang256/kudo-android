@@ -24,4 +24,4 @@ Topics without solutions keep their existing rendering. A server summary can be 
 
 ## Testing
 
-`SolutionParserTest` covers the standard object, multiple entries, post booleans, HTML-to-text excerpts and invalid floors. `TopicDetailUiTest` covers multiple entries, navigation callbacks, loaded-floor markers, unloaded-floor entries and hidden empty state. The device tests were built with explicit version properties and installed with `adb install -r -t`.
+`SolutionParserTest` covers the standard object, multiple entries, post booleans, HTML-to-text excerpts and invalid floors. `TopicViewModelTest` covers promoting a solution discovered on a later page into the topic summary. `TopicDetailUiTest` covers multiple entries, navigation callbacks, loaded-floor markers, unloaded-floor entries and hidden empty state. The device tests were built with explicit version properties and installed with `adb install -r -t`.

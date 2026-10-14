@@ -11,6 +11,18 @@ data class ReplyCursor(val after: Int = 1, val complete: Boolean = false)
 data class ReplyLoad(val cursors: Map<Int, ReplyCursor> = emptyMap(), val loading: Boolean = false, val error: Throwable? = null)
 private data class JumpPage(val ids: List<Int>, val posts: List<Post> = emptyList(), val error: Exception? = null)
 
+private fun TopicDetail.mergeSolutions(
+    posts: Iterable<Post> = emptyList(), summaries: Iterable<TopicSolution> = emptyList(),
+): TopicDetail {
+    val merged = (solutions + summaries + posts.filter(Post::isSolution).map { post ->
+        TopicSolution(post.number, post.author.username, post.author.name)
+    }).distinctBy(TopicSolution::postNumber).sortedBy(TopicSolution::postNumber)
+    val solutionNumbers = merged.map(TopicSolution::postNumber).toSet()
+    return copy(solutions = merged, posts = this.posts.map { post ->
+        if (post.isSolution || post.number in solutionNumbers) post.copy(isSolution = true) else post
+    })
+}
+
 data class TopicState(
     val detail: TopicDetail? = null, val loading: Boolean = true, val loadingMore: Boolean = false,
     val error: Throwable? = null, val moreError: Throwable? = null, val busy: Set<Int> = emptySet(),
@@ -151,7 +163,8 @@ class TopicViewModel(
             appended = posts.size > latest.posts.size
             current.copy(detail = latest.copy(posts = posts,
                 stream = (latest.stream + newIds).distinct().filterNot { it in missing },
-                highestPostNumber = maxOf(latest.highestPostNumber, fresh.highestPostNumber)))
+                highestPostNumber = maxOf(latest.highestPostNumber, fresh.highestPostNumber))
+                .mergeSolutions(received, fresh.solutions))
         }
         if (appended) resolveContext()
         return true
@@ -248,13 +261,15 @@ class TopicViewModel(
                 val available = posts.map { it.id }.toSet()
                 _state.update { current ->
                     val latest = current.detail
-                    if (requestGeneration != generation || navigationToken != jumpGeneration || latest == null) current else current.copy(
-                        detail = latest.copy(posts = (latest.posts + posts.map { incoming ->
+                    if (requestGeneration != generation || navigationToken != jumpGeneration || latest == null) current else {
+                        val merged = latest.copy(posts = (latest.posts + posts.map { incoming ->
                             latest.pinnedOriginal?.takeIf { it.id == incoming.id }
                                 ?: current.related.firstOrNull { it.id == incoming.id } ?: incoming
                         }).distinctBy(Post::id).sortedBy(Post::number),
-                            stream = latest.stream.filter { id -> id !in ids || id in available }),
-                        loadingMore = false, loadingPrevious = false)
+                            stream = latest.stream.filter { id -> id !in ids || id in available })
+                            .mergeSolutions(posts)
+                        current.copy(detail = merged, loadingMore = false, loadingPrevious = false)
+                    }
                 }
                 if (requestGeneration == generation && navigationToken == jumpGeneration) resolveContext()
             } catch (e: CancellationException) { throw e } catch (e: Exception) { _state.update {
@@ -290,12 +305,14 @@ class TopicViewModel(
                     val latest = current.detail ?: return@update current
                     val existing = current.allPosts.associateBy(Post::id)
                     val unavailable = unavailableIds(adjacent)
-                    current.copy(detail = if (window == null) latest else latest.copy(
+                    val merged = if (window == null) latest else latest.copy(
                         posts = (window.posts + adjacent.flatMap { it.posts }).map { existing[it.id] ?: it }
                             .distinctBy(Post::id).sortedBy(Post::number),
                         pinnedOriginal = latest.originalPost,
                         stream = window.stream.ifEmpty { latest.stream }.filterNot { it in unavailable },
-                        highestPostNumber = maxOf(latest.highestPostNumber, window.highestPostNumber)),
+                        highestPostNumber = maxOf(latest.highestPostNumber, window.highestPostNumber))
+                        .mergeSolutions(window.posts, window.solutions)
+                    current.copy(detail = merged,
                         related = if (window == null) current.related else (current.related + latest.posts).distinctBy(Post::id),
                         jumping = false, targetNumber = number, targetRevision = current.targetRevision + 1,
                         previousError = adjacent.getOrNull(0)?.error, moreError = adjacent.getOrNull(1)?.error)
