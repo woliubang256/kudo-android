@@ -239,9 +239,13 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             { topic(it) }, ::user, { nav.navigate("search") }, ::login, { nav.popBackStack() }, display.topicListStyle, pages)
                     }
                     composable("search") {
-                        val vm = model("search") { SearchViewModel(app.repository) }
+                        val vm = model("search") { SearchViewModel(app.repository, account.user?.id) }
                         val state by vm.state.collectAsStateWithLifecycle()
-                        SearchScreen(state, vm::search, { nav.popBackStack() }, { topic(it) }, ::user, ::login, listStyle = display.topicListStyle)
+                        LaunchedEffect(vm, account.user?.id) { vm.useAccount(account.user?.id) }
+                        SearchScreen(state.forAccount(account.user?.id), vm::search, { nav.popBackStack() }, ::topic, ::user, ::login, listStyle = display.topicListStyle,
+                            openCategory = { nav.navigate("category/$it") }, openTag = { tag -> nav.navigate("tag/${Uri.encode(tag.slug.ifBlank { tag.name })}?id=0") },
+                            changeKind = vm::changeKind, changeSort = vm::changeSort, clear = vm::clear, refreshHistory = vm::refreshHistory,
+                            loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters)
                     }
                     composable("personal/{destination}") { entry ->
                         val member = account.user
@@ -405,9 +409,13 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     }
                     composable("user-search/{username}") { entry ->
                         val username = entry.arguments!!.getString("username")!!
-                        val vm = model("user-search-$username") { SearchViewModel(app.repository).also { it.search("@${username}") } }
+                        val vm = model("user-search-$username") { SearchViewModel(app.repository, account.user?.id, "@$username") }
                         val state by vm.state.collectAsStateWithLifecycle()
-                        SearchScreen(state, vm::search, { nav.popBackStack() }, { topic(it) }, ::user, ::login, listStyle = display.topicListStyle)
+                        LaunchedEffect(vm, account.user?.id) { vm.useAccount(account.user?.id) }
+                        SearchScreen(state.forAccount(account.user?.id), vm::search, { nav.popBackStack() }, ::topic, ::user, ::login, listStyle = display.topicListStyle,
+                            openCategory = { nav.navigate("category/$it") }, openTag = { tag -> nav.navigate("tag/${Uri.encode(tag.slug.ifBlank { tag.name })}?id=0") },
+                            changeKind = vm::changeKind, changeSort = vm::changeSort, clear = vm::clear, refreshHistory = vm::refreshHistory,
+                            loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters)
                     }
                     composable("user/{username}") { entry ->
                         val username = entry.arguments!!.getString("username")!!

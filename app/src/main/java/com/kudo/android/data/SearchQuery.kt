@@ -28,8 +28,8 @@ data class SearchFilters(
     fun validationError(): String? {
         if (date.isNotBlank() && runCatching { LocalDate.parse(date) }.isFailure) return "日期请使用 YYYY-MM-DD 格式"
         for ((minimum, maximum, label) in listOf(Triple(minPosts, maxPosts, "帖子数量"), Triple(minViews, maxViews, "浏览量"))) {
-            if (listOf(minimum, maximum).any { it.isNotBlank() && (it.toIntOrNull()?.takeIf { n -> n >= 0 } == null) }) return "$label请输入非负整数"
-            if (minimum.isNotBlank() && maximum.isNotBlank() && minimum.toInt() > maximum.toInt()) return "$label的最小值不能大于最大值"
+            if (listOf(minimum, maximum).any { it.isNotBlank() && (it.toIntOrNull()?.takeIf { n -> n >= 0 } == null) }) return "${label}请输入非负整数"
+            if (minimum.isNotBlank() && maximum.isNotBlank() && minimum.toInt() > maximum.toInt()) return "${label}的最小值不能大于最大值"
         }
         if (listOf(username, assigned).any { it.isNotBlank() && !it.matches(Regex("[\\p{L}\\p{N}_.-]+")) }) return "用户名或群组名不能包含空格和搜索符号"
         return null
