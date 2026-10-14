@@ -105,11 +105,49 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
         }
     }
     if (post.number != 1 && (!ignored || revealed)) {
-        Text("#${post.number}", Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 4.dp)
-            .testTag("post-floor-number-${post.number}"),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Normal),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f))
+        val isSolution = post.isSolution || detail.solutions.any { it.postNumber == post.number }
+        Row(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (isSolution) Icon(Icons.Rounded.CheckCircle, "解决方案",
+                Modifier.size(14.dp).testTag("solution-marker-${post.number}"), tint = MaterialTheme.colorScheme.primary)
+            Text("#${post.number}", Modifier.testTag("post-floor-number-${post.number}"),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Normal),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f))
+        }
     }
+    }
+}
+
+@Composable
+internal fun TopicSolutionsSummary(detail: TopicDetail, posts: List<Post>, enabled: Boolean, navigate: (Int) -> Unit) {
+    if (detail.solutions.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = .42f), RoundedCornerShape(12.dp))
+        .padding(horizontal = 14.dp, vertical = 12.dp).testTag("topic-solutions"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Rounded.CheckCircle, "解决方案", Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Text("解决方案", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        }
+        detail.solutions.forEach { solution ->
+            val post = posts.firstOrNull { it.number == solution.postNumber }
+            val author = solution.name.ifBlank { solution.username }.ifBlank { post?.author?.displayName.orEmpty() }
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button,
+                    onClickLabel = "跳转到解决方案 ${solution.postNumber} 楼") { navigate(solution.postNumber) }
+                .testTag("topic-solution-${solution.postNumber}").padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("#${solution.postNumber}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    if (author.isNotBlank()) Text(author, style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                solution.excerpt.takeIf(String::isNotBlank)?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
     }
 }
 

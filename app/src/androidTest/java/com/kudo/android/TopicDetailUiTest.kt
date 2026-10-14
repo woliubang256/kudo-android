@@ -24,6 +24,7 @@ import com.kudo.android.ui.components.LocalAvatarMetadata
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.topic.TopicScreen
 import com.kudo.android.ui.topic.TopicState
+import com.kudo.android.ui.topic.TopicSolutionsSummary
 import com.kudo.android.ui.topic.LocalTopicActions
 import com.kudo.android.ui.topic.TopicActionsController
 import okio.Buffer
@@ -215,6 +216,42 @@ class TopicDetailUiTest {
         compose.setContent { Screen(initial) }
         compose.onAllNodesWithContentDescription("${author.displayName}\u7684\u8d44\u8d28\uff1a\u6d4b\u8bd5\u8d44\u8d28", useUnmergedTree = true).assertCountEquals(1)
         compose.onAllNodesWithContentDescription("${author.displayName}\u7684\u72b6\u6001\uff1a\u6d4b\u8bd5\u72b6\u6001", useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    @Test fun solutionSummaryShowsEverySolutionAndMarksLoadedFloors() {
+        val solutionAuthor = author.copy(id = 3, username = "helper", name = "热心用户")
+        val solutionOne = reply.copy(id = 11, number = 2, author = solutionAuthor, cooked = "<p>第一种解决方案</p>")
+        val solutionTwo = reply.copy(id = 12, number = 3, author = author.copy(id = 4, username = "another", name = "另一位用户"),
+            cooked = "<p>第二种解决方案</p>")
+        val solved = detail.copy(posts = listOf(first, solutionOne), stream = listOf(first.id, solutionOne.id, solutionTwo.id),
+            solutions = listOf(TopicSolution(2, "helper", "热心用户", "第一种解决方案"),
+                TopicSolution(3, "another", "另一位用户", "第二种解决方案")))
+        compose.setContent { Screen(initial.copy(detail = solved)) }
+
+        compose.onNodeWithTag("topic-posts").performScrollToNode(hasTestTag("topic-solutions"))
+        compose.onNodeWithTag("topic-solutions").assertIsDisplayed()
+        compose.onNodeWithTag("topic-solution-2").assertIsDisplayed()
+        compose.onNodeWithTag("topic-solution-3").assertIsDisplayed()
+        compose.onNodeWithTag("topic-posts").performScrollToNode(hasTestTag("post-2"))
+        compose.onNodeWithTag("solution-marker-2").assertIsDisplayed()
+        compose.onNodeWithTag("solution-marker-3").assertDoesNotExist()
+    }
+
+    @Test fun solutionSummaryNavigatesToAnUnloadedFloor() {
+        val solved = detail.copy(solutions = listOf(TopicSolution(2, "helper", "热心用户", "摘要")))
+        val jumps = mutableListOf<Int>()
+        compose.setContent {
+            KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
+                TopicSolutionsSummary(solved, solved.posts, true) { jumps += it }
+            }
+        }
+        compose.onNodeWithTag("topic-solution-2").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(listOf(2), jumps) }
+    }
+
+    @Test fun topicWithoutSolutionsDoesNotRenderSolutionSummary() {
+        compose.setContent { Screen(initial.copy(detail = detail.copy(solutions = emptyList()))) }
+        compose.onNodeWithTag("topic-solutions").assertDoesNotExist()
     }
 
     @Test fun shortTapCancelsHeartOrEmojiAndLongPressOnlyOpensTheResponsePicker() {

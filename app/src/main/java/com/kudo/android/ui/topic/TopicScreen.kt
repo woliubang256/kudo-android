@@ -276,6 +276,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                                     onHeading = if (post.number == 1 && tocEntries.isNotEmpty()) { heading, requester ->
                                         if (heading.level == 2 || heading.level == 3) headingAnchors[heading.path] = requester
                                     } else null)
+                                if (post.number == 1) TopicSolutionsSummary(detail, posts, !showing, ::navigatePost)
                                 if (post.number > 1 && thread != null) ReplyPreview(thread, state.replyLoads[post.id], state.hasMoreReplies(post), !showing) {
                                     if (it == null) openThread(post) else navigatePost(it)
                                 }
