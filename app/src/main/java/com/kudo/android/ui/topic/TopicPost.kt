@@ -92,6 +92,11 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
             UserSignature(post, openLink)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.weight(1f))
+                val actions = LocalTopicActions.current
+                if (post.editableBy(state.viewerId)) IconButton(onClick = { actions.edit(detail.id, post) },
+                    enabled = enabled && !state.loading && post.id !in state.busy, modifier = Modifier.testTag("post-edit-${post.number}")) {
+                    Icon(Icons.Rounded.Edit, "编辑第 ${post.number} 楼", Modifier.size(20.dp))
+                }
                 TopicReactionButton(post, enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canReact),
                     choose = if (post.reactionsAvailable && detail.validReactions.isNotEmpty()) ({ choose(post) }) else null,
                     click = { like(post) })
@@ -302,6 +307,11 @@ internal fun ThreadPreviewPost(post: Post, enabled: Boolean, image: (String) -> 
                     TopicAuthorMetadata(post.updatedAt, null, post.edited)
                 }
                 if (!hidden) {
+                    val actions = LocalTopicActions.current
+                    if (post.editableBy(state.viewerId)) IconButton(onClick = { state.detail?.let { actions.edit(it.id, post) } },
+                        enabled = enabled && !state.loading && post.id !in state.busy, modifier = Modifier.testTag("thread-edit-${post.number}")) {
+                        Icon(Icons.Rounded.Edit, "编辑第 ${post.number} 楼", Modifier.size(19.dp))
+                    }
                     TopicReactionButton(post, enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canReact),
                         choose = if (post.reactionsAvailable && state.detail?.validReactions?.isNotEmpty() == true) ({ choose(post) }) else null,
                         click = { like(post) }, modifier = Modifier.testTag("thread-like-${post.number}"))

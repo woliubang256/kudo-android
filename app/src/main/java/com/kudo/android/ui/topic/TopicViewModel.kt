@@ -244,6 +244,19 @@ class TopicViewModel(
         }
     }
 
+    fun applyEdit(result: PostEditResult) {
+        if (result.topicId != topicId) return
+        val post = result.post
+        _state.update { current -> current.copy(
+            related = current.related.map { if (it.id == post.id) post else it },
+            detail = current.detail?.let { detail -> detail.copy(
+                title = if (post.number == 1) result.title else detail.title,
+                posts = detail.posts.map { if (it.id == post.id) post else it },
+                pinnedOriginal = if (detail.pinnedOriginal?.id == post.id) post else detail.pinnedOriginal,
+            ) },
+        ) }
+    }
+
     fun more() = loadPage(previous = false)
     fun previous() = loadPage(previous = true)
 

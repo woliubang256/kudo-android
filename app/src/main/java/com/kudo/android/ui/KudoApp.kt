@@ -98,6 +98,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         val appLinks = remember(context) { ExternalAppLinkLauncher(context) }
         fun showMessage(text: String) { showKudoToast(context, text) }
         var refreshEpoch by rememberSaveable { mutableIntStateOf(0) }
+        var postEditResult by remember(account.user?.id) { mutableStateOf<PostEditResult?>(null) }
         var readingEpoch by rememberSaveable { mutableIntStateOf(0) }
         val readingSync = remember(app.repository, scope) {
             TopicReadingSync(scope, app.repository) { readingEpoch++ }
@@ -164,7 +165,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }, openLink = ::openLink, accountKey = account.user?.id) {
             TopicActionsHost(app.repository, account.user, display.glass, ::login,
                 ignored = { id, username -> account.recordIgnore(id, username, true); refreshEpoch++ },
-                message = { showMessage(it) }, changed = {
+                message = { showMessage(it) }, editPost = { id, post ->
+                    authenticated { nav.navigate("edit-post/${post.id}?topic=$id") }
+                }, changed = {
                     refreshEpoch++
                     nav.currentBackStackEntry?.savedStateHandle?.set("refresh", System.nanoTime())
                 }) {
@@ -349,6 +352,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         ObserveTopicUpdates(vm)
                         val state by vm.state.collectAsStateWithLifecycle()
                         val nonce by entry.savedStateHandle.getStateFlow("refresh", 0L).collectAsStateWithLifecycle()
+                        LaunchedEffect(vm, postEditResult) {
+                            postEditResult?.takeIf { it.topicId == id }?.let { vm.applyEdit(it); postEditResult = null }
+                        }
                         LaunchedEffect(nonce) { if (nonce != 0L) vm.refresh() }
                         LaunchedEffect(vm) { vm.events.collect { showMessage(it) } }
                         var replyTarget by rememberSaveable(account.user?.id) { mutableStateOf<Int?>(null) }
@@ -389,6 +395,26 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                     { keyboard?.hide(); replyVisibility.targetState = false }, replyAuthor = replyAuthor)
                             }
                         }
+                        }
+                    }
+                    composable("edit-post/{post}?topic={topic}", arguments = listOf(
+                        navArgument("post") { type = NavType.IntType }, navArgument("topic") { type = NavType.IntType })) { entry ->
+                        val postId = entry.arguments!!.getInt("post")
+                        val topicId = entry.arguments!!.getInt("topic")
+                        val currentUser = account.user
+                        if (currentUser == null) ErrorState(ApiFailure(FailureKind.SIGN_IN, "登录后可编辑自己的内容"), {}, ::login)
+                        else {
+                            val vm = model("post-edit-${currentUser.id}-$postId") { PostEditViewModel(
+                                loadPost = {
+                                    app.repository.editablePost(postId, currentUser.id).also { require(it.topicId == topicId) { "编辑话题不匹配" } }
+                                }, savePost = { source, draft -> app.repository.editPost(source, currentUser.id, draft.raw, draft.title, draft.reason) },
+                                restore = { app.settings.postEditDraft(currentUser.id, postId) },
+                                persist = { app.settings.savePostEditDraft(currentUser.id, postId, it) },
+                            ) }
+                            LaunchedEffect(vm) { vm.saved.collect {
+                                postEditResult = it; refreshEpoch++; nav.popBackStack(); showMessage("修改已保存")
+                            } }
+                            PostEditScreen(vm, display.glass, { uri -> uploadEditorImage(app.repository, context, uri) }, { nav.popBackStack() }, ::login)
                         }
                     }
                     composable("login") { LoginScreen(account, { refreshEpoch++; nav.popBackStack() }, { refreshEpoch++; nav.popBackStack(); showMessage("欢迎回来，${account.user?.displayName}") }) }

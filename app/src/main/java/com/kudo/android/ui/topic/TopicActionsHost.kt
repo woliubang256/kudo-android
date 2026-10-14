@@ -44,13 +44,15 @@ import com.kudo.android.ui.components.liquid.*
 import kotlinx.coroutines.launch
 
 class TopicActionsController(val openList: (Int) -> Unit, val openDetail: (Int, Post?, (Post) -> Unit) -> Unit,
-    val openReply: (Int, Post, (Post) -> Unit) -> Unit = { id, post, bookmark -> openDetail(id, post, bookmark) })
+    val openReply: (Int, Post, (Post) -> Unit) -> Unit = { id, post, bookmark -> openDetail(id, post, bookmark) },
+    val edit: (Int, Post) -> Unit = { _, _ -> })
 val LocalTopicActions = staticCompositionLocalOf { TopicActionsController({}, { _, _, _ -> }) }
 val LocalIgnoredUsers = staticCompositionLocalOf<Set<String>> { emptySet() }
 
 @Composable
 fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: GlassMode, login: () -> Unit,
-    ignored: (Int, String) -> Unit, message: suspend (String) -> Unit, changed: () -> Unit = {}, content: @Composable () -> Unit) {
+    ignored: (Int, String) -> Unit, message: suspend (String) -> Unit, changed: () -> Unit = {},
+    editPost: (Int, Post) -> Unit = { _, _ -> }, content: @Composable () -> Unit) {
     val vm: TopicActionsViewModel = viewModel(key = "topic-actions-${viewer?.id}", factory = viewModelFactory { initializer { TopicActionsViewModel(repository, viewer) } })
     val current = vm.state
     var retained by remember(vm) { mutableStateOf(current) }
@@ -60,6 +62,7 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
     val backdrop = rememberLayerBackdrop()
     val visibility = remember(vm) { MutableTransitionState(false) }
     var detailBookmark by remember(vm) { mutableStateOf<((Post) -> Unit)?>(null) }
+    val currentEdit by rememberUpdatedState(editPost)
     LaunchedEffect(current.topicId) { visibility.targetState = current.topicId != null }
     LaunchedEffect(vm) { vm.events.collect { event -> when (event) {
         is TopicActionEvent.Message -> launch { message(event.text) }
@@ -70,7 +73,7 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
         detailBookmark = bookmark; vm.open(id, true, post)
     }, { id, post, bookmark ->
         detailBookmark = bookmark; vm.open(id, true, post, isReply = true)
-    }) }
+    }, { id, post -> currentEdit(id, post) }) }
     fun authenticate(action: () -> Unit) { if (viewer == null) { vm.dismiss(); login() } else action() }
     val showing = current.topicId != null || visibility.currentState || visibility.targetState
     Box(Modifier.fillMaxSize()) {
@@ -118,7 +121,10 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
                         copyLink = { state.link?.let { link ->
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("链接", link))
                             vm.dismiss()
-                        } })
+                        } }, edit = if (state.post?.editableBy(viewer?.id) == true) ({
+                            val post = state.post!!; val topicId = state.topicId!!
+                            vm.dismiss(); currentEdit(topicId, post)
+                        }) else null)
                     if (state.loading) LoadingRow()
                 }
                 TopicActionPanel.HISTORY -> TopicHistoryContent(state, vm::history)
@@ -138,11 +144,12 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
 
 @Composable
 fun TopicActionMenu(post: Post?, fromDetail: Boolean, enabled: Boolean, copy: () -> Unit, bookmark: () -> Unit,
-    history: () -> Unit, ignore: () -> Unit, report: () -> Unit, copyLink: () -> Unit = {}) {
+    history: () -> Unit, ignore: () -> Unit, report: () -> Unit, copyLink: () -> Unit = {}, edit: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 10.dp).testTag("topic-action-row"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (fromDetail) TopicCircleAction("复制", Icons.Rounded.ContentCopy, enabled && post != null, copy)
         if (fromDetail) TopicCircleAction("复制链接", Icons.Rounded.Link, enabled && post != null, copyLink)
         TopicCircleAction(if (post?.bookmarkId != null) "取消收藏" else "收藏", if (post?.bookmarkId != null) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, enabled && post != null, bookmark)
+        edit?.let { TopicCircleAction("编辑", Icons.Rounded.Edit, enabled, it) }
         if (post?.hasEditHistory == true) TopicCircleAction("编辑历史", Icons.Rounded.History, enabled, history)
         if (!fromDetail) TopicCircleAction("屏蔽", Icons.Rounded.VisibilityOff, enabled && post != null, ignore)
         TopicCircleAction("举报", Icons.Rounded.Flag, enabled && post != null, report)

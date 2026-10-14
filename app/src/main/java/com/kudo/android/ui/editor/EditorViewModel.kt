@@ -67,17 +67,7 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
         viewModelScope.launch {
             try {
                 val markdown = withContext(Dispatchers.IO) {
-                    val resolver = context.applicationContext.contentResolver
-                    val type = resolver.getType(uri) ?: throw IllegalArgumentException("无法识别图片格式")
-                    val extension = when (type) { "image/jpeg" -> "jpg"; "image/png" -> "png"; "image/webp" -> "webp"; "image/gif" -> "gif"; else -> throw IllegalArgumentException("请选择 JPG、PNG、WebP 或 GIF 图片") }
-                    val bytes = resolver.openInputStream(uri)?.use { input ->
-                        val output = java.io.ByteArrayOutputStream()
-                        val buffer = ByteArray(8192)
-                        var count: Int
-                        while (input.read(buffer).also { count = it } != -1) { require(output.size() + count <= 10 * 1024 * 1024) { "图片不能超过 10 MB" }; output.write(buffer, 0, count) }
-                        output.toByteArray()
-                    } ?: throw IllegalArgumentException("无法读取图片")
-                    app.repository.upload(bytes, type, "kudo-${System.currentTimeMillis()}.$extension")
+                    uploadEditorImage(app.repository, context, uri)
                 }
                 edit(draft.copy(raw = draft.raw + "\n\n" + markdown + "\n"))
             } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "上传失败" }

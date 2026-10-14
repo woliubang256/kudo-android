@@ -48,18 +48,20 @@ internal fun ReplyEditorSheet(visibility: MutableTransitionState<Boolean>, sendi
 internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) -> Unit, publish: () -> Unit,
     pickImage: () -> Unit, back: () -> Unit, reply: Boolean = false, categoryError: Throwable? = null,
     reloadCategories: () -> Unit = {}, sending: Boolean = false, uploading: Boolean = false, error: String? = null,
-    replyRules: ReplyRules? = null, rulesError: String? = null, reloadRules: () -> Unit = {}, replyAuthor: Member? = null) {
+    replyRules: ReplyRules? = null, rulesError: String? = null, reloadRules: () -> Unit = {}, replyAuthor: Member? = null,
+    editing: Boolean = false, editingReply: Boolean = false, canSave: Boolean = false,
+    editReason: String = "", reasonChange: (String) -> Unit = {}, extra: @Composable ColumnScope.() -> Unit = {}) {
     val categorySheet = remember { MutableTransitionState(false) }
     val categoryShowing = categorySheet.currentState || categorySheet.targetState
     val bodyFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val enabled = !sending && !categoryShowing
-    val canPublish = enabled && !uploading && draft.raw.isNotBlank() &&
+    val canPublish = if (editing) enabled && !uploading && canSave else enabled && !uploading && draft.raw.isNotBlank() &&
         (if (reply) replyRules != null && replyRules.problem(draft.raw) == null else draft.title.isNotBlank() && draft.categoryId > 0)
     LaunchedEffect(reply) {
         if (reply) { withFrameNanos { }; bodyFocus.requestFocus(); keyboard?.show() }
     }
-    val publishText = if (sending) "发布中…" else "发布"
+    val publishText = if (editing) { if (sending) "保存中…" else "保存" } else if (sending) "发布中…" else "发布"
     Box(Modifier.then(if (reply) Modifier.fillMaxWidth() else Modifier.fillMaxSize()).background(MaterialTheme.colorScheme.surface)) {
         Column(Modifier.then(if (reply) Modifier.fillMaxWidth().heightIn(max = 300.dp) else Modifier.fillMaxSize().imePadding())
             .then(if (categoryShowing) Modifier.clearAndSetSemantics {} else Modifier)
@@ -67,10 +69,10 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             if (!reply) {
                 Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 56.dp).padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     CommunityIconButton(Icons.Rounded.Close, "关闭编辑器", back, enabled = !sending)
-                    Text("发布话题", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    Text(if (editing) { if (editingReply) "编辑回复" else "编辑话题" } else "发布话题", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     CommunityButton(publishText, publish, enabled = canPublish, compact = true)
                 }
-                Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { keyboard?.hide(); categorySheet.targetState = true }
+                if (!editing) Row(Modifier.fillMaxWidth().clickable(enabled = enabled) { keyboard?.hide(); categorySheet.targetState = true }
                     .heightIn(min = 64.dp).padding(horizontal = 20.dp, vertical = 12.dp).testTag("editor-category"), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.AddBox, null, Modifier.size(24.dp), tint = LogoYellow)
                     Text("发布到", Modifier.padding(start = 14.dp), style = MaterialTheme.typography.bodyLarge)
@@ -82,7 +84,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             }
             Column(Modifier.weight(1f, fill = !reply).then(if (!reply) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                 .padding(horizontal = 20.dp)) {
-                if (!reply) {
+                if (!reply && (!editing || !editingReply)) {
                     CommunityTextField(draft.title, { edit(draft.copy(title = it)) }, Modifier.fillMaxWidth().padding(vertical = 20.dp).testTag("editor-title"),
                         placeholder = "标题", enabled = enabled, maxLines = 3,
                         textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold))
@@ -93,13 +95,19 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                     .padding(vertical = 14.dp).focusRequester(bodyFocus).testTag("editor-body"),
                     placeholder = if (reply) replyAuthor?.displayName?.takeIf(String::isNotBlank)?.let { "回复 $it" } ?: "回复" else "正文",
                     enabled = enabled, minLines = if (reply) 3 else 8)
+                if (editing) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    CommunityTextField(editReason, reasonChange, Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("edit-reason"),
+                        placeholder = "编辑说明（选填）", enabled = enabled, maxLines = 3)
+                }
             }
             error?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            extra()
             if (reply && rulesError != null) Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(rulesError, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 CommunityButton("重试", reloadRules, enabled = enabled, compact = true)
             }
-            Text(if (uploading) "正在上传图片…" else if (sending) "正在发布…" else if (reply) {
+            Text(if (uploading) "正在上传图片…" else if (sending) { if (editing) "正在保存…" else "正在发布…" } else if (reply) {
                 if (replyRules == null) "正在读取回帖字数规则…"
                 else replyLength(draft.raw).let { length ->
                     if (length < replyRules.minimum) "$length / ${replyRules.minimum} 字" else "$length 字"
@@ -115,7 +123,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                 else Text("Markdown", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (!reply) CommunitySheet(categorySheet, "发布到", { categorySheet.targetState = false },
+        if (!reply && !editing) CommunitySheet(categorySheet, "发布到", { categorySheet.targetState = false },
             containerColor = MaterialTheme.colorScheme.background) {
             if (categories.isEmpty()) {
                 Text(categoryError?.message ?: "分类暂未加载", style = MaterialTheme.typography.bodyMedium)
