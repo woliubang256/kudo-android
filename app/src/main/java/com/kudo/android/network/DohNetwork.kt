@@ -25,12 +25,13 @@ import java.util.IdentityHashMap
 import kotlin.coroutines.resumeWithException
 
 data class DohNetworkState(val enabled: Boolean = false, val vpn: Boolean = false, val proxy: Boolean = false,
-    val echAccepted: Boolean = false, val error: String? = null) {
-    val effective: Boolean get() = enabled && !vpn && !proxy
+    val echAccepted: Boolean = false, val error: String? = null, val vpnAutoSwitch: Boolean = true) {
+    val pausedByVpnOrProxy: Boolean get() = vpnAutoSwitch && (vpn || proxy)
+    val effective: Boolean get() = enabled && !pausedByVpnOrProxy
     val summary: String get() = when {
         !enabled -> "已关闭"
-        vpn -> "VPN 已开启，DoH 暂停"
-        proxy -> "系统代理已开启，DoH 暂停"
+        vpnAutoSwitch && vpn -> "VPN 已开启，DoH 暂停"
+        vpnAutoSwitch && proxy -> "系统代理已开启，DoH 暂停"
         error != null -> error
         echAccepted -> "DoH + ECH 已连接"
         else -> "已开启，等待连接"
@@ -109,7 +110,8 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
             checks.toList().forEach { it.close() }; checks.clear()
             clients.forEach { (base, routed) -> base.connectionPool.evictAll(); routed.connectionPool.evictAll() }
             clients.clear()
-            current.value = DohNetworkState(configuration.enabled, snapshot.vpn, snapshot.proxy)
+            current.value = DohNetworkState(configuration.enabled, snapshot.vpn, snapshot.proxy,
+                vpnAutoSwitch = configuration.vpnAutoSwitch)
         }
     }
     fun client(base: OkHttpClient): Call.Factory = object : Call.Factory {
@@ -145,7 +147,7 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
     /** No credentials, no Cookie writes, and only a GET to the community's public list. */
     suspend fun check(server: DohServer): String = withContext(Dispatchers.IO) {
         refresh()
-        if (snapshot().let { it.vpn || it.proxy }) return@withContext "请先关闭 VPN 或系统代理，再检测直连"
+        if (state.value.pausedByVpnOrProxy) return@withContext "请先关闭 VPN 或系统代理，再检测直连"
         var accepted = false
         val probe = DohTransport(server) { host, ech -> if (host == "linux.do") accepted = ech }
         synchronized(lock) { checks += probe }

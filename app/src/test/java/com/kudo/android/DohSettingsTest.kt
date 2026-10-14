@@ -5,6 +5,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DohSettingsTest {
+    @Test fun oldConfigurationsKeepVpnAutoSwitchOnAndExplicitOptOutRoundTrips() {
+        val legacy = decodeDohConfiguration("""{"version":1,"enabled":true,"selectedId":"shihuang-doh","servers":[]}""")
+        assertTrue(legacy.vpnAutoSwitch)
+        assertTrue(legacy.enabled)
+        assertEquals(ShihuangDohServer, legacy.selected)
+        val server = validateDohServer("分流节点", "https://dns.example/dns-query")
+        val optedOut = legacy.copy(vpnAutoSwitch = false).saveServer(server).select(server.id)
+        assertEquals(optedOut, decodeDohConfiguration(encodeDohConfiguration(optedOut)))
+        assertFalse(optedOut.removeServer(server.id).vpnAutoSwitch)
+        assertTrue(decodeDohConfiguration(null).vpnAutoSwitch)
+    }
+
+    @Test fun invalidVpnAutoSwitchValuesKeepTheSafeDefaultWithoutDiscardingOtherSettings() {
+        for (value in listOf("null", "\"false\"", "0", "{}", "[]")) {
+            val restored = decodeDohConfiguration("""{"version":1,"enabled":true,"vpnAutoSwitch":$value}""")
+            assertTrue(restored.vpnAutoSwitch)
+            assertTrue(restored.enabled)
+        }
+    }
+
     @Test fun defaultsOffAndRepairsCorruptOrDanglingSelection() {
         assertFalse(decodeDohConfiguration(null).enabled)
         assertEquals(DohConfiguration(), decodeDohConfiguration("invalid"))

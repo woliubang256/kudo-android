@@ -120,11 +120,14 @@ class DohTransportDeviceTest {
         val network = DohNetwork(instrumentation.targetContext, settings) { snapshot }
         val server = MockWebServer()
         val socketKinds = mutableListOf<Boolean>()
-        val base = OkHttpClient.Builder().eventListener(object : EventListener() {
+        val base = OkHttpClient.Builder().proxy(java.net.Proxy.NO_PROXY).eventListener(object : EventListener() {
             override fun connectionAcquired(call: Call, connection: Connection) { socketKinds += connection.socket().javaClass.name.contains("RustSocket") }
         }).build()
         val calls = network.client(base)
-        fun read() { server.enqueue(MockResponse().setBody("ok")); calls.newCall(Request.Builder().url(server.localUrl("/")).build()).execute().use { assertEquals("ok", it.body!!.string()) } }
+        fun read() {
+            server.enqueue(MockResponse().setBody("ok"))
+            calls.newCall(Request.Builder().url(server.localUrl("/")).build()).execute().use { assertEquals("ok", it.body!!.string()) }
+        }
         try {
             read()
             settings.update(settings.configuration.value.copy(enabled = true)); read()
@@ -134,6 +137,38 @@ class DohTransportDeviceTest {
             snapshot = snapshot.copy(vpn = true); network.refresh()
             settings.update(settings.configuration.value.copy(enabled = false)); snapshot = snapshot.copy(vpn = false); read()
             assertEquals(listOf(false, true, false, true, false), socketKinds)
+        } finally { network.close(); base.connectionPool.evictAll(); server.shutdown(); settings.update(DohConfiguration()) }
+    }
+
+    @Test fun disablingVpnAutoSwitchKeepsNativeRoutingForVpnAndSystemProxyAndPersistsTheChoice() {
+        val settings = DohSettings(instrumentation.context).apply { update(DohConfiguration(enabled = true)) }
+        val snapshot = java.util.concurrent.atomic.AtomicReference(NetworkSnapshot(1, vpn = true))
+        val network = DohNetwork(instrumentation.targetContext, settings) { snapshot.get() }
+        val server = MockWebServer()
+        val socketKinds = java.util.concurrent.CopyOnWriteArrayList<Boolean>()
+        val base = OkHttpClient.Builder().proxy(java.net.Proxy.NO_PROXY).eventListener(object : EventListener() {
+            override fun connectionAcquired(call: Call, connection: Connection) {
+                socketKinds += connection.socket().javaClass.name.contains("RustSocket")
+            }
+        }).build()
+        val calls = network.client(base)
+        fun read() {
+            server.enqueue(MockResponse().setBody("ok"))
+            calls.newCall(Request.Builder().url(server.localUrl("/")).build()).execute().use { assertEquals("ok", it.body!!.string()) }
+        }
+        try {
+            read()
+            settings.update(settings.configuration.value.copy(vpnAutoSwitch = false)); read()
+            assertTrue(network.state.value.effective)
+            assertFalse(DohSettings(instrumentation.context).configuration.value.vpnAutoSwitch)
+            settings.update(settings.configuration.value.copy(vpnAutoSwitch = true)); read()
+            snapshot.set(NetworkSnapshot(2, proxy = true)); read()
+            assertEquals("系统代理已开启，DoH 暂停", network.state.value.summary)
+            settings.update(settings.configuration.value.copy(vpnAutoSwitch = false)); read()
+            assertTrue(network.state.value.effective)
+            settings.update(settings.configuration.value.copy(enabled = false)); read()
+            assertFalse(network.state.value.effective)
+            assertEquals(listOf(false, true, false, false, true, false), socketKinds)
         } finally { network.close(); base.connectionPool.evictAll(); server.shutdown(); settings.update(DohConfiguration()) }
     }
 

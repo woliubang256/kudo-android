@@ -19,7 +19,7 @@ val ShihuangDohServer = DohServer("shihuang-doh", "始皇DoH", "https://kudo.ddd
 val BuiltInDohServers = listOf(BuiltInDohServer, ShihuangDohServer)
 
 data class DohConfiguration(val enabled: Boolean = false, val selectedId: String = BuiltInDohServer.id,
-    val customServers: List<DohServer> = emptyList()) {
+    val customServers: List<DohServer> = emptyList(), val vpnAutoSwitch: Boolean = true) {
     val servers: List<DohServer> get() = BuiltInDohServers + customServers
     val selected: DohServer get() = servers.firstOrNull { it.id == selectedId } ?: BuiltInDohServer
     fun select(id: String): DohConfiguration = copy(selectedId = servers.firstOrNull { it.id == id }?.id ?: BuiltInDohServer.id)
@@ -56,7 +56,7 @@ private fun isBootstrapIp(value: String): Boolean {
 }
 
 internal fun encodeDohConfiguration(value: DohConfiguration): String = JSONObject().put("version", 1)
-    .put("enabled", value.enabled).put("selectedId", value.selected.id)
+    .put("enabled", value.enabled).put("selectedId", value.selected.id).put("vpnAutoSwitch", value.vpnAutoSwitch)
     .put("servers", JSONArray().apply { value.customServers.forEach { server ->
         put(JSONObject().put("id", server.id).put("name", server.name).put("url", server.url)
             .put("bootstrap", JSONArray(server.bootstrap)))
@@ -73,7 +73,8 @@ internal fun decodeDohConfiguration(raw: String?): DohConfiguration = runCatchin
         validateDohServer(item.getString("name"), item.getString("url"),
             (0 until ips.length()).joinToString(",") { ips.getString(it) }, item.getString("id"))
     }.getOrNull() }.distinctBy { it.id }
-    DohConfiguration(json.optBoolean("enabled", false), customServers = servers).select(json.optString("selectedId"))
+    DohConfiguration(json.optBoolean("enabled", false), customServers = servers,
+        vpnAutoSwitch = json.opt("vpnAutoSwitch") as? Boolean ?: true).select(json.optString("selectedId"))
 }.getOrDefault(DohConfiguration())
 
 class DohSettings(context: Context) {

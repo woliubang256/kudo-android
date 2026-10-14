@@ -69,7 +69,7 @@ AppContainer 持有统一 DohNetwork，并应用于主站、Connect、Coil 图�
 
 参考 FluxDO 的用户意图与生效状态分离：`effective = userEnabled && !vpnDetected && !systemProxyDetected`，初始化、切换中和错误状态另行显示。
 
-检测到 VPN 时暂停 DoH，显示“VPN 已开启，DoH 暂停”；不关闭用户的 VPN，不永久抹掉用户的开关选择。VPN 断开后按保存的选择恢复；暂停期间关闭开关则断开 VPN 后仍关闭。
+检测到 VPN 时默认暂停 DoH，显示“VPN 已开启，DoH 暂停”；不关闭用户的 VPN，不永久抹掉用户的开关选择。VPN 断开后按保存的选择恢复；暂停期间关闭总开关则断开 VPN 后仍关闭。`vpnAutoSwitch` 默认开启且在 DoH 设置中可关闭；关闭后 VPN 和系统代理仍显示检测状态，但允许按用户分流规则继续使用 DoH/ECH。
 
 启动时先检查 VPN，再创建需要联网的通道；运行中监听网络变化，回到前台时再次核对。Android 使用 `ConnectivityManager`／`NetworkCapabilities.TRANSPORT_VPN` 等公开能力；构建监听请求时注意默认 `NET_CAPABILITY_NOT_VPN` 可能过滤 VPN。
 
@@ -149,6 +149,7 @@ FluxDO 主项目为 GPL-3.0，本项目是 Apache-2.0；参考用户交互与设
 检索 proposed／implemented／rejected 的 DoH、DNS、ECH、VPN、Cloudflare、Cookie 与网络机制；没有既有 DoH 提案。
 
 - [Discourse 数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)部分重叠：本篇提出传输策略，原有来源校验、凭据隔离和写请求不重放继续成立。
+- [可关闭的 VPN 自动切换](2026-10-14-vpn-auto-switch.md)在本篇默认暂停策略上增加用户可选例外；本篇的网络边界、ECH 约束和 WebView 分工继续适用。
 - [人工验证流程](../../implemented/bug-fix/2026-10-11-cloudflare-verification-flow.md)部分重叠：本篇评估换出口后的能力边界，保留原有真实挑战识别、Cookie flush 与原生读取成功才完成验证的规则。
 - [原生客户端](../../implemented/architecture/2026-10-07-native-community-client.md)、[应用内网页](../../implemented/feature/2026-10-10-in-app-web-links.md)、[通知传输](../../implemented/architecture/2026-10-10-notification-stream.md)及[账号登录](../../implemented/feature/2026-10-07-account-and-composer.md)提供当前事实，本轮不改变它们的模块、导航、会话或业务协议。
 - 其余网络关键词命中是分页、图片资源、通知展示或历史测试，与本次新增 DNS／TLS 策略没有同一决策归属。没有完全吸收、需要归档或已经过时的提案。
