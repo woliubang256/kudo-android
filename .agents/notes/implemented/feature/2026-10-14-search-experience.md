@@ -16,6 +16,8 @@ SearchQuery 以引号感知的 token 切分实现面板条件替换；排序只�
 
 SearchViewModel 从 FeedViewModel 分离。账号、搜索与标签建议各有代际令牌，取消后迟到的响应不能覆盖新状态。历史、元数据、标签错误独立于主结果。分页成功才推进 page，失败保留命中和下一页重试位置。换号同步取消四类任务并重置状态，forAccount 在 Compose effect 执行前也屏蔽旧账号数据。类别/用户请求仅提取词语，不携带帖子排序和筛选；帖子搜索成功后重新读取服务端历史，不伪造本地记录。
 
+SearchFiltersPanel 使用 Foundation 输入、自绘选项和黄色选中态；分类可搜索、标签建议来自服务器，范围/话题状态/日期方向在面板内展开，提供固定底部重置与应用。个人范围仅登录显示，已解决、指定给和专家回应由站点/账号能力决定；读取失败保留基本字段并可重试。
+
 ## Related decisions
 
 检索 proposed、implemented、rejected 搜索相关笔记，无专属搜索决策。与[数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)、[主题展示](../../implemented/feature/2026-10-09-topic-presentation.md)、[酷安表单](../../implemented/feature/2026-10-10-coolapk-forms.md)、[快速回顶](../../implemented/feature/2026-10-11-quick-scroll-to-top.md)部分重叠：沿用同源凭据隔离、标签 slug、全局列表样式、自绘控件、滚动注册；这些旧篇仍各有独立职责。其余命中是页面布局、导航和过去测试记录，非本方案归属，无完全吸收或过时提案。
