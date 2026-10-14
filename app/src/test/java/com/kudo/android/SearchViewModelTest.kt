@@ -175,21 +175,21 @@ class SearchViewModelTest {
 
     @Test fun newSearchWinsEvenWhenOldResponseArrivesLater() = runTest {
         val oldEntered = CountDownLatch(1)
-        val release = CountDownLatch(1)
         fixture(response = { request ->
-            if (request.requestUrl!!.queryParameter("q")!!.startsWith("old")) { oldEntered.countDown(); release.await(5, TimeUnit.SECONDS) }
-            MockResponse().setBody(result.replace("主题", request.requestUrl!!.queryParameter("q")!!))
+            val query = request.requestUrl!!.queryParameter("q")!!
+            if (query.startsWith("old")) {
+                oldEntered.countDown()
+                MockResponse().setBody(result.replace("主题", query)).setBodyDelay(500, TimeUnit.MILLISECONDS)
+            } else MockResponse().setBody(result.replace("主题", query))
         }) { repository, _, models ->
             val vm = SearchViewModel(repository).also(models::add)
-            try {
-                vm.search("old"); assertTrue(oldEntered.await(3, TimeUnit.SECONDS))
-                vm.search("new")
-                withContext(Dispatchers.IO) {
-                    withTimeout(5000) {
-                        vm.state.first { it.searched && !it.loading && it.query == "new" && it.hits.posts.isNotEmpty() }
-                    }
+            vm.search("old"); assertTrue(oldEntered.await(3, TimeUnit.SECONDS))
+            vm.search("new")
+            withContext(Dispatchers.IO) {
+                withTimeout(5000) {
+                    vm.state.first { it.searched && !it.loading && it.query == "new" && it.hits.posts.isNotEmpty() }
                 }
-            } finally { release.countDown() }
+            }
             assertEquals("new order:relevance", vm.state.value.hits.posts.single().topic.title)
         }
     }
