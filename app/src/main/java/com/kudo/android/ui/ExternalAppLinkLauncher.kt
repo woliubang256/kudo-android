@@ -18,6 +18,7 @@ internal class ExternalAppLinkLauncher(
         val intent = Intent(Intent.ACTION_VIEW, url.toUri())
             .addCategory(Intent.CATEGORY_BROWSABLE)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .apply { ExternalAppLinkPolicy.targetPackage(url)?.let(::setPackage) }
         return try {
             launch(intent)
             true

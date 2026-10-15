@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <queries>
+        <package android:name="com.quark.browser" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />

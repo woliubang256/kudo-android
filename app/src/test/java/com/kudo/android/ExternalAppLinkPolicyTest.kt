@@ -10,6 +10,8 @@ class ExternalAppLinkPolicyTest {
 
     @Test fun quarkOnlyMatchesSharePagesAndPreservesAccessParameters() {
         assertEquals(share, ExternalAppLinkPolicy.quarkShare(share))
+        assertEquals(ExternalAppLinkPolicy.QUARK_PACKAGE, ExternalAppLinkPolicy.targetPackage(share))
+        assertNull(ExternalAppLinkPolicy.targetPackage(share.replace("https:", "http:")))
         listOf("https://pan.quark.cn/", "https://pan.quark.cn/s/", "https://pan.quark.cn/s/a/extra",
             "https://pan.quark.cn.evil.test/s/a", "https://user@pan.quark.cn/s/a",
             "https://pan.quark.cn:444/s/a", "https://example.org/s/a").forEach {

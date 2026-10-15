@@ -16,7 +16,7 @@ class ExternalAppLinkLauncherTest {
     @Test fun systemOpeningPreservesUrlsAndLetsAndroidSelectTheHandler() {
         val started = mutableListOf<Intent>()
         val launcher = ExternalAppLinkLauncher(context, launch = { started += it })
-        listOf(share, "http://example.org/help?q=1#part", "https://share.test/s/abc", scheme).forEach {
+        listOf("http://example.org/help?q=1#part", "https://share.test/s/abc", scheme).forEach {
             assertTrue(launcher.open(it))
             val intent = started.last()
             assertEquals(it, intent.dataString)
@@ -26,7 +26,16 @@ class ExternalAppLinkLauncherTest {
             assertTrue(intent.hasCategory(Intent.CATEGORY_BROWSABLE))
             assertFalse(intent.hasExtra(Intent.EXTRA_INITIAL_INTENTS))
         }
-        assertEquals(4, started.size)
+        assertEquals(3, started.size)
+    }
+
+    @Test fun quarkShareTargetsTheInstalledQuarkApp() {
+        val started = mutableListOf<Intent>()
+        val launcher = ExternalAppLinkLauncher(context, launch = { started += it })
+
+        assertTrue(launcher.open(share))
+        assertEquals("com.quark.browser", started.single().`package`)
+        assertEquals(share, started.single().dataString)
     }
 
     @Test fun inAppModeNeverLaunchesEvenForQuarkSharesAndSupportedSchemes() {
