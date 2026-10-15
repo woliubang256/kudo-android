@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -112,13 +113,13 @@ class EditorToolbarUiTest {
         } }
         tool("表情")
         compose.onNodeWithTag("editor-emoji-groups").assertIsDisplayed()
-        compose.onNodeWithText("最近使用").assertIsDisplayed()
+        compose.onNodeWithText("最近使用").assertDoesNotExist()
         compose.onNodeWithTag("editor-emoji-search").performTextInput("smile")
-        compose.onNodeWithText("搜索结果").assertIsDisplayed()
+        compose.onNodeWithText("搜索结果").assertDoesNotExist()
         compose.onNodeWithContentDescription(":smile:").performClick()
         compose.waitUntil(5000) { draft.raw == ":smile:" }
         tool("表情")
-        compose.onNodeWithText("最近使用").assertIsDisplayed()
+        compose.onNodeWithText("最近使用").assertDoesNotExist()
         compose.onNodeWithContentDescription(":smile:").assertIsDisplayed()
     }
 
@@ -136,11 +137,14 @@ class EditorToolbarUiTest {
             hasAnyAncestor(hasTestTag("editor-emoji-tab-recent")) and hasContentDescription("star"),
             useUnmergedTree = true,
         ).assertExists()
+        compose.onNodeWithTag("editor-emoji-tab-recent").assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+            .performTouchInput { longClick() }
         compose.onNodeWithTag("editor-emoji-tab-0").assertIsDisplayed()
         compose.onNode(
             hasText("表情与情绪") and hasAnyAncestor(hasTestTag("editor-emoji-tab-0")),
             useUnmergedTree = true,
         ).assertDoesNotExist()
+        compose.onNodeWithTag("editor-emoji-tab-0").assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
     }
 
     @Test fun sendingLocksAllFormattingAndPreviewAndImageControls() {

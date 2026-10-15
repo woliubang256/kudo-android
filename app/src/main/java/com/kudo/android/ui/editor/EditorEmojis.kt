@@ -1,6 +1,7 @@
 package com.kudo.android.ui.editor
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -27,6 +28,7 @@ import com.kudo.android.data.SiteEmoji
 import com.kudo.android.data.SiteEmojiGroup
 import com.kudo.android.ui.components.CommunityTextField
 import com.kudo.android.ui.components.LocalAvatarMetadata
+import com.kudo.android.ui.components.showKudoToast
 import com.kudo.android.ui.topic.SiteEmoji as SiteEmojiView
 
 private val fallbackEditorEmojis = listOf(
@@ -90,11 +92,6 @@ internal fun EditorEmojis(insert: (String) -> Unit) {
         selectedGroup == null -> currentRecent
         else -> shownGroup?.items.orEmpty()
     }
-    val heading = when {
-        searchResult != null -> "搜索结果"
-        selectedGroup == null -> "最近使用"
-        else -> groupTitle(selectedGroup.orEmpty())
-    }
     fun choose(item: SiteEmoji) {
         settings.rememberEmoji(item.name); recent = settings.recentEmojis(); insert(":${item.name}:")
     }
@@ -116,10 +113,9 @@ internal fun EditorEmojis(insert: (String) -> Unit) {
             ) { selectedGroup = group.name; search = "" }
         }
     }
-    Text(heading, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.titleSmall)
     when {
         groups == null -> Text("正在读取站点表情…", style = MaterialTheme.typography.bodySmall)
-        entries.isEmpty() && searchResult == null && selectedGroup == null -> Text("还没有最近使用的表情", style = MaterialTheme.typography.bodySmall)
+        entries.isEmpty() && searchResult == null && selectedGroup == null -> Text("暂无表情", style = MaterialTheme.typography.bodySmall)
         entries.isEmpty() -> Text("没有匹配的表情", style = MaterialTheme.typography.bodySmall)
         else -> LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().heightIn(max = 320.dp).testTag("editor-emojis")) {
             items(entries, key = { "${it.group}:${it.name}" }) { item ->
@@ -141,12 +137,18 @@ private fun EmojiGroupTab(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val background = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
     Box(
         Modifier
             .testTag(testTag)
             .clip(MaterialTheme.shapes.small)
-            .clickable(role = Role.Tab, onClick = onClick)
+            .combinedClickable(
+                role = Role.Tab,
+                onClick = onClick,
+                onLongClickLabel = "显示分组名称",
+                onLongClick = { showKudoToast(context, label) },
+            )
             .semantics {
                 contentDescription = label
                 stateDescription = if (selected) "已选择" else "未选择"

@@ -62,3 +62,7 @@ EditorToolbarUiTest新增预览首项与滚动容器归属回归，真机完整6
 The emoji picker keeps server-provided group order and content, while rendering the horizontal group tabs as icon-only controls like the website. Standard groups choose a representative emoji when that emoji exists in the group; otherwise they use the first item in the group. Custom groups also use their first item. The recent-use tab uses a star icon. Accessible labels, selected-state descriptions, and stable test tags remain on each tab container, while the selected group heading keeps its text label in the content area.
 
 The new `EditorToolbarUiTest.emojiGroupTabsUseIconsInsteadOfTextLabels` regression test verifies the recent and first server group tabs are visible, icon-labelled, and contain no visible group title. The full editor toolbar suite is expected to contain seven device tests after this addition.
+
+## Group name visibility
+
+Group names are no longer rendered as a heading inside the emoji picker, so the grid starts immediately after the search and icon tabs. The icon tabs keep their accessibility labels, and a long press shows the same name through the app toast without changing the short-press group selection behavior. Empty recent content uses a neutral `暂无表情` message rather than repeating the group name.
