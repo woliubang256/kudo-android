@@ -36,6 +36,10 @@ CommunityUiTest 的整栏抬升与取消复位检查同样按真实16ms间隔推
 
 ## JVM fixture lifecycle
 
+0.2.6后续云端运行38742475340中前述断线与搜索用例通过，502项仅HomeUpdateViewModelTest首项报告UncaughtExceptionsBeforeTest。完整XML的suppressed异常明确为取消中的IO协程在Dispatchers.resetMain之后恢复Main（`second-tag-test-failure/test-results/testDebugUnitTest/TEST-com.kudo.android.HomeUpdateViewModelTest.xml`）。时间戳显示此前运行FeedViewModelTest；该类三处清理只cancel而未join，与已修复的FeedUpdates夹具属于同一生命周期缺口。FeedViewModelTest共用的清理函数等待viewModelScope根Job cancelAndJoin后再关闭服务器与重置Main，新增受控取消清理用例守住顺序，不修改HomeUpdate业务逻辑。
+
+新增清理用例先失败，报告为 `artifacts/release/0.2.6/feed-teardown-repro.xml`：旧清理函数在受控清理放行之前已经返回。等待根Job结束后，FeedViewModel、FeedUpdates、FeedSession、FeedPageCache与HomeUpdate共24项通过（`feed-teardown-fixed.log`）。XML未保留原IO协程的创建栈，不把具体哪次请求视作已确认事实；用受控清理回归约束实际发现的生命周期缺口。
+
 0.2.6云端运行38737113799的首轮502项JVM中，断线后释放并发与新搜索覆盖旧请求两项失败；第二轮断线用例再次失败。首轮XML明确显示断线后的第二次请求连接 `localhost/::1` 被拒绝，而MockWebServer只监听另一地址族。断线或取消会影响OkHttp路由选择，关闭自动连接重试的夹具不能假定localhost始终指向服务器监听地址。RequestScheduler断线夹具与SearchViewModel共享夹具显式绑定回环地址，URL使用同一 `listenAddress.hostAddress`，使请求始终到达同一个监听端点，保留响应体异常、请求数、并发释放和旧搜索不能覆盖新结果的断言。搜索用例原报告仅有超时，不能据此声称其底层异常也已确认是IPv6拒绝。
 
 本地为原断线用例显式提供IPv4监听与localhost双栈DNS，先复现第二次请求连接 `::1` 被拒绝，失败XML与临时夹具差异保留在 `artifacts/release/0.2.6/dual-stack-repro.xml`、`dual-stack-repro.patch`。同一双栈输入下改为监听IP后，两组18项通过；最终提交移除DNS注入，夹具仍绑定同一回环地址并使用其IP。完整502项JVM与Lint在两核、IPv6优先配置下通过，日志 `full-unit-lint-fixed.log`；测试输出强制重新执行，不把UP-TO-DATE算作重复验证。搜索等待在失败状态立即断言网络错误，避免将明确的请求失败隐藏成等待结果超时；不延长5秒边界。

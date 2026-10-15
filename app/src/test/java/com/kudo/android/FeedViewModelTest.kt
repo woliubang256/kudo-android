@@ -13,6 +13,46 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FeedViewModelTest {
+    @Test fun fixtureTeardownWaitsForCancelledWorkBeforeResettingMain() = runBlocking {
+        Dispatchers.setMain(Dispatchers.Unconfined)
+        val server = MockWebServer()
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest) =
+                MockResponse().setBody(if (request.path == "/site.json") """{"categories":[]}"""
+                    else """{"topic_list":{"topics":[]}}""")
+        }
+        server.start()
+        val vm = FeedViewModel(CommunityRepository(DiscourseClient(NoCookies, server.url("/"))))
+        vm.viewModelScope.coroutineContext.job.children.toList().joinAll()
+        val cleanupStarted = CompletableDeferred<Unit>()
+        val allowCleanup = CompletableDeferred<Unit>()
+        val cleaned = CompletableDeferred<Unit>()
+        vm.viewModelScope.launch(Dispatchers.Unconfined) {
+            try { awaitCancellation() }
+            finally { withContext(NonCancellable) {
+                cleanupStarted.complete(Unit)
+                allowCleanup.await()
+                cleaned.complete(Unit)
+            } }
+        }
+        val closing = async(Dispatchers.IO) { closeFixture(vm, server) }
+        try {
+            withTimeout(5000) { cleanupStarted.await() }
+            assertNull("清理完成前不能重置Main或释放服务器", withTimeoutOrNull(200) { closing.await(); true })
+        } finally {
+            allowCleanup.complete(Unit)
+            withTimeout(5000) { closing.await(); vm.viewModelScope.coroutineContext.job.join() }
+        }
+        assertTrue(cleaned.isCompleted)
+        assertTrue(vm.viewModelScope.coroutineContext.job.isCompleted)
+    }
+
+    private suspend fun closeFixture(vm: FeedViewModel, server: MockWebServer) {
+        vm.viewModelScope.coroutineContext.job.cancelAndJoin()
+        server.shutdown()
+        Dispatchers.resetMain()
+    }
+
     @Test fun manualRefreshReportsNewAndUpdatedTopicsFromTheResponse() = runBlocking {
         Dispatchers.setMain(Dispatchers.Unconfined)
         val server = MockWebServer()
@@ -32,9 +72,7 @@ class FeedViewModelTest {
             vm.refresh()
             assertEquals(2, withTimeout(5000) { event.await() })
         } finally {
-            vm.viewModelScope.cancel()
-            server.shutdown()
-            Dispatchers.resetMain()
+            closeFixture(vm, server)
         }
     }
 
@@ -56,9 +94,7 @@ class FeedViewModelTest {
             vm.refresh()
             assertNull(withTimeoutOrNull(1000) { vm.refreshEvents.first() })
         } finally {
-            vm.viewModelScope.cancel()
-            server.shutdown()
-            Dispatchers.resetMain()
+            closeFixture(vm, server)
         }
     }
 
@@ -74,7 +110,7 @@ class FeedViewModelTest {
             assertEquals(listOf(42), vm.state.value.topics.map { it.id })
             assertFalse(vm.state.value.loading)
             assertNull("辅助分类请求失败不能遮挡已成功加载的话题", vm.state.value.error)
-        } finally { vm.viewModelScope.cancel(); server.shutdown(); Dispatchers.resetMain() }
+        } finally { closeFixture(vm, server) }
     }
 }
 
