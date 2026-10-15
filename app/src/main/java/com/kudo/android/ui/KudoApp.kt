@@ -176,6 +176,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     enterTransition = { fadeIn(tween(280)) }, exitTransition = { fadeOut(tween(180)) },
                     popEnterTransition = { fadeIn(tween(220)) }, popExitTransition = { fadeOut(tween(220)) }) {
                     composable("root") {
+                        val directory = model("community-directory") { CommunityDirectoryViewModel(app.repository) }
                         val feed = model("feed") { FeedViewModel(app.repository, initialUser = account.user, updates = DiscourseMessageBus(app.client, userAgent = app.userAgent, route = app.network::client)) }
                         val state by feed.state.collectAsStateWithLifecycle()
                         val pages by feed.pages.collectAsStateWithLifecycle()
@@ -191,7 +192,6 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             feed.refreshReadListsIfRequested(readingEpoch, account.user?.id)
                         }
                         LaunchedEffect(selected, account.user?.id) {
-                            if (selected == 1 && account.categories.isEmpty()) account.loadCategories()
                             if (selected == 3) account.loadNotices()
                         }
                         CompositionLocalProvider(LocalQuickScrollBottomPadding provides
@@ -200,9 +200,11 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         Box(Modifier.fillMaxSize()) {
                             Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)) {
                                 when (selected) {
-                                    0 -> FeedScreen(state.forUser(account.user), account.user, feed::select, feed::refresh, feed::more, { topic(it) }, ::user, { nav.navigate("search") }, { if (account.user == null) login() else user(account.user!!.username) }, { account.loadCategories() }, listStyle = display.topicListStyle, pages = pages,
-                                        categoryContent = { CategoriesScreen(account.categories, account.categoriesLoading, account.categoryError, account::loadCategories, ::login, inHome = true) { nav.navigate("category/${it.id}") } })
-                                    1 -> CategoriesScreen(account.categories, account.categoriesLoading, account.categoryError, account::loadCategories, ::login) { nav.navigate("category/${it.id}") }
+                                    0 -> FeedScreen(state.forUser(account.user), account.user, feed::select, feed::refresh, feed::more, { topic(it) }, ::user, { nav.navigate("search") }, { if (account.user == null) login() else user(account.user!!.username) }, { directory.useAccount(account.user?.id); if (account.sessionReady) directory.loadIfStale() }, listStyle = display.topicListStyle, pages = pages,
+                                        categoryContent = { CommunityDirectoryHost(directory, account.user?.id, account.sessionReady, ::login,
+                                            { nav.navigate("category/${it.id}") }, { nav.navigate("tag/${Uri.encode(it.slug.ifBlank { it.name })}?id=0") }, ::openWebPage, inHome = true) })
+                                    1 -> CommunityDirectoryHost(directory, account.user?.id, account.sessionReady, ::login,
+                                        { nav.navigate("category/${it.id}") }, { nav.navigate("tag/${Uri.encode(it.slug.ifBlank { it.name })}?id=0") }, ::openWebPage)
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
                                         { nav.navigate("personal/${AccountDestination.MESSAGES.name}") })
                                     4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") },

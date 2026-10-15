@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,12 +46,14 @@ fun RootHeading(title: String, action: @Composable RowScope.() -> Unit = {}) {
 }
 
 @Composable
-fun CategoriesScreen(categories: List<Category>, loading: Boolean, error: Throwable?, refresh: () -> Unit, login: () -> Unit, inHome: Boolean = false, select: (Category) -> Unit) {
-    val scroll = rememberLazyListState()
+fun CategoriesScreen(categories: List<Category>, loading: Boolean, error: Throwable?, refresh: () -> Unit, login: () -> Unit,
+    inHome: Boolean = false, scroll: LazyListState = rememberLazyListState(), footer: (@Composable () -> Unit)? = null,
+    select: (Category) -> Unit) {
     Column(Modifier.fillMaxSize().then(if (inHome) Modifier else Modifier.statusBarsPadding())) {
-        LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 112.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll).testTag("category-directory-list"), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 112.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (loading && categories.isEmpty()) item { LoadingRow() }
             if (error != null) item { ErrorState(error, refresh, login) }
+            if (!loading && error == null && categories.isEmpty()) item { Text("暂无类别", Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(categories, key = { it.id }) { category ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surface).clickable { select(category) }.padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     val color = runCatching { Color(android.graphics.Color.parseColor("#${category.color}")) }.getOrDefault(LogoYellow)
@@ -62,6 +65,7 @@ fun CategoriesScreen(categories: List<Category>, loading: Boolean, error: Throwa
                     Icon(Icons.Rounded.ChevronRight, null, Modifier.size(18.dp), MaterialTheme.colorScheme.outline)
                 }
             }
+            if (footer != null) item("directory-footer") { footer() }
         }
     }
 }
