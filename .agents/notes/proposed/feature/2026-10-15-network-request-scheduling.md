@@ -24,7 +24,9 @@ Status: proposed
 
 ## Implementation status
 
-核心RequestScheduler与网络拦截器已实现，8项离线测试通过（artifacts/request-scheduler-core.txt）：共享并发覆盖正文、窗口精确到期、扩大窗口保留历史、动态调整、等待取消、异源隔离、429打断等待、逐跳计数与读取失败释放。配置持久化、客户端接入及设置页面仍按本提案继续实现。
+核心RequestScheduler与网络拦截器已实现，8项离线测试通过（artifacts/request-scheduler-core.txt）：共享并发覆盖正文、窗口精确到期、扩大窗口保留历史、动态调整、等待取消、异源隔离、429打断等待、逐跳计数与读取失败释放。
+
+RequestSettings将version 1格式的request_limits独立存入kudo_network，缺失配置默认均衡，损坏字段分别修复。AppContainer为API、Connect和图片安装同一个调度器，下载及MessageBus仍用原路由；API/Connect保留排队期间的429错误类型，DoH状态不将本地冷却误报成连接失败。配置3项、接入3项及既有API/图片/Connect定向回归通过（artifacts/request-scheduler-integration.txt）。设置页面仍按本提案继续实现。
 
 ## Alternatives considered
 

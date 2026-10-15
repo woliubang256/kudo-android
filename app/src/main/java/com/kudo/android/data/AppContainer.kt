@@ -20,12 +20,16 @@ class AndroidSessionCookies : SessionCookies {
 class AppContainer(context: Context) {
     val settings = AppSettings(context.applicationContext)
     val network = com.kudo.android.network.DohNetwork(context.applicationContext, DohSettings(context.applicationContext))
+    val requestSettings = RequestSettings(context.applicationContext)
     val notifications = com.kudo.android.notifications.LocalNotifications(context.applicationContext)
     val cookies = AndroidSessionCookies()
     val userAgent: String = WebSettings.getDefaultUserAgent(context.applicationContext)
-    val client = DiscourseClient(cookies, userAgent = { userAgent }, route = network::client)
+    private fun scheduledClient(base: OkHttpClient): okhttp3.Call.Factory = network.client(base.newBuilder()
+        .addNetworkInterceptor(com.kudo.android.network.RequestSchedulingInterceptor(requestSettings.scheduler)).build())
+    val client = DiscourseClient(cookies, userAgent = { userAgent }, route = ::scheduledClient,
+        cooldown = requestSettings.scheduler.cooldown)
     val repository = CommunityRepository(client)
-    val connect = ConnectRepository(cookies, userAgent, route = network::client)
+    val connect = ConnectRepository(cookies, userAgent, route = ::scheduledClient)
     internal val downloads = NativeDownloadManager(context.applicationContext, network.client(OkHttpClient.Builder()
         .followRedirects(true).followSslRedirects(true)
         .addNetworkInterceptor { chain ->
@@ -34,6 +38,6 @@ class AppContainer(context: Context) {
         }.build()), cookies, userAgent, keepAlive = {
             context.startForegroundService(android.content.Intent(context, com.kudo.android.media.DownloadService::class.java))
         })
-    val imageHttpClient: okhttp3.Call.Factory = network.client(
+    val imageHttpClient: okhttp3.Call.Factory = scheduledClient(
         com.kudo.android.media.createImageHttpClient(client.cooldown, cookies, userAgent))
 }

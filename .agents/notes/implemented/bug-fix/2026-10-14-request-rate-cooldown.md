@@ -22,6 +22,8 @@ RequestCooldown 为主站调用提供统一冷却，DiscourseClient 在构造网
 
 ## Existing note audit
 
+[网络请求调度](../../proposed/feature/2026-10-15-network-request-scheduling.md)增加429前的同源共享滑动窗口与并发控制；本篇429后的立即失败、来源隔离及图片4路保护继续保留，本地排队不等于冷却后的自动重放。
+
 检索活跃笔记的限流、429、头像、首页刷新与图片。与[请求契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)部分重叠：新增冷却，保留同源与写请求不重放；与[首页推送](../../implemented/feature/2026-10-08-home-live-refresh.md)部分重叠：落实已有的页面不可见即暂停约束；与[头像展示](../../implemented/feature/2026-10-08-avatar-presentation.md)部分重叠：调整元数据缓存节奏，保留状态语义与账号隔离。与[DoH 网络](../../implemented/feature/2026-10-12-doh-network.md)及[图片容量](../../implemented/bug-fix/2026-10-13-image-capacity-resolution.md)边界相关，不改变路由及按需 HEAD。通知流、详情推送、阅读历史与各图像解码笔记无决定翻转。没有完全吸收或过时提案。
 
 ## Alternatives considered

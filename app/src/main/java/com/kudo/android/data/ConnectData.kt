@@ -66,7 +66,9 @@ class ConnectRepository(private val cookies: SessionCookies, private val userAge
         val response = suspendCancellableCoroutine<Response> { continuation ->
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(ApiFailure(FailureKind.NETWORK, "无法连接等级页面，请稍后重试")) }
+                override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(
+                    if (e is com.kudo.android.network.RequestCoolingDown) e.apiFailure()
+                    else ApiFailure(FailureKind.NETWORK, "无法连接等级页面，请稍后重试")) }
                 override fun onResponse(call: Call, response: Response) { continuation.resume(response) { _, value, _ -> value.close() } }
             })
         }
@@ -77,6 +79,8 @@ class ConnectRepository(private val cookies: SessionCookies, private val userAge
             val html = source.readUtf8()
             if (isCloudflareChallenge(it, html)) throw ApiFailure(FailureKind.VERIFICATION, CloudflareVerificationMessage)
             if (it.isRedirect || it.code == 401) throw ApiFailure(FailureKind.SIGN_IN, "等级页面需要认证，请先在应用内网页打开")
+            if (it.code == 429) throw ApiFailure(FailureKind.RATE_LIMIT, "请求较频繁，请稍后重试",
+                com.kudo.android.network.RequestCooldown().record(it, html))
             if (!it.isSuccessful) throw ApiFailure(FailureKind.SERVER, "等级页面暂时不可用（${it.code}）")
             return parseTrustReport(html)
         }

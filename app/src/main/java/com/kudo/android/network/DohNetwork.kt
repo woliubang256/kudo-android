@@ -133,7 +133,7 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
                     }
                     native.configure(base.newBuilder()).addInterceptor { chain ->
                         try { chain.proceed(chain.request()) } catch (e: IOException) {
-                            if (!chain.call().isCanceled()) synchronized(lock) {
+                            if (e !is RequestCoolingDown && !chain.call().isCanceled()) synchronized(lock) {
                                 if (epoch == generation) current.value = current.value.copy(error = dohErrorMessage(e), echAccepted = false)
                             }
                             throw e

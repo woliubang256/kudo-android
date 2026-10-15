@@ -12,6 +12,8 @@ Status: implemented
 
 ## Decision
 
+[网络请求调度](../../proposed/feature/2026-10-15-network-request-scheduling.md)为API、Connect与图片增加独立于DoH的共享请求节奏；修改并发参数不重建DoH通道，本地冷却不改变连接状态，本篇凭据与路由边界继续保留。
+
 应用采用独立编写的 Rust DoH + ECH DNS/TLS 桥接，保留 OkHttp HTTP 与 Android WebView 的既有边界。配置持久化、原生 DNS/TLS、Socket 适配、VPN 策略、客户端接入与界面按小单元提交；纯 OkHttp DoH 仅作对照。
 
 生产接入保留 OkHttp 的 HTTP、连接池、Cookie 边界、流式请求/响应及取消机制，通过自定义 SocketFactory/SSLSocketFactory 将 DNS 与 TLS 交给独立编写的 Rust 模块。支持真实 ALPN 的 HTTP/2 与 HTTP/1.1；原生 Socket 的关闭必须可中断正在等待的读写，TLS 仍严格验证原域名及证书；`linux.do` 与子域、`ldstatic.com` 与子域必须真实接受 ECH，否则明确失败。

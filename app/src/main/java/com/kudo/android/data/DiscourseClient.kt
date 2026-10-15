@@ -24,6 +24,8 @@ import kotlin.coroutines.resumeWithException
 enum class FailureKind { SIGN_IN, VERIFICATION, FORBIDDEN, NOT_FOUND, RATE_LIMIT, NETWORK, SERVER }
 class ApiFailure(val kind: FailureKind, override val message: String, val retryAfter: Int? = null) : IOException(message)
 
+internal fun com.kudo.android.network.RequestCoolingDown.apiFailure() = ApiFailure(FailureKind.RATE_LIMIT, message.orEmpty(), seconds)
+
 internal const val CloudflareVerificationMessage = "检测到 Cloudflare 网页验证，请打开 Linux.do 手动完成验证后重试"
 
 internal fun isHtmlResponse(response: Response, body: String): Boolean {
@@ -98,6 +100,7 @@ class DiscourseClient(
                 token?.let { header("X-CSRF-Token", it); header("Origin", baseUrl.toString().trimEnd('/')) }
             }.build()
         val response = try { calls.newCall(request).await() } catch (e: IOException) {
+            if (e is com.kudo.android.network.RequestCoolingDown) throw e.apiFailure()
             throw ApiFailure(FailureKind.NETWORK, if (method == "GET") {
                 if (e.message.orEmpty().contains("DoH:")) com.kudo.android.network.dohErrorMessage(e)
                 else "网络连接失败，请检查网络后重试"
