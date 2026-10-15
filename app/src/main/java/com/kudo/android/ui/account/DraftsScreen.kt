@@ -11,14 +11,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.distinctUntilChanged
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DraftsScreen(user: Member, repository: CommunityRepository, settings: AppSettings,
     back: () -> Unit, login: () -> Unit, edit: (SavedDraft) -> Unit) {
@@ -44,18 +51,36 @@ internal fun DraftsScreen(user: Member, repository: CommunityRepository, setting
         finally { loading = false }
     }
     LaunchedEffect(user.id, refresh) { load(false) }
+    val pull = rememberPullToRefreshState()
+    val refreshing = loading && (cloud.isNotEmpty() || local.isNotEmpty())
+    LaunchedEffect(cloud.size, loading, hasMore, error) {
+        snapshotFlow { scroll.isScrollInProgress to (scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) }
+            .distinctUntilChanged().collect { (scrolling, last) ->
+                if (scrolling && hasMore && !loading && error == null && cloud.isNotEmpty() &&
+                    last >= scroll.layoutInfo.totalItemsCount - 3) scope.launch { load(true) }
+            }
+    }
     Box(Modifier.fillMaxSize()) {
         Column {
             AccountPageTopBar("我的草稿", back) { CommunityIconButton(Icons.Rounded.Refresh, "刷新草稿", { refresh++ }, enabled = !loading) }
-            LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll, enabled = !sheet.currentState && !sheet.targetState), contentPadding = PaddingValues(bottom = 24.dp)) {
-                if (local.isNotEmpty()) item { Text("本机草稿", Modifier.padding(16.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(local, key = { "local-${it.key}" }) { saved -> DraftRow(saved, { edit(saved) }, { deleting = saved; sheet.targetState = true }) }
-                item { Text("云端草稿", Modifier.padding(16.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(cloud, key = { "cloud-${it.key}" }) { saved -> DraftRow(saved, { edit(saved) }, { deleting = saved; sheet.targetState = true }) }
-                if (loading) item { LoadingRow() }
-                error?.let { item { ErrorState(it, { refresh++ }, login) } }
-                if (!loading && error == null && cloud.isEmpty() && local.isEmpty()) item { EmptyState("还没有草稿", "未发布的内容会保存在这里。", Icons.Rounded.EditNote) }
-                if (hasMore && !loading) item { TextButton({ scope.launch { load(true) } }, Modifier.fillMaxWidth()) { Text("加载更多草稿") } }
+            PullToRefreshBox(isRefreshing = refreshing, onRefresh = { scope.launch { load(false) } }, state = pull,
+                modifier = Modifier.fillMaxSize(), indicator = {
+                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
+                }) {
+                LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = !sheet.currentState && !sheet.targetState), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    if (local.isNotEmpty()) item { Text("本机草稿", Modifier.padding(16.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    items(local, key = { "local-${it.key}" }) { saved -> DraftRow(saved, { edit(saved) }, { deleting = saved; sheet.targetState = true }) }
+                    item { Text("云端草稿", Modifier.padding(16.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    items(cloud, key = { "cloud-${it.key}" }) { saved -> DraftRow(saved, { edit(saved) }, { deleting = saved; sheet.targetState = true }) }
+                    if (loading) item { LoadingRow() }
+                    error?.let { item { ErrorState(it, { refresh++ }, login) } }
+                    if (!loading && error == null && cloud.isEmpty() && local.isEmpty()) item { EmptyState("还没有草稿", "未发布的内容会保存在这里。", Icons.Rounded.EditNote) }
+                    if (hasMore && !loading && cloud.isNotEmpty()) item {
+                        Text("向上滑动加载更多草稿", Modifier.fillMaxWidth().padding(18.dp), fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
+                }
             }
         }
         CommunitySheet(sheet, "删除草稿", { if (!loading) sheet.targetState = false }, dismissEnabled = !loading, showActions = false) {

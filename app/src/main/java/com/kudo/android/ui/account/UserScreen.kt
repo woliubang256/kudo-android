@@ -17,6 +17,9 @@ import androidx.compose.foundation.selection.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +61,7 @@ fun UserScreen(username: String, repository: CommunityRepository, back: () -> Un
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: () -> Unit, login: () -> Unit,
     openLink: (String) -> Unit, search: () -> Unit, message: () -> Unit, openWeb: (String) -> Unit,
@@ -134,6 +138,12 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                     val scroll = rememberLazyListState()
                     val feed = state.feeds[tab] ?: ProfileFeedState()
                     val currentNext by rememberUpdatedState(feed.next)
+                    val pull = rememberPullToRefreshState()
+                    val refreshing = if (tab == ProfileTab.SUMMARY) state.summaryLoading && state.summary != null
+                    else feed.loading && feed.entries.isNotEmpty()
+                    val refreshPage by rememberUpdatedState {
+                        if (tab == ProfileTab.SUMMARY) refresh() else latestLoad(tab, false, false)
+                    }
                     LaunchedEffect(scroll, feed.next, feed.loading, feed.error, pager.settledPage) {
                         if (tab != ProfileTab.SUMMARY && index == pager.settledPage && feed.next != null && !feed.loading && feed.error == null) {
                             snapshotFlow { scroll.layoutInfo.visibleItemsInfo.any { it.key == "profile-more" } }.distinctUntilChanged().collect { visible ->
@@ -141,12 +151,17 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                             }
                         }
                     }
+                    PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshPage() }, state = pull,
+                        modifier = Modifier.fillMaxSize(), indicator = {
+                            PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                                containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
+                        }) {
                     LazyColumn(Modifier.fillMaxSize().testTag("profile-list-${tab.name}")
-                        .quickScrollTarget(scroll, enabled = pager.settledPage == index && !covered,
-                            expandHeader = {
-                                androidx.compose.animation.core.animate(collapse, 0f) { value, _ -> collapse = value }
-                            }), state = scroll,
-                        contentPadding = PaddingValues(top = 8.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            .quickScrollTarget(scroll, enabled = pager.settledPage == index && !covered,
+                                expandHeader = {
+                                    androidx.compose.animation.core.animate(collapse, 0f) { value, _ -> collapse = value }
+                                }), state = scroll,
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         if (tab == ProfileTab.SUMMARY) {
                             if (state.error != null) item { ErrorState(state.error, refresh, login, back) }
                             if (state.summaryLoading && state.summary == null) item { LoadingRow() }
@@ -162,10 +177,12 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                             if (feed.error != null) item { ErrorState(feed.error, { load(tab, feed.entries.isNotEmpty() && feed.next != null, true) }, login) }
                             if (feed.loaded && feed.entries.isEmpty() && feed.error == null) item { EmptyState("暂无${tab.label}", "这里会显示用户公开的${tab.label}记录。") }
                             if (feed.next != null && !feed.loading && feed.error == null) item("profile-more") {
-                                Text("继续加载", Modifier.fillMaxWidth().clickable { load(tab, true, false) }.padding(18.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("向上滑动加载更多", Modifier.fillMaxWidth().padding(18.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                             }
                             if (feed.loaded && feed.entries.isNotEmpty() && feed.next == null) item { Text("已显示全部", Modifier.padding(18.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline) }
                         }
+                    }
                     }
                 }
             }
