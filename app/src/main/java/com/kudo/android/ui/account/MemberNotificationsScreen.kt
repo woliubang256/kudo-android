@@ -12,7 +12,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,7 +28,9 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, open: (Int, Int?) -> Unit,
     website: (String) -> Unit, privateMessages: () -> Unit) {
@@ -52,9 +58,25 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                     scanned++; vm.loadNotices(vm.noticesLoaded)
                 }
             }
-            LazyColumn(Modifier.fillMaxSize().testTag("notice-group-${group.name}")
-                .quickScrollTarget(scroll, enabled = pager.settledPage == index), state = scroll,
-                contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            val pull = rememberPullToRefreshState()
+            val refreshing = vm.noticesLoading && vm.notices.isNotEmpty()
+            LaunchedEffect(pager.settledPage, vm.notices.size, vm.noticesLoading, vm.hasMoreNotices, vm.noticesError) {
+                if (pager.settledPage == index) {
+                    snapshotFlow { scroll.isScrollInProgress to (scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) }
+                        .distinctUntilChanged().collect { (scrolling, last) ->
+                            if (scrolling && vm.hasMoreNotices && !vm.noticesLoading && vm.noticesError == null &&
+                                notices.isNotEmpty() && last >= scroll.layoutInfo.totalItemsCount - 3) vm.loadNotices(true)
+                        }
+                }
+            }
+            PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.loadNotices() }, state = pull,
+                modifier = Modifier.fillMaxSize(), indicator = {
+                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
+                }) {
+                LazyColumn(Modifier.fillMaxSize().testTag("notice-group-${group.name}")
+                    .quickScrollTarget(scroll, enabled = pager.settledPage == index), state = scroll,
+                    contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 if (group == NoticeGroup.MESSAGES) item {
                     CompactAccountRow(Icons.Rounded.MailOutline, Color(0xFF6C83CA), "查看私信收件箱", privateMessages)
                 }
@@ -93,8 +115,10 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                     EmptyState(if (vm.hasMoreNotices) "当前批次暂无${group.title}" else "暂时没有${group.title}",
                         if (vm.hasMoreNotices) "可以继续加载更早的通知。" else "新的社区回应会出现在这里。", Icons.Rounded.NotificationsNone)
                 }
-                if (vm.hasMoreNotices && !vm.noticesLoading) item {
-                    TextButton({ scanned = 0; vm.loadNotices(true) }, Modifier.fillMaxWidth()) { Text("加载更早的通知") }
+                if (vm.hasMoreNotices && !vm.noticesLoading && notices.isNotEmpty()) item {
+                    Text("向上滑动加载更早的通知", Modifier.fillMaxWidth().padding(18.dp), fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
                 }
             }
         }

@@ -9,7 +9,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,6 +27,7 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.topic.RichContent
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jsoup.nodes.Entities
 
 internal class ChatViewModel(private val repository: CommunityRepository, val channelId: Int, val initialMessage: Int? = null) : ViewModel() {
@@ -101,6 +107,7 @@ internal class ChatViewModel(private val repository: CommunityRepository, val ch
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings, back: () -> Unit,
     login: () -> Unit, website: () -> Unit, link: (String) -> Unit, user: (String) -> Unit,
@@ -108,6 +115,14 @@ internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings
     val draftKey = "${member.id}_chat_${vm.channelId}"
     var raw by remember(member.id, vm.channelId) { mutableStateOf(settings.draft(draftKey).raw) }
     val scroll = rememberLazyListState()
+    val pull = rememberPullToRefreshState()
+    val refreshing = vm.loading && vm.messages.isNotEmpty()
+    LaunchedEffect(vm.messages.size, vm.loading, vm.morePast, vm.error) {
+        snapshotFlow { scroll.isScrollInProgress to (scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) }
+            .distinctUntilChanged().collect { (scrolling, last) ->
+                if (scrolling && vm.morePast && !vm.loading && vm.error == null && last >= scroll.layoutInfo.totalItemsCount - 3) vm.load(true)
+            }
+    }
     val pastViewport = rememberQuickScrollPastViewport(scroll)
     val awayFromTop = pastViewport && scroll.canScrollForward
     var located by remember(vm) { mutableStateOf(false) }
@@ -134,7 +149,12 @@ internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings
             CommunityIconButton(Icons.Rounded.Refresh, "刷新聊天", { vm.load() }, enabled = !vm.loading)
             CommunityIconButton(Icons.Rounded.Language, "在应用内网页查看聊天", website)
         }
-        LazyColumn(Modifier.weight(1f).quickScrollTarget(scrolled = awayFromTop) {
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.load() }, state = pull,
+            modifier = Modifier.weight(1f).fillMaxWidth(), indicator = {
+                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
+            }) {
+        LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scrolled = awayFromTop) {
             scroll.animateScrollToItem((scroll.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
         }, state = scroll, reverseLayout = true,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -152,8 +172,12 @@ internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings
             }
             vm.error?.let { item { ErrorState(it, { vm.load() }, login) } }
             if (vm.loading) item { LoadingRow() }
-            if (vm.morePast && !vm.loading) item { TextButton({ vm.load(true) }, Modifier.fillMaxWidth()) { Text("加载更早的消息") } }
+            if (vm.morePast && !vm.loading) item {
+                Text("向上滑动加载更早的消息", Modifier.fillMaxWidth().padding(12.dp), fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
             if (!vm.loading && vm.messages.isEmpty() && vm.error == null) item { EmptyState("还没有消息", "写下第一条消息。", Icons.Rounded.Forum) }
+        }
         }
         Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).navigationBarsPadding().padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
