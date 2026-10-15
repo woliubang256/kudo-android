@@ -96,6 +96,7 @@ fun AboutScreen(openLink: (String) -> Unit = {}, openExternal: (String) -> Unit 
                 ModalLink("Font Awesome 图标与许可") { openLink("https://fontawesome.com/license/free") }
                 ModalLink("APNG4Android 动图支持与许可") { openLink("https://github.com/penfeizhou/APNG4Android") }
                 ModalLink("AndroidSVG 图片支持与许可") { openLink("https://github.com/BigBadaboom/androidsvg/blob/Release_1.4/LICENSE") }
+                ModalLink("CommonMark Markdown 预览与许可") { openLink("https://github.com/commonmark/commonmark-java/blob/commonmark-parent-0.24.0/LICENSE.txt") }
                 ModalLink("libavif 解码器与许可") { openLink("https://github.com/AOMediaCodec/libavif/blob/v1.1.1/LICENSE") }
                 ModalLink("FluxDO 接口参考") { openLink("https://github.com/Lingyan000/fluxdo") }
                 ModalLink("Rust DoH / ECH 组件与完整许可") { openLink("https://github.com/woliubang256/kudo-android/blob/main/app/src/main/assets/licenses/native-doh-NOTICES.txt") }

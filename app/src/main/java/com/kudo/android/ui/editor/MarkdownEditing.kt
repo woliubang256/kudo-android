@@ -44,7 +44,7 @@ internal fun TextFieldValue.lineMarkdown(kind: MarkdownLines): TextFieldValue {
     val lines = text.substring(start, end).split('\n')
     val target = when (kind) {
         MarkdownLines.QUOTE -> Regex("^> ?")
-        MarkdownLines.BULLET -> Regex("^[-+*] ")
+        MarkdownLines.BULLET -> Regex("^[-+*] (?!\\[[ xX]] )")
         MarkdownLines.NUMBERED -> Regex("^\\d+\\. ")
         MarkdownLines.TASK -> Regex("^- \\[([ xX])] ")
         MarkdownLines.H1, MarkdownLines.H2, MarkdownLines.H3, MarkdownLines.H4 -> Regex("^${"#".repeat(kind.ordinal - MarkdownLines.H1.ordinal + 1)} ")

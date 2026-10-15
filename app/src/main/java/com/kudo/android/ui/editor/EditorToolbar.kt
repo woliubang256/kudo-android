@@ -5,6 +5,9 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.automirrored.rounded.FormatTextdirectionLToR
+import androidx.compose.material.icons.automirrored.rounded.FormatTextdirectionRToL
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,8 +40,8 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
         tool(Icons.Rounded.Link, "插入链接") { open("link") }
         tool(Icons.Rounded.FormatQuote, "插入引用") { apply { it.lineMarkdown(MarkdownLines.QUOTE) } }
         CommunityIconButton(Icons.Rounded.AddPhotoAlternate, "上传图片", pickImage, enabled = enabled && !uploading)
-        tool(Icons.Rounded.FormatListBulleted, "列表") { open("list") }
-        tool(if (rtl) Icons.Rounded.FormatTextdirectionLToR else Icons.Rounded.FormatTextdirectionRToL, "切换文字方向", direction)
+        tool(Icons.AutoMirrored.Rounded.FormatListBulleted, "列表") { open("list") }
+        tool(if (rtl) Icons.AutoMirrored.Rounded.FormatTextdirectionLToR else Icons.AutoMirrored.Rounded.FormatTextdirectionRToL, "切换文字方向", direction)
         tool(Icons.Rounded.EmojiEmotions, "表情") { open("emoji") }
         tool(Icons.Rounded.Code, "插入代码块") { apply { it.blockMarkdown("```\n", "\n```") } }
         tool(Icons.Rounded.Add, "更多格式") { open("more") }

@@ -73,8 +73,8 @@ class CommunityFormsUiTest {
         compose.onNodeWithText("开发调优").performClick()
         compose.onNodeWithTag("editor-title").performTextInput("一个清楚的标题")
         compose.onNodeWithTag("editor-body").performTextInput("正文内容")
-        compose.onNodeWithContentDescription("插入代码块").performClick()
-        compose.onNodeWithContentDescription("上传图片").performClick()
+        compose.onNodeWithContentDescription("插入代码块").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("上传图片").performScrollTo().performClick()
         compose.onNodeWithText("发布", substring = false).assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(1, draft.categoryId); assertTrue(draft.raw.contains("```")); assertEquals(1, images); assertEquals(1, published) }
         capture("coolapk-new-topic.png")

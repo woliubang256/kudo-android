@@ -35,6 +35,10 @@ class MarkdownEditingTest {
         assertEquals("# 中文", h1.text)
         assertEquals("中文", h1.lineMarkdown(MarkdownLines.PARAGRAPH).text)
     }
+    @Test fun switchingTaskListToBulletDoesNotLeaveACheckboxInPlainText() {
+        val source = TextFieldValue("- [x] 完成", TextRange(7))
+        assertEquals("- 完成", source.lineMarkdown(MarkdownLines.BULLET).text)
+    }
     @Test fun unicodeBlockAndLinkPreserveSurroundings() {
         val source = TextFieldValue("前😀后", TextRange(1, 3))
         assertEquals("前\n\n```\n😀\n```\n\n后", source.blockMarkdown("```\n", "\n```").text)

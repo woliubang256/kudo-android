@@ -63,6 +63,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
     val keyboard = LocalSoftwareKeyboardController.current
     var body by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(draft.raw, TextRange(draft.raw.length))) }
     var rtl by rememberSaveable { mutableStateOf(false) }
+    var preview by remember { mutableStateOf(false) }
     // Acknowledged text keeps IME composition and selection; external changes are rebased.
     body = body.syncMarkdown(draft.raw)
     fun changeBody(value: TextFieldValue) { body = value; if (value.text != draft.raw) edit(draft.copy(raw = value.text)) }
@@ -129,6 +130,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             Row(Modifier.fillMaxWidth().then(if (reply) Modifier else Modifier.navigationBarsPadding()).padding(start = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 EditorToolbar(body, ::changeBody, { imageSelection(body.selection); pickImage() }, enabled, uploading,
                     { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f))
+                CommunityIconButton(Icons.Rounded.Visibility, "预览正文", { keyboard?.hide(); preview = true }, enabled = enabled && draft.raw.isNotBlank())
                 if (reply) CommunityButton(publishText, publish, enabled = canPublish, compact = true)
             }
         }
@@ -151,4 +153,5 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             }
         }
     }
+    if (preview) EditorPreviewDialog(draft.raw) { preview = false }
 }

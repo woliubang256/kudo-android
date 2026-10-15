@@ -452,6 +452,7 @@ internal fun parseInlineArticle(html: String, linkColor: Color, onFootnote: ((St
                     "strong", "b" -> withStyle(SpanStyle(fontWeight = FontWeight.Bold), children)
                     "em", "i" -> withStyle(SpanStyle(fontStyle = FontStyle.Italic), children)
                     "del", "s" -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), children)
+                    "small" -> withStyle(SpanStyle(fontSize = .8.em), children)
                     "code" -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = linkColor.copy(alpha = 0.1f)), children)
                     "sup" -> withStyle(SpanStyle(baselineShift = androidx.compose.ui.text.style.BaselineShift.Superscript, fontSize = .75.em), children)
                     "sub" -> withStyle(SpanStyle(baselineShift = androidx.compose.ui.text.style.BaselineShift.Subscript, fontSize = .75.em), children)
