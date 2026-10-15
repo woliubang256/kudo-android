@@ -56,3 +56,9 @@ EditorToolbarUiTest新增预览首项与滚动容器归属回归，真机完整6
 工具不再强制追加到文末，格式命令可复用且可独立测试。文字方向仅影响本地输入方向，不新增服务器帖子语言元数据。表格等模板保留可编辑源码，图表和投票构建器不在当前范围。输入法composition、外部草稿更新及工具弹窗涉及焦点，必须回归回复面板的键盘和草稿保留。
 
 本地预览不等同站点完整插件引擎，复杂嵌套BBCode和插件组合仍有差异；联网图片和表情仍受实际网络影响。插入点通过连续正文编辑移动；一次整体替换多处正文时无法还原编辑意图，落在变更区的插入点移到替换内容末尾，始终保留最新原文。
+
+## Emoji group tabs
+
+The emoji picker keeps server-provided group order and content, while rendering the horizontal group tabs as icon-only controls like the website. Standard groups choose a representative emoji when that emoji exists in the group; otherwise they use the first item in the group. Custom groups also use their first item. The recent-use tab uses a star icon. Accessible labels, selected-state descriptions, and stable test tags remain on each tab container, while the selected group heading keeps its text label in the content area.
+
+The new `EditorToolbarUiTest.emojiGroupTabsUseIconsInsteadOfTextLabels` regression test verifies the recent and first server group tabs are visible, icon-labelled, and contain no visible group title. The full editor toolbar suite is expected to contain seven device tests after this addition.

@@ -121,6 +121,28 @@ class EditorToolbarUiTest {
         compose.onNodeWithText("最近使用").assertIsDisplayed()
         compose.onNodeWithContentDescription(":smile:").assertIsDisplayed()
     }
+
+    @Test fun emojiGroupTabsUseIconsInsteadOfTextLabels() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            EditorForm(Draft(raw = ""), emptyList(), {}, {}, {}, {}, editing = true, editingReply = true)
+        } }
+        tool("表情")
+        compose.onNodeWithTag("editor-emoji-tab-recent").assertIsDisplayed()
+        compose.onNode(
+            hasText("最近使用") and hasAnyAncestor(hasTestTag("editor-emoji-tab-recent")),
+            useUnmergedTree = true,
+        ).assertDoesNotExist()
+        compose.onNode(
+            hasAnyAncestor(hasTestTag("editor-emoji-tab-recent")) and hasContentDescription("star"),
+            useUnmergedTree = true,
+        ).assertExists()
+        compose.onNodeWithTag("editor-emoji-tab-0").assertIsDisplayed()
+        compose.onNode(
+            hasText("表情与情绪") and hasAnyAncestor(hasTestTag("editor-emoji-tab-0")),
+            useUnmergedTree = true,
+        ).assertDoesNotExist()
+    }
+
     @Test fun sendingLocksAllFormattingAndPreviewAndImageControls() {
         compose.setContent { KudoTheme(DisplaySettings()) {
             EditorForm(Draft(raw = "待发布内容"), emptyList(), {}, {}, {}, {}, sending = true, reply = true, replyRules = ReplyRules(1, 64000))

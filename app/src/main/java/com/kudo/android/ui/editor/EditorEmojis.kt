@@ -2,20 +2,24 @@ package com.kudo.android.ui.editor
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Mood
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.kudo.android.data.AppSettings
 import com.kudo.android.data.AvatarMetadataCache
@@ -43,6 +47,24 @@ private fun groupTitle(name: String): String = when (name) {
     "flags" -> "旗帜"
     "custom" -> "自定义"
     else -> name
+}
+
+private val groupIconNames = mapOf(
+    "smileys_&_emotion" to "smile",
+    "people_&_body" to "wave",
+    "animals_&_nature" to "monkey_face",
+    "food_&_drink" to "grapes",
+    "travel_&_places" to "earth_americas",
+    "activities" to "soccer",
+    "objects" to "bulb",
+    "symbols" to "heart",
+    "flags" to "flag_us",
+)
+
+private fun groupIcon(group: SiteEmojiGroup): SiteEmoji? {
+    val preferred = groupIconNames[group.name]
+    return preferred?.let { name -> group.items.firstOrNull { it.name == name } }
+        ?: group.items.firstOrNull()
 }
 
 @Composable
@@ -79,9 +101,19 @@ internal fun EditorEmojis(insert: (String) -> Unit) {
 
     CommunityTextField(search, { search = it }, Modifier.fillMaxWidth().testTag("editor-emoji-search"), placeholder = "搜索表情", singleLine = true)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("editor-emoji-groups"), verticalAlignment = Alignment.CenterVertically) {
-        EmojiGroupTab("最近", selectedGroup == null && search.isBlank()) { selectedGroup = null; search = "" }
-        available.forEach { group ->
-            EmojiGroupTab(groupTitle(group.name), selectedGroup == group.name && search.isBlank()) { selectedGroup = group.name; search = "" }
+        EmojiGroupTab(
+            label = "最近使用",
+            testTag = "editor-emoji-tab-recent",
+            icon = SiteEmoji("star", AvatarMetadataCache.standardEmojiUrl("star").orEmpty(), "recent"),
+            selected = selectedGroup == null && search.isBlank(),
+        ) { selectedGroup = null; search = "" }
+        available.forEachIndexed { index, group ->
+            EmojiGroupTab(
+                label = groupTitle(group.name),
+                testTag = "editor-emoji-tab-$index",
+                icon = groupIcon(group),
+                selected = selectedGroup == group.name && search.isBlank(),
+            ) { selectedGroup = group.name; search = "" }
         }
     }
     Text(heading, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.titleSmall)
@@ -102,8 +134,32 @@ internal fun EditorEmojis(insert: (String) -> Unit) {
 }
 
 @Composable
-private fun EmojiGroupTab(text: String, selected: Boolean, onClick: () -> Unit) {
-    Text(text, Modifier.clickable(role = Role.Tab, onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.labelMedium)
+private fun EmojiGroupTab(
+    label: String,
+    testTag: String,
+    icon: SiteEmoji?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val background = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+    Box(
+        Modifier
+            .testTag(testTag)
+            .clip(MaterialTheme.shapes.small)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .semantics {
+                contentDescription = label
+                stateDescription = if (selected) "已选择" else "未选择"
+            }
+            .background(background)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .size(32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (icon != null) {
+            SiteEmojiView(icon.name, Modifier.size(24.dp), icon.url)
+        } else {
+            Icon(Icons.Rounded.Mood, contentDescription = label, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
