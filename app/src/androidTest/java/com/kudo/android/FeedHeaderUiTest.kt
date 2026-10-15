@@ -71,6 +71,48 @@ class FeedHeaderUiTest {
             compose.onNodeWithTag("home-header").fetchSemanticsNode().boundsInRoot.bottom)
     }
 
+    @Test fun searchPillKeepsIconSloganDividerAndActionOrderedAndClickable() {
+        var narrow by mutableStateOf(false)
+        var searches = 0
+        compose.setContent {
+            KudoTheme(DisplaySettings(theme = if (narrow) ThemeMode.DARK else ThemeMode.LIGHT, fontScale = if (narrow) 1.3f else 1f)) {
+                Box(Modifier.fillMaxSize()) {
+                    FeedScreen(FeedState(loading = false), null, {}, {}, {}, {}, {}, { searches++ }, {}, {},
+                        Modifier.width(if (narrow) 280.dp else 360.dp))
+                }
+            }
+        }
+        var expectedSearches = 0
+        for (compact in listOf(false, true)) {
+            compose.runOnIdle { narrow = compact }
+            val pill = compose.onNodeWithTag("home-search").assertIsDisplayed().assertHasClickAction()
+            val icon = compose.onNodeWithTag("home-search-icon", useUnmergedTree = true).assertIsDisplayed()
+            val slogan = compose.onNodeWithText("真诚 · 友善 · 团结 · 专业", useUnmergedTree = true).assertIsDisplayed()
+            val divider = compose.onNodeWithTag("home-search-divider", useUnmergedTree = true).assertIsDisplayed()
+            val action = compose.onNodeWithText("搜索", useUnmergedTree = true).assertIsDisplayed()
+            val bounds = listOf(icon, slogan, divider, action).map { it.fetchSemanticsNode().boundsInRoot }
+            bounds.zipWithNext().forEach { (left, right) ->
+                assertTrue("搜索图标、标语、竖线和搜索文字应从左到右且不重叠", left.right <= right.left)
+            }
+            val pillBounds = pill.fetchSemanticsNode().boundsInRoot
+            assertTrue("搜索栏内容应保持在胶囊内", bounds.all { it.left >= pillBounds.left && it.right <= pillBounds.right })
+            val layouts = mutableListOf<TextLayoutResult>()
+            action.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            val layout = layouts.single()
+            assertEquals("搜索文字应保持一行", 1, layout.lineCount)
+            assertFalse("搜索文字不能省略", layout.isLineEllipsized(0))
+            assertTrue("窄屏大字号下搜索文字应完整显示", "搜索".indices.map(layout::getBoundingBox).all {
+                it.left >= -1f && it.right <= layout.size.width + 1f
+            })
+            for (target in listOf(icon, slogan, action)) {
+                target.performTouchInput { click() }
+                expectedSearches++
+                compose.runOnIdle { assertEquals("点击搜索栏各区域应只触发一次搜索", expectedSearches, searches) }
+            }
+            capture(if (compact) "home-search-pill-dark-narrow.png" else "home-search-pill-light.png")
+        }
+    }
+
     @OptIn(coil3.annotation.DelicateCoilApi::class)
     @Test fun pinnedHeaderSamplesLiveContentInLightAndDarkThemes() {
         var theme by mutableStateOf(ThemeMode.LIGHT)
