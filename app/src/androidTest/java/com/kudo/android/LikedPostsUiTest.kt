@@ -84,7 +84,7 @@ class LikedPostsUiTest {
         capture("liked-posts-first-page.png", "liked-posts")
         compose.onNodeWithText("点赞原楼层").performClick()
         compose.runOnIdle { assertEquals("https://linux.do/t/topic/99/8", opened) }
-        compose.onNodeWithText("继续加载").performScrollTo().performClick()
+        compose.onNodeWithTag("liked-posts-list").performScrollToIndex(29)
         compose.waitUntil(5000) { vm.state.value.error != null }
         compose.onNodeWithTag("liked-posts-list").performScrollToNode(hasText("重新加载"))
         compose.onNodeWithText("重新加载").performClick()
@@ -132,10 +132,8 @@ class LikedPostsUiTest {
         compose.onNodeWithText("我的点赞").assertIsDisplayed()
         compose.onNodeWithContentDescription("刷新").assertIsDisplayed()
         compose.onNodeWithTag("profile-entry-long").assertIsDisplayed()
-        compose.onNodeWithTag("liked-posts-list").performScrollToNode(hasText("继续加载"))
         capture("liked-posts-dark-narrow.png", "liked-posts")
-        compose.onNodeWithText("继续加载").performClick()
-        compose.runOnIdle { assertEquals(1, more) }
+        compose.runOnIdle { assertEquals(0, more) }
     }
 
     @Test fun topicsDraftActionOpensExistingDraftsAndReturnsWithReadingPosition() {

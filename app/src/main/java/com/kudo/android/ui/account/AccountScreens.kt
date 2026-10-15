@@ -11,6 +11,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +38,7 @@ import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -171,23 +175,42 @@ private fun GuestNotificationsScreen(login: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookmarksScreen(vm: AccountViewModel, back: () -> Unit, login: () -> Unit, open: (Int, Int?) -> Unit) {
     val scroll = rememberLazyListState()
+    val pull = rememberPullToRefreshState()
+    val refreshing = vm.savedLoading && vm.saved.isNotEmpty()
+    LaunchedEffect(vm.saved.size, vm.savedLoading, vm.hasMoreSaved, vm.savedError) {
+        snapshotFlow { scroll.isScrollInProgress to (scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) }
+            .distinctUntilChanged().collect { (scrolling, last) ->
+                if (scrolling && vm.hasMoreSaved && !vm.savedLoading && vm.savedError == null &&
+                    vm.saved.isNotEmpty() && last >= scroll.layoutInfo.totalItemsCount - 3) vm.loadSaved(true)
+            }
+    }
     Column {
         AccountPageTopBar("我的收藏", back) { CommunityIconButton(Icons.Rounded.Refresh, "刷新收藏", { vm.loadSaved() }) }
-        LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            if (vm.user == null) item { EmptyState("把好内容留在这里", "登录后查看你的社区收藏。", Icons.Rounded.BookmarkBorder, "登录", login) }
-            if (vm.savedLoading) item { LoadingRow() }
-            items(vm.saved, key = { it.id }) { topic ->
-                Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { open(topic.topicId, topic.postNumber) }.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(topic.title, style = MaterialTheme.typography.titleMedium)
-                    if (topic.excerpt.isNotBlank()) Text(topic.excerpt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.loadSaved() }, state = pull,
+            modifier = Modifier.fillMaxSize(), indicator = {
+                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
+            }) {
+            LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                if (vm.user == null) item { EmptyState("把好内容留在这里", "登录后查看你的社区收藏。", Icons.Rounded.BookmarkBorder, "登录", login) }
+                if (vm.savedLoading) item { LoadingRow() }
+                items(vm.saved, key = { it.id }) { topic ->
+                    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { open(topic.topicId, topic.postNumber) }.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(topic.title, style = MaterialTheme.typography.titleMedium)
+                        if (topic.excerpt.isNotBlank()) Text(topic.excerpt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
+                vm.savedError?.let { item { ErrorState(it, { vm.loadSaved() }, login) } }
+                if (vm.user != null && !vm.savedLoading && vm.saved.isEmpty() && vm.savedError == null) item { EmptyState("还没有收藏", "在帖子下方点星标，保存想再看的内容。", Icons.Rounded.BookmarkBorder) }
+                if (!vm.savedLoading && vm.savedError == null && vm.saved.isNotEmpty() && !vm.hasMoreSaved) item {
+                    Text("已显示全部", Modifier.padding(18.dp), color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                }
+                item { Spacer(Modifier.navigationBarsPadding().height(16.dp)) }
             }
-            vm.savedError?.let { item { ErrorState(it, { vm.loadSaved() }, login) } }
-            if (vm.user != null && !vm.savedLoading && vm.saved.isEmpty() && vm.savedError == null) item { EmptyState("还没有收藏", "在帖子下方点星标，保存想再看的内容。", Icons.Rounded.BookmarkBorder) }
-            if (vm.hasMoreSaved && !vm.savedLoading) item { TextButton(onClick = { vm.loadSaved(true) }, modifier = Modifier.fillMaxWidth()) { Text("加载更多收藏") } }
         }
     }
 }
