@@ -57,7 +57,7 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
     val toolbarPadding = with(LocalDensity.current) { toolbarHeight.toDp() }
     Box(Modifier.fillMaxSize().semantics { paneTitle = "消息" }.testTag("member-notifications")) {
         HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
-            .padding(top = toolbarPadding).testTag("notifications-content-backdrop")) { index ->
+            .testTag("notifications-content-backdrop")) { index ->
             val group = NoticeGroup.entries[index]
             val scroll = rememberLazyListState()
             val notices = vm.notices.filter(group::includes)
@@ -82,12 +82,12 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
             }
             PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.loadNotices() }, state = pull,
                 modifier = Modifier.fillMaxSize(), indicator = {
-                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = toolbarPadding),
                         containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
                 }) {
                 LazyColumn(Modifier.fillMaxSize().testTag("notice-group-${group.name}")
                     .quickScrollTarget(scroll, enabled = pager.settledPage == index), state = scroll,
-                    contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    contentPadding = PaddingValues(top = toolbarPadding + 6.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 if (group == NoticeGroup.MESSAGES) item {
                     CompactAccountRow(Icons.Rounded.MailOutline, Color(0xFF6C83CA), "查看私信收件箱", privateMessages)
                 }

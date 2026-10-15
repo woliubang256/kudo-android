@@ -96,21 +96,16 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
     var toolbarHeight by remember { mutableIntStateOf(0) }
     val toolbarPadding = with(LocalDensity.current) { toolbarHeight.toDp() }
     Box(Modifier.fillMaxSize().testTag("community-directory")) {
-        Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+        Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
             .testTag("directory-content-backdrop")) {
-        Spacer(Modifier.height(toolbarPadding))
-        if (expanded) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = ::collapse) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回侧栏目录") }
-            Text(if (tab == "categories") "所有类别" else "所有标签", style = MaterialTheme.typography.titleMedium)
-        }
         val refreshing = (state.loading && directory != null) || (tab == "tags" && allTags && state.tagsLoading && state.tagGroups != null)
         val pull = rememberPullToRefreshState()
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = {
             refresh()
             if (tab == "tags" && allTags) refreshTags()
-        }, state = pull, modifier = Modifier.weight(1f).fillMaxWidth(), indicator = {
+        }, state = pull, modifier = Modifier.fillMaxSize(), indicator = {
             PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing,
-                modifier = Modifier.align(Alignment.TopCenter), containerColor = MaterialTheme.colorScheme.surface) {
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = toolbarPadding), containerColor = MaterialTheme.colorScheme.surface) {
                 CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing)
             }
         }) {
@@ -120,7 +115,7 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
                     scroll = if (allCategories) allCategoriesScroll else sidebarCategoriesScroll,
                     footer = if (allCategories || directory == null) null else ({
                         DirectoryMoreRow("所有类别") { allCategories = true }
-                    }), select = openCategory)
+                    }), contentTopPadding = toolbarPadding, select = openCategory)
             } else {
                 val groups = if (allTags) state.tagGroups.orEmpty() else listOf(DirectoryTagGroup("", directory?.tags.orEmpty()))
                 val scroll = if (allTags) allTagsScroll else sidebarTagsScroll
@@ -128,7 +123,7 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
                     val minimum = minOf(100.dp * LocalDensity.current.fontScale.coerceAtLeast(1f), (maxWidth - 34.dp) / 2)
                     LazyVerticalGrid(columns = GridCells.Adaptive(minimum), state = scroll,
                         modifier = Modifier.fillMaxSize().quickScrollTarget(scroll).testTag("directory-tag-grid"),
-                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 112.dp),
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = toolbarPadding + 14.dp, bottom = 112.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         if ((state.loading && directory == null) || (allTags && state.tagsLoading && state.tagGroups == null)) {
                             item(span = { GridItemSpan(maxLineSpan) }) { LoadingRow() }
@@ -157,7 +152,7 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
             }
         }
         }
-        Box(Modifier.fillMaxWidth().onSizeChanged { toolbarHeight = it.height }
+        Column(Modifier.fillMaxWidth().onSizeChanged { toolbarHeight = it.height }
             .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
                 drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
             }, effects = {
@@ -166,6 +161,10 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
             }).then(if (inHome) Modifier else Modifier.statusBarsPadding())
             .testTag("directory-toolbar-material")) {
             FeedTabBar(listOf("categories" to "类别", "tags" to "标签"), tab, containerColor = Color.Transparent) { tab = it }
+            if (expanded) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = ::collapse) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回侧栏目录") }
+                Text(if (tab == "categories") "所有类别" else "所有标签", style = MaterialTheme.typography.titleMedium)
+            }
         }
     }
 }
