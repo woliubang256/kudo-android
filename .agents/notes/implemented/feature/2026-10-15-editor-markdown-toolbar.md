@@ -20,6 +20,8 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 
 表情面板复用账号级 AvatarMetadataCache 的站点目录与单次合并请求，保留 `/emojis.json` 的分组、分组内顺序和服务端自定义分组；网页标准分组显示中文标题，自定义分组保留服务器名称。搜索跨分组过滤，最近使用按名称写入本地偏好并限制为32项，点击后立即出现在“最近使用”，目录失败时使用内置常用表情回退。标准与自定义表情都以站点短代码插入，避免把不同平台的 Unicode 组合写进帖子。图片选择前将 UTF-16 插入位置交给草稿所属 ViewModel；每次正文编辑按共同前后缀移动该位置，上传完成时向最新草稿插入，不覆盖上传期间输入。插入点不绑定短生命周期的编辑器 Composable，关闭重开面板仍保留上传定位；图片插在选区末尾而不删除选中文字。
 
+预览入口作为横向滚动工具栏的第一个图标，与粗体等格式按钮共享滚动容器；发布按钮仍保持回复面板右侧的独立固定位置。预览按钮不再占用工具栏外的固定槽位，窄屏下可随工具栏滚动回到首项。
+
 ## Existing note audit
 
 检索编辑器、工具栏和Markdown。[账号与编辑器](../../implemented/feature/2026-10-07-account-and-composer.md)、[酷安表单](../../implemented/feature/2026-10-10-coolapk-forms.md)、[已发布内容编辑](../../implemented/feature/2026-10-15-post-editing.md)部分重叠，保留草稿隔离、发布与保存契约、写操作不重放、编辑权限及回复面板承载，只扩展共享正文交互。[正文列表](../../implemented/feature/2026-10-13-markdown-lists.md)、[颜色](../../implemented/feature/2026-10-13-markdown-colors.md)、[脚注](../../implemented/feature/2026-10-13-markdown-footnotes.md)等属于接收cooked内容的解析决策，本轮预览生成内容后复用，不改变服务端正文契约。导航、回复目标、字数规则及其他搜索命中不受影响。无完全吸收或过时提案。
@@ -46,6 +48,8 @@ MarkdownPreviewTest的5个用例验证常用格式、表格任务、details/spoi
 AvatarModelTest补充分组与自定义组字段解析；EditorToolbarUiTest增加网页式分组、跨组搜索及最近使用回显，5项编辑器真机用例全部通过。分组顺序测试不依赖 `org.json.JSONObject.keys()` 的实现顺序，但每个组及组内项目仍按解析结果保留。
 
 真机1618704c：CommunityFormsUiTest、PostEditingUiTest和EditorLifecycleUiTest共14项通过；EditorToolbarUiTest与MarkdownContentUiTest共9项通过，覆盖选择格式、独立预览保留选区且不发布、回复内的链接/列表弹层、固定发布、表情与模板、深色大字及发送锁。首轮截图API在嵌套弹窗退出时失败，改用UiAutomation并等待菜单消失采集证据，功能断言没有失败。构建与Lint通过；覆盖前核对版本0.2.5/2006及相同开发签名，仅adb install -r/-r -t，保留开发版数据。证据为artifacts/editor-device-tests.log、editor-device-retest.log、editor-preview-light.png、editor-preview-dark-large.png和editor-reply-toolbar.png。
+
+EditorToolbarUiTest新增预览首项与滚动容器归属回归，真机完整6项通过；预览弹窗、格式面板和发送锁定继续沿用原有验证。
 
 ## Consequences
 

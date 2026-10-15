@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.editor.*
@@ -35,6 +36,21 @@ class EditorToolbarUiTest {
         compose.onNodeWithTag(tag).assertIsDisplayed()
         file.outputStream().use { InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot().compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
+    @Test fun previewIsFirstScrollableToolbarAction() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            Box(Modifier.width(320.dp).height(640.dp)) {
+                EditorForm(Draft(title = "标题", raw = "预览内容", categoryId = 1), emptyList(), {}, {}, {}, {})
+            }
+        } }
+        val preview = compose.onNode(
+            hasContentDescription("预览正文") and hasAnyAncestor(hasTestTag("editor-toolbar")),
+            useUnmergedTree = true,
+        )
+        preview.assertExists()
+        val bold = compose.onNodeWithContentDescription("粗体", useUnmergedTree = true)
+        assertTrue("预览应位于第一个格式按钮之前", preview.fetchSemanticsNode().boundsInRoot.left < bold.fetchSemanticsNode().boundsInRoot.left)
+    }
+
     @Test fun newTopicPreviewIsSeparateAndPreservesSelectionWithoutPublishing() {
         var draft by mutableStateOf(Draft(title = "预览标题", raw = "前中文后", categoryId = 1))
         var publishes = 0
@@ -42,7 +58,7 @@ class EditorToolbarUiTest {
         compose.onNodeWithTag("editor-body").performTextInputSelection(TextRange(1, 3))
         tool("粗体")
         compose.runOnIdle { assertEquals("前**中文**后", draft.raw) }
-        compose.onNodeWithContentDescription("预览正文").performClick()
+        tool("预览正文")
         compose.onNodeWithTag("markdown-preview").assertIsDisplayed()
         compose.waitUntil(5000) { compose.onAllNodesWithText("前中文后").fetchSemanticsNodes().isNotEmpty() }
         capture("markdown-preview", "editor-preview-light.png")
@@ -84,7 +100,7 @@ class EditorToolbarUiTest {
         tool("更多格式")
         compose.onNodeWithText("折叠内容").performScrollTo().performClick()
         compose.waitUntil(5000) { draft.raw.contains("[details=") }
-        compose.onNodeWithContentDescription("预览正文").performClick()
+        tool("预览正文")
         compose.onNodeWithTag("markdown-preview").assertIsDisplayed()
         compose.waitUntil(5000) { compose.onAllNodesWithText("摘要").fetchSemanticsNodes().isNotEmpty() }
         capture("markdown-preview", "editor-preview-dark-large.png")

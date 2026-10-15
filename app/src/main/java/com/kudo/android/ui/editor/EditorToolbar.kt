@@ -25,7 +25,7 @@ import com.kudo.android.ui.components.*
 @Composable
 internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Unit, pickImage: () -> Unit,
     enabled: Boolean, uploading: Boolean, focus: () -> Unit, rtl: Boolean, direction: () -> Unit,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier, preview: () -> Unit = {}) {
     var menu by remember { mutableStateOf<String?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
     fun open(name: String) { keyboard?.hide(); menu = name }
@@ -34,6 +34,7 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
         CommunityIconButton(icon, label, action, enabled = enabled)
     }
     Row(modifier.horizontalScroll(rememberScrollState()).testTag("editor-toolbar"), verticalAlignment = Alignment.CenterVertically) {
+        CommunityIconButton(Icons.Rounded.Visibility, "预览正文", preview, enabled = enabled && value.text.isNotBlank())
         tool(Icons.Rounded.FormatBold, "粗体") { apply { it.wrapMarkdown("**") } }
         tool(Icons.Rounded.FormatItalic, "斜体") { apply { it.wrapMarkdown("*") } }
         tool(Icons.Rounded.TextFields, "文本大小") { open("size") }

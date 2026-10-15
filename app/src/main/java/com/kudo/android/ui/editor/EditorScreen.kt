@@ -129,8 +129,8 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp).then(if (reply) Modifier.testTag("reply-length") else Modifier), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth().then(if (reply) Modifier else Modifier.navigationBarsPadding()).padding(start = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 EditorToolbar(body, ::changeBody, { imageSelection(body.selection); pickImage() }, enabled, uploading,
-                    { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f))
-                CommunityIconButton(Icons.Rounded.Visibility, "预览正文", { keyboard?.hide(); preview = true }, enabled = enabled && draft.raw.isNotBlank())
+                    { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f),
+                    preview = { keyboard?.hide(); preview = true })
                 if (reply) CommunityButton(publishText, publish, enabled = canPublish, compact = true)
             }
         }
