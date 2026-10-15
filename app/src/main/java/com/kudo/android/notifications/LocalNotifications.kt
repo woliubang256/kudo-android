@@ -51,7 +51,7 @@ class LocalNotifications(context: Context) : NotificationDelivery {
             .putExtra(TOKEN, token)
         val pending = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.mipmap.ic_notification_color)
             .setContentTitle(alert.title.take(200)).setContentText(alert.body.take(500))
             .setStyle(Notification.BigTextStyle().bigText(alert.body.take(2000)))
             .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true)

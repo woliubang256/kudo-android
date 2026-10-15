@@ -1,11 +1,17 @@
 package com.kudo.android
 
+import android.accessibilityservice.AccessibilityService
 import android.app.NotificationManager
+import android.app.Notification
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.drawable.AdaptiveIconDrawable
+import android.os.ParcelFileDescriptor
+import android.os.SystemClock
+import android.service.notification.StatusBarNotification
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.NotificationAlert
 import com.kudo.android.data.NotificationTarget
@@ -14,6 +20,7 @@ import com.kudo.android.media.DownloadStatus
 import com.kudo.android.media.DownloadTask
 import com.kudo.android.notifications.LocalNotifications
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
@@ -31,11 +38,18 @@ class NotificationIconTest {
     private val task = DownloadTask("notification-icon-fixture", "https://example.invalid/fixture.zip",
         "通知图标验证 · 下载", DownloadStatus.DOWNLOADING, bytes = 50, totalBytes = 100)
 
+    @Before fun prepare() {
+        val prefs = fixture.getSharedPreferences("runtime_notifications", 0)
+        prefs.all.keys.forEach { manager.cancel("kudo.message.$it", 0) }
+        prefs.edit().clear().commit()
+    }
+
     @After fun cleanup() {
         LocalNotifications(fixture).account(null)
+        fixture.getSharedPreferences("runtime_notifications", 0).edit().clear().commit()
         manager.cancel(task.id.hashCode())
         manager.deleteNotificationChannel(channel)
-        instrumentation.uiAutomation.executeShellCommand("cmd statusbar collapse").close()
+        shell("cmd statusbar collapse")
     }
 
     @Test fun smallIconKeepsRecognizableKAndSeparateDotAtStatusBarSizes() {
@@ -74,28 +88,55 @@ class NotificationIconTest {
     }
 
     @Test fun communityAndAllDownloadNotificationsUseTheBrandSmallIcon() {
+        val expected = R.mipmap.ic_notification_color
         val service = LocalNotifications(fixture)
         assertTrue("真机验收需要已开启通知权限", service.enabled())
         service.account(424242)
         service.show(NotificationAlert("icon-fixture", "通知图标验证 · 消息", "仅本机测试，不访问社区",
             NotificationTarget(424242)))
         val token = fixture.getSharedPreferences("runtime_notifications", 0).all.keys.single()
-        val message = manager.activeNotifications.single { it.tag == "kudo.message.$token" }.notification
-        assertEquals(R.drawable.ic_notification, message.smallIcon.resId)
+        val message = awaitNotification("消息通知") { it.tag == "kudo.message.$token" }
+        assertEquals(expected, message.smallIcon.resId)
+        captureStatus("notification-icon-message-status.png")
+        capture("notification-icon-message.png")
 
         val notifier = DownloadNotifier(context, channel)
         val progress = notifier.progressNotification(task, 1)
-        assertEquals(R.drawable.ic_notification, progress.smallIcon.resId)
+        assertEquals(expected, progress.smallIcon.resId)
         manager.notify(task.id.hashCode(), progress)
+        awaitNotification("下载进度通知") { it.id == task.id.hashCode() }
         capture("notification-icon-progress.png")
         assertTrue(notifier.completed(task.copy(status = DownloadStatus.COMPLETED)))
-        assertEquals(R.drawable.ic_notification,
-            manager.activeNotifications.single { it.id == task.id.hashCode() }.notification.smallIcon.resId)
+        assertEquals(expected,
+            awaitNotification("下载完成通知") { it.id == task.id.hashCode() &&
+                it.notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() == "下载完成" }.smallIcon.resId)
         capture("notification-icon-completed.png")
         assertTrue(notifier.failed(task.copy(status = DownloadStatus.FAILED, error = "本机测试失败提示")))
-        assertEquals(R.drawable.ic_notification,
-            manager.activeNotifications.single { it.id == task.id.hashCode() }.notification.smallIcon.resId)
+        assertEquals(expected,
+            awaitNotification("下载失败通知") { it.id == task.id.hashCode() &&
+                it.notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() == "本机测试失败提示" }.smallIcon.resId)
         capture("notification-icon-failed.png")
+    }
+
+    @Test fun communitySmallIconUsesAdaptiveResourceWithBrandColors() {
+        val service = LocalNotifications(fixture)
+        assertTrue(service.enabled())
+        service.account(424242)
+        service.show(NotificationAlert("color-fixture", "彩色图标验证", "仅本机测试",
+            NotificationTarget(424242)))
+        val token = fixture.getSharedPreferences("runtime_notifications", 0).all.keys.single()
+        val message = awaitNotification("彩色消息通知") { it.tag == "kudo.message.$token" }
+        val bitmap = Bitmap.createBitmap(72, 72, Bitmap.Config.ARGB_8888)
+        val drawable = message.smallIcon.loadDrawable(context)!!
+        assertTrue("所有厂商的消息通知都应使用自适应图标资源", drawable is AdaptiveIconDrawable)
+        drawable.apply { setBounds(0, 0, 72, 72); draw(Canvas(bitmap)) }
+        var yellow = 0
+        for (y in 0 until 72) for (x in 0 until 72) {
+            val pixel = bitmap.getPixel(x, y)
+            if (Color.alpha(pixel) > 200 && Color.red(pixel) > 200 && Color.green(pixel) > 100 && Color.blue(pixel) < 80) yellow++
+        }
+        bitmap.recycle()
+        assertTrue("通知图标资源应包含品牌黄色，实际黄色像素=$yellow", yellow > 500)
     }
 
     private fun render(size: Int): Bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also {
@@ -103,6 +144,15 @@ class NotificationIconTest {
             setBounds(0, 0, size, size)
             draw(Canvas(it))
         }
+    }
+
+    private fun awaitNotification(description: String, predicate: (StatusBarNotification) -> Boolean): Notification {
+        val deadline = SystemClock.uptimeMillis() + 5000
+        do {
+            manager.activeNotifications.firstOrNull(predicate)?.let { return it.notification }
+            Thread.sleep(50)
+        } while (SystemClock.uptimeMillis() < deadline)
+        throw AssertionError("5秒内未等到$description")
     }
 
     private fun components(bitmap: Bitmap): Int {
@@ -132,8 +182,23 @@ class NotificationIconTest {
 
     private fun capture(name: String) {
         if (InstrumentationRegistry.getArguments().getString("notificationIconScreenshots") != "true") return
-        instrumentation.uiAutomation.executeShellCommand("cmd statusbar expand-notifications").close()
+        assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS))
+        Thread.sleep(1500)
+        saveScreenshot(name)
+    }
+
+    private fun captureStatus(name: String) {
+        if (InstrumentationRegistry.getArguments().getString("notificationIconScreenshots") != "true") return
+        shell("cmd statusbar collapse")
         Thread.sleep(1000)
+        saveScreenshot(name)
+    }
+
+    private fun shell(command: String) {
+        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use { it.readBytes() }
+    }
+
+    private fun saveScreenshot(name: String) {
         val bitmap = instrumentation.uiAutomation.takeScreenshot()
         File(context.getExternalFilesDir(null), name).outputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)

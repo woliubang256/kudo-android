@@ -380,18 +380,18 @@ internal class DownloadNotifier(private val context: Context, private val channe
     fun progressNotification(task: DownloadTask?, count: Int): Notification {
         val percent = task?.downloadPercent()
         return Notification.Builder(context, channel)
-            .setSmallIcon(R.drawable.ic_notification).setContentTitle(task?.fileName ?: "文件下载")
+            .setSmallIcon(R.mipmap.ic_notification_color).setContentTitle(task?.fileName ?: "文件下载")
             .setContentText(if (task == null) "准备下载" else "下载中${percent?.let { " $it%" }.orEmpty()} · $count 项任务")
             .setOngoing(true).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_PROGRESS)
             .setProgress(100, percent ?: 0, percent == null)
             .setContentIntent(pendingIntent()).build()
     }
 
-    fun completed(task: DownloadTask): Boolean = post(task, Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_notification)
+    fun completed(task: DownloadTask): Boolean = post(task, Notification.Builder(context, channel).setSmallIcon(R.mipmap.ic_notification_color)
             .setContentTitle(task.fileName).setContentText("下载完成").setAutoCancel(true).setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent()).build())
 
-    fun failed(task: DownloadTask): Boolean = post(task, Notification.Builder(context, channel).setSmallIcon(R.drawable.ic_notification)
+    fun failed(task: DownloadTask): Boolean = post(task, Notification.Builder(context, channel).setSmallIcon(R.mipmap.ic_notification_color)
             .setContentTitle(task.fileName).setContentText(task.error ?: "下载失败").setAutoCancel(true).setContentIntent(pendingIntent()).build())
 
     private fun post(task: DownloadTask, value: Notification): Boolean {

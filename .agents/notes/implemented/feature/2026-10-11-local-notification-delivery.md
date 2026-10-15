@@ -16,6 +16,8 @@ LocalNotifications通过NotificationDelivery端口显示社区消息渠道的本
 
 ## Related decisions
 
+[统一自适应通知图标](../../implemented/bug-fix/2026-10-15-unified-adaptive-notification-icons.md)部分取代本篇最初的统一单色图标选择：所有厂商均使用彩色自适应资源，最终着色由系统决定；本篇权限、身份存储、投递及已读契约继续保留。
+
 检索运行通知、本地通知与通知频道。[通知协议](../architecture/2026-10-10-notification-stream.md)部分重叠，保持无Cookie跨域传输和游标；[运行通知方案](../../implemented/feature/2026-10-10-runtime-local-notifications.md)部分重叠，本篇负责平台投递和身份存储。没有完全吸收或过时提案。
 
 ## Alternatives considered
