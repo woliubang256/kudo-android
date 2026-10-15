@@ -8,6 +8,7 @@ import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.IOException
+import java.net.InetAddress
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -144,12 +145,14 @@ class RequestSchedulerTest {
 
     @Test fun failureWhileReadingTheBodyReleasesConcurrencyWithoutReplayingTheRequest() {
         MockWebServer().use { server ->
-            server.start()
+            val listenAddress = InetAddress.getLoopbackAddress()
+            server.start(listenAddress, 0)
             server.enqueue(MockResponse().setBody("broken body").setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))
             server.enqueue(MockResponse().setBody("next"))
             val http = OkHttpClient.Builder().retryOnConnectionFailure(false).callTimeout(2, TimeUnit.SECONDS)
                 .addNetworkInterceptor(RequestSchedulingInterceptor(RequestScheduler(RequestLimits(1, 30, 1)))).build()
-            val request = Request.Builder().url(server.url("/")).build()
+            val request = Request.Builder().url(server.url("/").newBuilder()
+                .host(requireNotNull(listenAddress.hostAddress)).build()).build()
             http.newCall(request).execute().use { assertTrue(runCatching { it.body!!.string() }.exceptionOrNull() is IOException) }
             http.newCall(request).execute().use { assertEquals("next", it.body!!.string()) }
             assertEquals(2, server.requestCount)

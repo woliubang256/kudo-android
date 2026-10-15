@@ -36,6 +36,10 @@ CommunityUiTest 的整栏抬升与取消复位检查同样按真实16ms间隔推
 
 ## JVM fixture lifecycle
 
+0.2.6云端运行38737113799的首轮502项JVM中，断线后释放并发与新搜索覆盖旧请求两项失败；第二轮断线用例再次失败。首轮XML明确显示断线后的第二次请求连接 `localhost/::1` 被拒绝，而MockWebServer只监听另一地址族。断线或取消会影响OkHttp路由选择，关闭自动连接重试的夹具不能假定localhost始终指向服务器监听地址。RequestScheduler断线夹具与SearchViewModel共享夹具显式绑定回环地址，URL使用同一 `listenAddress.hostAddress`，使请求始终到达同一个监听端点，保留响应体异常、请求数、并发释放和旧搜索不能覆盖新结果的断言。搜索用例原报告仅有超时，不能据此声称其底层异常也已确认是IPv6拒绝。
+
+本地为原断线用例显式提供IPv4监听与localhost双栈DNS，先复现第二次请求连接 `::1` 被拒绝，失败XML与临时夹具差异保留在 `artifacts/release/0.2.6/dual-stack-repro.xml`、`dual-stack-repro.patch`。同一双栈输入下改为监听IP后，两组18项通过；最终提交移除DNS注入，夹具仍绑定同一回环地址并使用其IP。完整502项JVM与Lint在两核、IPv6优先配置下通过，日志 `full-unit-lint-fixed.log`；测试输出强制重新执行，不把UP-TO-DATE算作重复验证。搜索等待在失败状态立即断言网络错误，避免将明确的请求失败隐藏成等待结果超时；不延长5秒边界。
+
 0.2.4云端运行38362477072的357项JVM中两项失败，完整XML与日志保留在 `artifacts/release/0.2.4/cloud-failure-1/`。点赞取消用例期望刷新楼层3却得到空列表，原夹具通过500ms真实socket延迟制造顺序，未记录失败状态，不能据此确定底层传输根因；顺序契约采用现有可控Call回调模式验证取消和迟到结果。ThreadAndDecorationTest的预览转主时间线用例期望总请求数3、实际4，断言覆盖了与跳楼无关的异步作者资料读取；请求数量契约限定目标 `/t/5/3.json`，并显式让作者请求在跳楼过程中进入计数，以复现错误边界。
 
 作者请求受控放行后，本地先稳定复现同样的期望3/实际4（`thread-count-repro.xml`），修复仅按目标接口计数，保留连续楼层、目标修订号及唯一跳楼读取断言。点赞用例使用单线程Main、可控Call回调，确认刷新取消旧Call、先完成最新结果、随后交付旧结果不能覆盖、新账号独立列表，并等待两作用域cancelAndJoin后重置Main。11项关联测试及两核同JVM配置10轮共110项通过（`fixture-fixed.txt`、`fixture-repeat-1.txt`至`fixture-repeat-10.txt`）；完整357项JVM通过，日志为同目录 `full-unit-lint-fixed.txt`。未改App行为，未延长原网络等待或删掉原状态断言。
@@ -51,6 +55,8 @@ CommunityUiTest 的整栏抬升与取消复位检查同样按真实16ms间隔推
 取消清理用例先失败，报告为 `artifacts/feed-fixture-cleanup-repro.xml`；修复后21项相关测试通过，日志为 `ci-fixture-focused-fixed.txt`。串行Main还复现旧父链断言过早读取状态（期望1/20/80，实际1/80），报告为 `ci-fixture-focused-failure.xml`；等待真实父楼层出现后保留原断言。旧跳转用例在最新100楼完成后释放80楼请求，确认旧请求已返回才检查目标仍是100。两核同一JVM连续10轮共210项通过，日志为 `ci-fixture-repeat-fixed.txt`；这证明这些夹具不变量，并不能补回v0.1.8缺失的完整异常报告。
 
 ## Alternatives considered
+
+全局设置JVM仅使用IPv4最省改动，但会改变所有网络测试的地址族行为，掩盖其他用例的双栈问题；仅给这两个失败夹具使用真实监听IP，不修改App的DNS、路由或重试策略。增加超时不能使未监听的IPv6端口成功，不用于修复本次ConnectException。
 
 仅增加超时或重新运行的优势是改动小、偶发慢机可能通过，但无法消除任务越过测试边界或并发访问的机会；用明确清理完成条件及串行Main缩小调度差异。原始云端报告缺失的问题由发布工作流失败上传XML/HTML解决，原始失败与本地新复现需分开记录。
 

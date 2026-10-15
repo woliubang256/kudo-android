@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.*
 import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Test
+import java.net.InetAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -185,12 +186,13 @@ class SearchViewModelTest {
             val vm = SearchViewModel(repository).also(models::add)
             vm.search("old"); assertTrue(oldEntered.await(3, TimeUnit.SECONDS))
             vm.search("new")
-            withContext(Dispatchers.IO) {
+            val fresh = withContext(Dispatchers.IO) {
                 withTimeout(5000) {
-                    vm.state.first { it.searched && !it.loading && it.query == "new" && it.hits.posts.isNotEmpty() }
+                    vm.state.first { it.searched && !it.loading && it.query == "new" }
                 }
             }
-            assertEquals("new order:relevance", vm.state.value.hits.posts.single().topic.title)
+            assertNull("New search must complete without a network error", fresh.error)
+            assertEquals("new order:relevance", fresh.hits.posts.single().topic.title)
         }
     }
 
@@ -229,8 +231,10 @@ class SearchViewModelTest {
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse { requests += request; return response(request) }
             }
-            server.start()
-            try { block(CommunityRepository(DiscourseClient(NoCookies, server.url("/"))), requests, models) }
+            val listenAddress = InetAddress.getLoopbackAddress()
+            server.start(listenAddress, 0)
+            val endpoint = server.url("/").newBuilder().host(requireNotNull(listenAddress.hostAddress)).build()
+            try { block(CommunityRepository(DiscourseClient(NoCookies, endpoint)), requests, models) }
             finally { models.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }; Dispatchers.resetMain() }
         }
     }
