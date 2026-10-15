@@ -66,3 +66,7 @@ The new `EditorToolbarUiTest.emojiGroupTabsUseIconsInsteadOfTextLabels` regressi
 ## Group name visibility
 
 Group names are no longer rendered as a heading inside the emoji picker, so the grid starts immediately after the search and icon tabs. The icon tabs keep their accessibility labels, and a long press shows the same name through the app toast without changing the short-press group selection behavior. Empty recent content uses a neutral `暂无表情` message rather than repeating the group name.
+
+## Emoji image cache identity
+
+Emoji image requests now carry a stable memory and disk cache key derived from the server URL and requested pixel size. Cache read/write and network policies remain enabled, so the first request still loads normally while revisiting the picker can reuse the cached image. The URL, including the server version query, remains part of the key so a server-side emoji version change invalidates the old entry. Other avatar, post, and gallery image requests keep their existing cache behavior.

@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil3.asDrawable
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 
 @Composable
@@ -22,6 +23,7 @@ internal fun AvatarImage(
     pixels: Int,
     animate: Boolean,
     modifier: Modifier = Modifier,
+    cacheKey: String? = null,
     fallbackUrl: String? = null,
     contentScale: ContentScale = ContentScale.Crop,
     onLoaded: (Boolean) -> Unit = {},
@@ -35,8 +37,19 @@ internal fun AvatarImage(
     val source = if (primaryFailed) fallbackUrl else url ?: fallbackUrl
     var loaded by remember(source) { mutableStateOf(false) }
     var animation by remember(source) { mutableStateOf<Animatable?>(null) }
-    val request = remember(context, source, pixels) {
-        source?.let { ImageRequest.Builder(context).data(it).size(pixels).build() }
+    val request = remember(context, source, pixels, cacheKey) {
+        source?.let {
+            val stableKey = cacheKey?.let { key -> "$key@$pixels" }
+            ImageRequest.Builder(context).data(it).size(pixels).apply {
+                if (stableKey != null) {
+                    memoryCacheKey(stableKey)
+                    diskCacheKey(stableKey)
+                    memoryCachePolicy(CachePolicy.ENABLED)
+                    diskCachePolicy(CachePolicy.ENABLED)
+                    networkCachePolicy(CachePolicy.ENABLED)
+                }
+            }.build()
+        }
     }
     Box(modifier, contentAlignment = Alignment.Center) {
         if (!loaded) placeholder()

@@ -507,6 +507,7 @@ internal fun SiteEmoji(name: String, modifier: Modifier = Modifier, source: Stri
     }
     val pixels = with(LocalDensity.current) { (24.dp.toPx() * fontScale).toInt().coerceAtLeast(1) }
     AvatarImage(url?.let(::mediaUrl), pixels, animate = true,
+        cacheKey = url?.let { "emoji:$it" },
         modifier = modifier.size(24.dp).semantics { contentDescription = name }, contentScale = ContentScale.Fit) {
         Icon(Icons.Rounded.Mood, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
