@@ -10,9 +10,9 @@ Status: implemented
 
 目录独立读取 /latest 的 data-preloaded 快照（兼容属性和 application/json 脚本），从同一次响应解析 site、siteSettings、currentUser。核对当前账号，拒绝把另一账号或匿名快照发布到当前目录。网页类别使用 sidebar_category_ids 筛选完整目录，再遵循 fixed_category_positions 和父子层级排序；匿名使用 default_navigation_menu_categories。无个人选择时按网页回退顶层类别前五项。个人 sidebar_tags 使用网页的名称比较规则；默认/热门标签保留服务器集合顺序。display_sidebar_tags 和 tagging_enabled 继续控制可见内容，不用热门标签冒充隐藏的个人列表。
 
-类别和标签使用独立 Tab 与滚动状态；类别保留图标介绍卡片，标签使用可滚动宫格，手机通常三列，窄屏/大字号减少列数，宽屏增加。全部类别来自同一完整目录；全部标签按需读取 /tags.json，保留服务器分组和数组顺序。私信专用标签进入网页对应的私信标签地址，不能误请求公开标签列表。
+数据协议保留完整类别目录与侧栏筛选结果。全部标签按需读取 /tags.json，保留服务器分组和数组顺序；私信标签保留 pm_only，不混同公开标签。完整元数据目录继续由 CommunityRepository.categories() 服务其他功能，独立目录接口不发布筛选结果到 categoryCatalog。
 
-目录 ViewModel 按账号代次隔离在途结果，失败保留同账号成功数据；切 Tab 不请求网络，下拉刷新重新读取，恢复前台仅在缓存过期时刷新。返回详情保留 Tab、目录模式及位置。功能按数据协议、状态管理、界面接线分批提交。
+CommunityDirectoryViewModel 按账号代次取消并隔离目录与全部标签请求，UI 通过 forAccount 在切换帧立即遮蔽旧账号数据。成功结果缓存，失败保留同账号成功数据，全部标签失败不影响类别和侧栏。切 Tab 读取缓存，进入或前台恢复时只在成功快照超过60秒后刷新，用户主动刷新可越过时限，同类在途请求合并。
 
 ## Related decisions
 
@@ -26,7 +26,9 @@ Status: implemented
 
 ## Testing
 
-CommunityDirectoryTest ?6?????????????????????????????????????????????????????3? CategoryMetadataTest ??????? artifacts/community-directory-data-tests.txt?
+CommunityDirectoryTest 的6项用例验证个人显示项与站点顺序、两种预载格式、匿名默认、隐藏标签、账号快照拒绝、标签分组和缺失数据错误。与3项 CategoryMetadataTest 一起通过，日志 artifacts/community-directory-data-tests.txt。
+
+CommunityDirectoryViewModelTest 验证在途合并、缓存过期、主动刷新、迟到旧账号结果拒绝、退出清空、同账号刷新失败保留和全部标签独立重试。
 
 ## Consequences
 
