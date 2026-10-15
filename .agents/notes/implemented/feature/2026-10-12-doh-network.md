@@ -12,7 +12,7 @@ Status: implemented
 
 ## Decision
 
-[网络请求调度](../../proposed/feature/2026-10-15-network-request-scheduling.md)为API、Connect与图片增加独立于DoH的共享请求节奏；修改并发参数不重建DoH通道，本地冷却不改变连接状态，本篇凭据与路由边界继续保留。
+[网络请求调度](2026-10-15-network-request-scheduling.md)为API、Connect与图片增加独立于DoH的共享请求节奏；修改并发参数不重建DoH通道，本地冷却不改变连接状态，本篇凭据与路由边界继续保留。
 
 应用采用独立编写的 Rust DoH + ECH DNS/TLS 桥接，保留 OkHttp HTTP 与 Android WebView 的既有边界。配置持久化、原生 DNS/TLS、Socket 适配、VPN 策略、客户端接入与界面按小单元提交；纯 OkHttp DoH 仅作对照。
 

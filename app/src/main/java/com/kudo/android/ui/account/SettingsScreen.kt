@@ -109,7 +109,7 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                 item { SectionLabel("网络") }
                 item {
                     Column(Modifier.clip(RoundedCornerShape(19.dp)).background(MaterialTheme.colorScheme.surface)) {
-                        SettingRow("DNS over HTTPS", networkSummary, !showing, manageNetwork)
+                        SettingRow("网络管理", networkSummary, !showing, manageNetwork)
                         SettingsDivider()
                         SettingRow("手动过盾", "打开网页完成验证", !showing && verification != null) {
                             verification?.invoke {}

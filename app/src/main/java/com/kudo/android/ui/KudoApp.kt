@@ -428,11 +428,13 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     composable("login") { LoginScreen(account, { refreshEpoch++; nav.popBackStack() }, { refreshEpoch++; nav.popBackStack(); showMessage("欢迎回来，${account.user?.displayName}") }) }
                     composable("settings") {
                         val network by app.network.state.collectAsStateWithLifecycle()
+                        val limits by app.requestSettings.configuration.collectAsStateWithLifecycle()
                         SettingsScreen(display, app.settings::update, account.user, account::logout, { nav.popBackStack() }, ::openWebPage,
-                            { nav.navigate("ignored-users") }, network.summary, { nav.navigate("doh-settings") })
+                            { nav.navigate("ignored-users") }, "${if (network.enabled) network.summary else "DoH 已关闭"} · ${limits.concurrent} 路并发",
+                            { nav.navigate("doh-settings") })
                     }
                     composable("downloads") { DownloadsScreen(app.downloads) { nav.popBackStack() } }
-                    composable("doh-settings") { DohSettingsScreen(app.network) { nav.popBackStack() } }
+                    composable("doh-settings") { DohSettingsScreen(app.network, app.requestSettings) { nav.popBackStack() } }
                     composable("about") { AboutScreen(openLink = ::openWebPage, openExternal = ::openBrowser) { nav.popBackStack() } }
                     composable("ignored-users") {
                         LaunchedEffect(Unit) { account.checkSession() }

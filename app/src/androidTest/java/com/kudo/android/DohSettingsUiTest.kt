@@ -17,10 +17,11 @@ class DohSettingsUiTest {
     @get:Rule val compose = createComposeRule()
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val settings = DohSettings(instrumentation.context).apply { update(DohConfiguration()) }
+    private val requests = RequestSettings(instrumentation.context)
     private var snapshot = NetworkSnapshot(1)
     private val network = DohNetwork(instrumentation.targetContext, settings) { snapshot }
     @After fun close() { network.close(); settings.update(DohConfiguration()) }
-    private fun show() { compose.setContent { KudoTheme(DisplaySettings()) { DohSettingsScreen(network) {} } } }
+    private fun show() { compose.setContent { KudoTheme(DisplaySettings()) { DohSettingsScreen(network, requests) {} } } }
 
     @Test fun addValidateSelectEditAndDeleteCustomServer() {
         show()
@@ -57,7 +58,7 @@ class DohSettingsUiTest {
 
     @Test fun vpnAutoSwitchDefaultsOnCanBeDisabledAndPersistsAcrossTheScreen() {
         val visible = mutableStateOf(true)
-        compose.setContent { KudoTheme(DisplaySettings()) { if (visible.value) DohSettingsScreen(network) {} } }
+        compose.setContent { KudoTheme(DisplaySettings()) { if (visible.value) DohSettingsScreen(network, requests) {} } }
         compose.onNodeWithText("VPN 自动切换").performScrollTo()
         compose.onNodeWithTag("doh-vpn-auto-switch").assertIsOn().performClick()
         compose.runOnIdle {

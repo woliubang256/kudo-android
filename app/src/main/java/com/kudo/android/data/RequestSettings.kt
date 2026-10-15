@@ -1,6 +1,7 @@
 package com.kudo.android.data
 
 import android.content.Context
+import androidx.core.content.edit
 import com.kudo.android.network.RequestCooldown
 import com.kudo.android.network.RequestLimits
 import com.kudo.android.network.RequestScheduler
@@ -25,7 +26,7 @@ class RequestSettings(context: Context, cooldown: RequestCooldown = RequestCoold
     val scheduler = RequestScheduler(state.value, cooldown)
 
     @Synchronized fun update(value: RequestLimits) {
-        prefs.edit().putString("request_limits", encodeRequestLimits(value)).apply()
+        prefs.edit { putString("request_limits", encodeRequestLimits(value)) }
         scheduler.update(value)
         state.value = value
     }

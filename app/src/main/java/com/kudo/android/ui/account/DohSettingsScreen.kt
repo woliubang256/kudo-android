@@ -31,16 +31,24 @@ import com.kudo.android.data.*
 import com.kudo.android.network.DohNetwork
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.components.liquid.LiquidModalAction
+import com.kudo.android.ui.components.liquid.LiquidModal
+import com.kudo.android.ui.theme.LocalDisplaySettings
+import com.kudo.android.network.RequestLimits
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun DohSettingsScreen(network: DohNetwork, back: () -> Unit) {
+internal fun DohSettingsScreen(network: DohNetwork, requests: RequestSettings, back: () -> Unit) {
     val configuration by network.settings.configuration.collectAsStateWithLifecycle()
     val state by network.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val panel = remember { MutableTransitionState(false) }
+    val reset = remember { MutableTransitionState(false) }
+    val backdrop = rememberLayerBackdrop()
+    val limits by requests.configuration.collectAsStateWithLifecycle()
     var mode by rememberSaveable { mutableStateOf("actions") }
     var serverId by rememberSaveable { mutableStateOf<String?>(null) }
     var name by rememberSaveable { mutableStateOf("") }
@@ -50,7 +58,7 @@ internal fun DohSettingsScreen(network: DohNetwork, back: () -> Unit) {
     var checking by remember { mutableStateOf<DohServer?>(null) }
     val results = remember { mutableStateMapOf<DohServer, String>() }
     val server = configuration.servers.firstOrNull { it.id == serverId }
-    val showing = panel.currentState || panel.targetState
+    val showing = panel.currentState || panel.targetState || reset.currentState || reset.targetState
     fun dismiss() { panel.targetState = false }
     fun edit(value: DohServer?) {
         serverId = value?.id; name = value?.name.orEmpty(); url = value?.url.orEmpty(); bootstrap = value?.bootstrap?.joinToString(", ").orEmpty()
@@ -67,11 +75,11 @@ internal fun DohSettingsScreen(network: DohNetwork, back: () -> Unit) {
         }
     }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+        Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
             .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
             .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
-            PageTopBar("DNS over HTTPS", back)
-            LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll, enabled = !showing),
+            PageTopBar("网络管理", back)
+            LazyColumn(state = scroll, modifier = Modifier.testTag("network-settings-list").quickScrollTarget(scroll, enabled = !showing),
                 contentPadding = PaddingValues(14.dp, 6.dp, 14.dp, 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(MaterialTheme.colorScheme.surface)
@@ -132,6 +140,10 @@ internal fun DohSettingsScreen(network: DohNetwork, back: () -> Unit) {
                 }
                 item { Text("自定义服务器需支持标准 DoH 和 HTTPS 记录；仅 DNS 查询成功不代表 ECH 可用。服务器可看到查询域名，登录凭据不会发送给解析服务器。",
                     Modifier.padding(horizontal = 9.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item { SectionLabel("高级") }
+                item { RequestLimitsCard(limits, requests::update, { reset.targetState = true }, enabled = !showing) }
+                item { Text("接口与图片共用同一来源的请求额度。实时推送和文件下载独立控制；服务器返回限流时仍需等待。",
+                    Modifier.padding(horizontal = 9.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
         CommunitySheet(panel, when (mode) { "edit" -> if (serverId == null) "添加服务器" else "编辑服务器"; "view" -> "服务器信息"; "delete" -> "删除服务器？"; else -> "服务器管理" },
@@ -174,6 +186,12 @@ internal fun DohSettingsScreen(network: DohNetwork, back: () -> Unit) {
                 }
             }
         }
+        LiquidModal(reset, "恢复默认请求设置？", false, backdrop, LocalDisplaySettings.current.glass, { reset.targetState = false }, actions = {
+            LiquidModalAction("取消", { reset.targetState = false }, Modifier.weight(1f))
+            LiquidModalAction("恢复默认", {
+                if (reset.targetState) { requests.update(RequestLimits.Balanced); reset.targetState = false }
+            }, Modifier.weight(1f), primary = true)
+        }) { Text("恢复为均衡模式：每 3 秒内最多 6 个请求，同时进行 3 个。", style = MaterialTheme.typography.bodyMedium) }
     }
 }
 
