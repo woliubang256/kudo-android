@@ -1,5 +1,6 @@
 package com.kudo.android
 
+import android.net.Uri
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
@@ -33,9 +34,10 @@ class DeepLinkUiTest {
                 composable("category/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
                     Text("分类：${it.arguments!!.getInt("id")}")
                 }
-                composable("tag/{slug}?id={id}", arguments = listOf(navArgument("slug") { type = NavType.StringType },
-                    navArgument("id") { type = NavType.IntType; defaultValue = 0 })) {
-                    Text("标签：${it.arguments!!.getString("slug")}")
+                composable("tag/{slug}?id={id}&name={name}", arguments = listOf(navArgument("slug") { type = NavType.StringType },
+                    navArgument("id") { type = NavType.IntType; defaultValue = 0 },
+                    navArgument("name") { type = NavType.StringType; defaultValue = "" })) {
+                    Text("标签：${it.arguments!!.getString("name").orEmpty().ifBlank { it.arguments!!.getString("slug").orEmpty() }}")
                 }
                 composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) {
                     Text("网页：${it.arguments!!.getString("url")}")
@@ -49,6 +51,14 @@ class DeepLinkUiTest {
     }
 
     private fun open(url: String) { compose.runOnIdle { sequence++; incoming = url } }
+
+    @Test fun namedTagRoutesPreserveReadableNamesWhileExternalLinksStillMatchWithoutName() {
+        show()
+        compose.runOnIdle { nav.navigate("tag/444-tag?id=444&name=${Uri.encode("公告 & 分享")}") }
+        compose.onNodeWithText("标签：公告 & 分享").assertIsDisplayed()
+        open("https://linux.do/tag/193-tag/193")
+        compose.onNodeWithText("标签：193-tag").assertIsDisplayed()
+    }
 
     @Test fun direct404AndContent404UseNativeUnavailablePageAndCanReturn() {
         show()

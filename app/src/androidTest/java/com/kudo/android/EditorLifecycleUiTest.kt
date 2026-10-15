@@ -46,16 +46,19 @@ class EditorLifecycleUiTest {
         assertEquals(98, other.draft.categoryId)
         assertEquals("", four.draft.raw)
         instrumentation.runOnMainSync {
-            four.edit(four.draft.copy(title = "分类四", raw = "分类草稿", categoryId = 98))
+            four.edit(four.draft.copy(title = "分类四", raw = "分类草稿", categoryId = 98, tags = listOf("公告", "开发")))
             other.edit(other.draft.copy(raw = "另一分类草稿"))
         }
         val restored = newEditor(4)
         assertEquals("分类草稿", restored.draft.raw)
+        assertEquals(listOf("公告", "开发"), restored.draft.tags)
+        assertEquals(restored.draft.tags, AppSettings(instrumentation.targetContext).draft("${userId}_new_4").tags)
         assertEquals("手动改选的分类要随草稿恢复", 98, restored.draft.categoryId)
         assertEquals("首页正文", newEditor(null).draft.raw)
         assertEquals("另一分类草稿", newEditor(98).draft.raw)
         val saved = app.settings.drafts(userId).first { it.key == "${userId}_new_4" }
         assertEquals(4, saved.categoryContext)
+        assertEquals(restored.draft.tags, saved.draft.tags)
         assertNull(saved.topicId)
         assertNull(saved.replyTo)
     }
@@ -66,13 +69,15 @@ class EditorLifecycleUiTest {
         instrumentation.runOnMainSync {
             app.settings.saveDraft("${userId}_new_0", Draft(raw = "首页草稿"))
             app.settings.saveDraft("${userId}_new_98", Draft(raw = "其他分类草稿"))
-            vm.edit(vm.draft.copy(title = "标题", raw = "确认发送的分类正文"))
+            vm.edit(vm.draft.copy(title = "标题", raw = "确认发送的分类正文", tags = listOf("公告", "开发")))
         }
         assertNull(published)
         instrumentation.runOnMainSync { vm.publish() }
         withTimeout(5000) { vm.published.first() }
         assertEquals(4, published!!.categoryId)
+        assertEquals(listOf("公告", "开发"), published!!.tags)
         assertEquals("", app.settings.draft("${userId}_new_4").raw)
+        assertTrue(app.settings.draft("${userId}_new_4").tags.isEmpty())
         assertEquals("首页草稿", app.settings.draft("${userId}_new_0").raw)
         assertEquals("其他分类草稿", app.settings.draft("${userId}_new_98").raw)
     }
@@ -115,6 +120,21 @@ class EditorLifecycleUiTest {
         assertEquals(raw, vm.draft.raw)
         assertEquals(raw, app.settings.draft("${userId}_700_8").raw)
         assertEquals("夹具失败", vm.error)
+    }
+
+    @Test fun topicSendingLocksTagsAndFailurePreservesThemForReopening() = runBlocking {
+        val pending = CompletableDeferred<PublishResult>()
+        val vm = newEditor(4) { pending.await() }
+        instrumentation.runOnMainSync {
+            vm.edit(Draft("标签草稿", "正文", 4, tags = listOf("公告", "开发")))
+            vm.publish()
+            vm.edit(vm.draft.copy(tags = emptyList()))
+        }
+        assertEquals(listOf("公告", "开发"), vm.draft.tags)
+        pending.completeExceptionally(IllegalStateException("标签不满足站点规则"))
+        withTimeout(5000) { while (vm.sending) delay(10) }
+        assertEquals("标签不满足站点规则", vm.error)
+        assertEquals(listOf("公告", "开发"), newEditor(4).draft.tags)
     }
 
     @Test fun unavailableRulesPreventPublishingAndCanBeRetriedWithoutLosingText() = runBlocking {

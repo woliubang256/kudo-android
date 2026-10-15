@@ -17,7 +17,7 @@ internal fun localAccountDrafts(values: Map<String, *>, userId: Int): List<Saved
         .mapNotNull { (topic, reply) ->
             val key = "${userId}_${topic}_$reply"
             val draft = Draft(values["draft_${key}_title"] as? String ?: "", values["draft_${key}_raw"] as? String ?: "",
-                values["draft_${key}_category"] as? Int ?: 0, values["draft_${key}_recipients"] as? String ?: "")
+                values["draft_${key}_category"] as? Int ?: 0, values["draft_${key}_recipients"] as? String ?: "", decodeDraftTags(values["draft_${key}_tags"] as? String))
             if (draft.raw.isBlank() && draft.title.isBlank()) null else SavedDraft(key, draft, topic.toIntOrNull(),
                 reply.toIntOrNull()?.takeIf { it > 0 && topic.toIntOrNull() != null }, false, privateMessage = topic == "message",
                 categoryContext = reply.toIntOrNull()?.takeIf { it > 0 && topic == "new" })
@@ -26,7 +26,8 @@ internal fun localAccountDrafts(values: Map<String, *>, userId: Int): List<Saved
     val backups = values.keys.filter { it.startsWith(backupPrefix) && it.endsWith("_raw") }.mapNotNull { rawKey ->
         val remoteKey = rawKey.removePrefix(backupPrefix).removeSuffix("_raw")
         val prefix = rawKey.removeSuffix("_raw")
-        val draft = Draft(values["${prefix}_title"] as? String ?: "", values[rawKey] as? String ?: "", values["${prefix}_category"] as? Int ?: 0)
+        val draft = Draft(values["${prefix}_title"] as? String ?: "", values[rawKey] as? String ?: "", values["${prefix}_category"] as? Int ?: 0,
+            tags = decodeDraftTags(values["${prefix}_tags"] as? String))
         if (draft.raw.isBlank() && draft.title.isBlank()) null else SavedDraft(remoteKey, draft,
             remoteKey.removePrefix("topic_").toIntOrNull(), null, true, privateMessage = remoteKey.startsWith("new_private_message"), backupKey = "${userId}_cloud_$remoteKey")
     }
@@ -41,7 +42,7 @@ internal fun parseCloudDraft(item: JSONObject): SavedDraft {
     } ?: throw ApiFailure(FailureKind.SERVER, "草稿内容无法读取，请在网页查看")
     val key = item.text("draft_key").takeIf(String::isNotBlank) ?: throw ApiFailure(FailureKind.SERVER, "草稿缺少标识")
     val topicId = item.positiveInt("topic_id") ?: key.removePrefix("topic_").toIntOrNull()?.takeIf { it > 0 }
-    return SavedDraft(key, Draft(source.text("title").ifBlank { item.text("title") }, source.text("reply"), source.optInt("categoryId")),
+    return SavedDraft(key, Draft(source.text("title").ifBlank { item.text("title") }, source.text("reply"), source.optInt("categoryId"), tags = source.optJSONArray("tags").tagNames()),
         topicId, source.positiveInt("replyToPostNumber"), true, item.optInt("draft_sequence", item.optInt("sequence")),
         source.toString(), item.text("updated_at").ifBlank { item.text("created_at") },
         item.text("archetype") == "private_message" || key.startsWith("new_private_message") || source.text("action") == "private_message")

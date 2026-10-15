@@ -1,6 +1,7 @@
 package com.kudo.android.data
 
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.FormBody
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,14 +146,18 @@ class CommunityRepository(val client: DiscourseClient) {
     }
     suspend fun notifications(offset: Int): List<Notice> = DiscourseParser.notices(client.get("/notifications", mapOf("offset" to offset.toString(), "limit" to "30")))
     suspend fun readNotification(id: Int? = null) { client.write("PUT", "/notifications/mark-read", id?.let { mapOf("id" to it.toString()) } ?: emptyMap()) }
-    suspend fun publish(raw: String, title: String?, categoryId: Int?, topicId: Int?, replyTo: Int?): PublishResult {
+    suspend fun publish(raw: String, title: String?, categoryId: Int?, topicId: Int?, replyTo: Int?, tags: List<String> = emptyList()): PublishResult {
         val fields = mutableMapOf("raw" to raw)
         if (topicId != null) fields["topic_id"] = topicId.toString() else {
             fields["title"] = title.orEmpty()
             categoryId?.let { fields["category"] = it.toString() }
         }
         replyTo?.let { fields["reply_to_post_number"] = it.toString() }
-        val result = client.write("POST", "/posts.json", fields)
+        val body = FormBody.Builder().apply {
+            fields.forEach { (key, value) -> add(key, value) }
+            if (topicId == null) tags.map(String::trim).filter(String::isNotBlank).distinct().forEach { add("tags[]", it) }
+        }.build()
+        val result = client.write("POST", "/posts.json", body = body)
         if (result.text("action") == "enqueued") return PublishResult(topicId, true)
         val post = result.optJSONObject("post") ?: result
         if (post.positiveInt("id") == null) throw ApiFailure(FailureKind.SERVER, "未确认发布结果，草稿已保留，请到社区查看")

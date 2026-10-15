@@ -12,7 +12,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 
 class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: Int?, val replyTo: Int?,
-    private val publishRequest: suspend (Draft) -> PublishResult = { draft -> app.repository.publish(draft.raw, draft.title, draft.categoryId.takeIf { it > 0 }, topicId, replyTo) },
+    private val publishRequest: suspend (Draft) -> PublishResult = { draft -> app.repository.publish(draft.raw, draft.title, draft.categoryId.takeIf { it > 0 }, topicId, replyTo, draft.tags) },
     categoryId: Int? = null,
     private val rulesRequest: suspend () -> ReplyRules = { app.repository.replyRules(requireNotNull(topicId), categoryId) },
 ) : ViewModel() {
@@ -39,6 +39,8 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
     }
     private val results = Channel<PublishResult>(Channel.BUFFERED)
     val published = results.receiveAsFlow()
+    suspend fun searchTags(query: String, categoryId: Int, selected: List<TopicTag>): List<TopicTag> =
+        app.repository.composerTags(query, categoryId, selected)
     private val imageInsertion = EditorImageInsertion()
     fun prepareImageUpload(selection: TextRange) { if (!sending && !uploading) imageInsertion.prepare(draft.raw, selection) }
 
@@ -51,7 +53,7 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
             if (rules == null) { error = rulesError ?: "正在读取回帖字数规则，请稍候"; return }
             rules.problem(draft.raw)?.let { error = it; return }
         }
-        if (topicId == null && (draft.title.isBlank() || draft.categoryId == 0)) { error = "请填写标题并选择分类"; return }
+        if (topicId == null && (draft.title.isBlank() || draft.categoryId == 0)) { error = "请填写标题并选择类别"; return }
         sending = true; error = null
         val snapshot = draft
         viewModelScope.launch {
