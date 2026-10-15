@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.TextFieldValue
@@ -21,19 +22,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kudo.android.ui.components.*
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Unit, pickImage: () -> Unit,
     enabled: Boolean, uploading: Boolean, focus: () -> Unit, rtl: Boolean, direction: () -> Unit,
     modifier: Modifier = Modifier, preview: () -> Unit = {}) {
     var menu by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val toolbarScroll = rememberScrollState()
     val keyboard = LocalSoftwareKeyboardController.current
     fun open(name: String) { keyboard?.hide(); menu = name }
     fun apply(transform: (TextFieldValue) -> TextFieldValue) { if (enabled) { change(transform(value)); focus() } }
     @Composable fun tool(icon: ImageVector, label: String, action: () -> Unit) {
         CommunityIconButton(icon, label, action, enabled = enabled)
     }
-    Row(modifier.horizontalScroll(rememberScrollState()).testTag("editor-toolbar"), verticalAlignment = Alignment.CenterVertically) {
+    LaunchedEffect(toolbarScroll.maxValue) {
+        val preferences = context.getSharedPreferences("kudo_preferences", 0)
+        if (toolbarScroll.maxValue > 0 && !preferences.getBoolean("editor_toolbar_scroll_guide_shown", false)) {
+            preferences.edit().putBoolean("editor_toolbar_scroll_guide_shown", true).apply()
+            delay(350)
+            toolbarScroll.animateScrollTo(toolbarScroll.maxValue)
+            delay(250)
+            toolbarScroll.animateScrollTo(0)
+        }
+    }
+    Row(modifier.horizontalScroll(toolbarScroll).testTag("editor-toolbar"), verticalAlignment = Alignment.CenterVertically) {
         CommunityIconButton(Icons.Rounded.Visibility, "预览正文", preview, enabled = enabled && value.text.isNotBlank())
         tool(Icons.Rounded.FormatBold, "粗体") { apply { it.wrapMarkdown("**") } }
         tool(Icons.Rounded.FormatItalic, "斜体") { apply { it.wrapMarkdown("*") } }

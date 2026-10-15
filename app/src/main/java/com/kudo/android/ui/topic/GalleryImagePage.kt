@@ -4,6 +4,7 @@ import android.graphics.drawable.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.rememberSplineBasedDecay
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun GalleryImagePage(
@@ -52,11 +54,22 @@ internal fun GalleryImagePage(
     var animation by remember(image.originalUrl) { mutableStateOf<Animatable?>(null) }
     var failed by remember(image.originalUrl) { mutableStateOf(false) }
     var loaded by remember(image.originalUrl) { mutableStateOf(false) }
+    var loadingProgress by remember(image.originalUrl) { mutableFloatStateOf(0f) }
     var retry by remember(image.originalUrl) { mutableIntStateOf(0) }
     var settling by remember { mutableStateOf<Job?>(null) }
     var flinging by remember { mutableStateOf<Job?>(null) }
     var touching by remember { mutableStateOf(false) }
     var flingActive by remember { mutableStateOf(false) }
+    val displayedProgress by animateFloatAsState(loadingProgress, label = "gallery image loading progress")
+    LaunchedEffect(image.originalUrl, retry, loaded, failed) {
+        if (!loaded && !failed) {
+            loadingProgress = 0.08f
+            while (loadingProgress < 0.92f) {
+                delay(180)
+                loadingProgress = (loadingProgress + 0.035f).coerceAtMost(0.92f)
+            }
+        }
+    }
     val decay = rememberSplineBasedDecay<Float>()
     DisposableEffect(transform, enabled, active) { onDispose { flinging?.cancel(); settling?.cancel(); touching = false } }
     DisposableEffect(image.originalUrl) { onDispose { animation?.stop(); onPainterDisposed() } }
@@ -121,11 +134,12 @@ internal fun GalleryImagePage(
             translationX = transform.offset.x + transform.dismissOffset.x
             translationY = transform.offset.y + transform.dismissOffset.y
         }.testTag("gallery-photo-$page"), contentScale = ContentScale.Fit, placeholder = placeholder,
-            onLoading = { failed = false; loaded = false },
-            onError = { failed = true; loaded = false },
+            onLoading = { failed = false; loaded = false; loadingProgress = 0.08f },
+            onError = { failed = true; loaded = false; loadingProgress = 0f },
             onSuccess = { result ->
                 loaded = true
                 failed = false
+                loadingProgress = 1f
                 val decoded = result.result.image
                 if (decoded.width > 0 && decoded.height > 0) transform.decodedRatio(decoded.width.toFloat() / decoded.height)
                 onPainter(result.painter)
@@ -134,7 +148,12 @@ internal fun GalleryImagePage(
                 if (!active || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) drawable?.stop()
             })
         }
-        if (!loaded && !failed && placeholder == null) CommunityLoadingIndicator(Modifier.align(Alignment.Center).size(24.dp))
+        if (!loaded && !failed) {
+            Box(Modifier.align(Alignment.Center).size(72.dp).testTag("gallery-loading-progress"), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(progress = { displayedProgress }, modifier = Modifier.fillMaxSize(), color = Color.White, trackColor = Color.White.copy(alpha = 0.24f))
+                Text("${(displayedProgress * 100).roundToInt()}%", color = Color.White, style = MaterialTheme.typography.labelMedium)
+            }
+        }
         if (failed) Column(Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = 0.7f)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("图片加载失败", color = Color.White)
             TextButton(onClick = { retry++ }, enabled = enabled) { Text("重试", color = Color.White) }
