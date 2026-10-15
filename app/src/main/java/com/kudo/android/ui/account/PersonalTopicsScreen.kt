@@ -62,7 +62,7 @@ internal class PersonalTopicsViewModel(private val repository: CommunityReposito
     }
     fun selectTopicTab(value: PersonalTopicsTab) {
         if (destination != AccountDestination.TOPICS || value == topicTab) return
-        request?.cancel()
+        request?.cancel(); generation++
         topicTab = value; topics = emptyList(); replies = emptyList(); next = null; error = null
         load()
     }

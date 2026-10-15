@@ -142,7 +142,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                     val refreshing = if (tab == ProfileTab.SUMMARY) state.summaryLoading && state.summary != null
                     else feed.loading && feed.entries.isNotEmpty()
                     val refreshPage by rememberUpdatedState {
-                        if (tab == ProfileTab.SUMMARY) refresh() else latestLoad(tab, false, false)
+                        if (tab == ProfileTab.SUMMARY) refresh() else latestLoad(tab, false, true)
                     }
                     LaunchedEffect(scroll, feed.next, feed.loading, feed.error, pager.settledPage) {
                         if (tab != ProfileTab.SUMMARY && index == pager.settledPage && feed.next != null && !feed.loading && feed.error == null) {
