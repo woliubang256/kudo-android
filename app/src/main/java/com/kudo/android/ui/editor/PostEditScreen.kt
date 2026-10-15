@@ -39,7 +39,7 @@ fun PostEditScreen(vm: PostEditViewModel, glass: GlassMode, uploadImage: suspend
                 pickImage = { picker.launch("image/*") }, back = back,
                 sending = vm.sending, uploading = vm.uploading, error = vm.error?.message,
                 editing = true, editingReply = source.post.number != 1, canSave = vm.canSave,
-                editReason = draft.reason, reasonChange = { vm.edit(draft.copy(reason = it)) }, extra = {
+                editReason = draft.reason, reasonChange = { vm.edit(draft.copy(reason = it)) }, imageSelection = vm::prepareImageUpload, extra = {
                     if (vm.conflict) Text("原文已有更新，你的修改已保留。请核对楼层后重新载入。",
                         Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error)

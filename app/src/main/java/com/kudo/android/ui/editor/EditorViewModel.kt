@@ -3,6 +3,7 @@ package com.kudo.android.ui.editor
 import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kudo.android.data.*
@@ -38,8 +39,10 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
     }
     private val results = Channel<PublishResult>(Channel.BUFFERED)
     val published = results.receiveAsFlow()
+    private val imageInsertion = EditorImageInsertion()
+    fun prepareImageUpload(selection: TextRange) { if (!sending && !uploading) imageInsertion.prepare(draft.raw, selection) }
 
-    fun edit(value: Draft) { if (!sending) { draft = value; app.settings.saveDraft(draftKey, value); error = null } }
+    fun edit(value: Draft) { if (!sending) { imageInsertion.edited(draft.raw, value.raw); draft = value; app.settings.saveDraft(draftKey, value); error = null } }
     fun publish() {
         if (sending || uploading) return
         if (draft.raw.isBlank()) { error = "先写点内容吧"; return }
@@ -69,7 +72,7 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
                 val markdown = withContext(Dispatchers.IO) {
                     uploadEditorImage(app.repository, context, uri)
                 }
-                edit(draft.copy(raw = draft.raw + "\n\n" + markdown + "\n"))
+                edit(draft.copy(raw = imageInsertion.insert(draft.raw, markdown)))
             } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "上传失败" }
             finally { uploading = false }
         }

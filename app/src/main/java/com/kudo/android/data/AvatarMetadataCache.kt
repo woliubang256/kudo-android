@@ -84,6 +84,10 @@ class AvatarMetadataCache(
 
     suspend fun emojiUrl(name: String): String? {
         if (name.isBlank()) return null
+        return emojiDirectory()[name] ?: standardEmojiUrl(name)
+    }
+
+    suspend fun emojiDirectory(): Map<String, String> {
         job.ensureActive()
         val request = emojiLock.withLock {
             val cached = emojis?.takeIf { it.expires > nowMillis() }
@@ -97,7 +101,7 @@ class AvatarMetadataCache(
         }
         val urls = request.await().urls
         job.ensureActive()
-        return urls[name] ?: standardEmojiUrl(name)
+        return urls
     }
 
     override fun close() { job.cancel() }

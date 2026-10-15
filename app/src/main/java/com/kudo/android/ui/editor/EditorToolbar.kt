@@ -39,11 +39,12 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
         CommunityIconButton(Icons.Rounded.AddPhotoAlternate, "上传图片", pickImage, enabled = enabled && !uploading)
         tool(Icons.Rounded.FormatListBulleted, "列表") { open("list") }
         tool(if (rtl) Icons.Rounded.FormatTextdirectionLToR else Icons.Rounded.FormatTextdirectionRToL, "切换文字方向", direction)
+        tool(Icons.Rounded.EmojiEmotions, "表情") { open("emoji") }
         tool(Icons.Rounded.Code, "插入代码块") { apply { it.blockMarkdown("```\n", "\n```") } }
         tool(Icons.Rounded.Add, "更多格式") { open("more") }
     }
     menu?.let { panel ->
-        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; else -> "更多格式" }, { menu = null }) { close ->
+        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; "emoji" -> "表情"; else -> "更多格式" }, { menu = null }) { close ->
             fun choose(transform: (TextFieldValue) -> TextFieldValue) { apply(transform); close() }
             when (panel) {
                 "size" -> {
@@ -56,6 +57,7 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
                 "list" -> listOf("项目符号列表" to MarkdownLines.BULLET, "编号列表" to MarkdownLines.NUMBERED,
                     "任务列表" to MarkdownLines.TASK).forEach { (label, command) -> EditorToolOption(label) { choose { it.lineMarkdown(command) } } }
                 "link" -> EditorLinkForm(value.text.substring(value.selection.min, value.selection.max)) { label, url -> choose { it.linkMarkdown(label, url) } }
+                "emoji" -> EditorEmojis { emoji -> choose { it.replaceMarkdown(emoji) } }
                 else -> {
                     EditorToolOption("行内代码") { choose { it.wrapMarkdown("`", placeholder = "代码") } }
                     EditorToolOption("删除线") { choose { it.wrapMarkdown("~~") } }

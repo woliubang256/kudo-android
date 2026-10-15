@@ -1,6 +1,7 @@
 package com.kudo.android
 
 import androidx.lifecycle.viewModelScope
+import androidx.compose.ui.text.TextRange
 import com.kudo.android.data.*
 import com.kudo.android.ui.editor.PostEditViewModel
 import kotlinx.coroutines.*
@@ -15,6 +16,20 @@ class PostEditViewModelTest {
     private val post = Post(10, 1, Member(2, "me", "", ""), "<p>正文</p>", "", 0, false, null, null, false, canEdit = true)
     private val source = EditablePost(post, 5, "原文", "标题")
     private suspend fun await(predicate: () -> Boolean) = withContext(Dispatchers.IO) { withTimeout(5000) { while (!predicate()) delay(10) } }
+    @Test fun imageUploadKeepsTypingAndOriginalInsertionPosition() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val gate = CompletableDeferred<String>()
+        val vm = PostEditViewModel({ source.copy(raw = "前后") }, { _, _ -> post })
+        try {
+            await { !vm.loading }
+            vm.prepareImageUpload(TextRange(1)); vm.upload { gate.await() }
+            vm.edit(vm.draft!!.copy(raw = "前继续写后"))
+            vm.edit(vm.draft!!.copy(raw = "开头前继续写后"))
+            vm.edit(vm.draft!!.copy(raw = "开头前继续写后结尾"))
+            gate.complete("![图](upload://a)"); await { !vm.uploading }
+            assertEquals("开头前继续写\n\n![图](upload://a)\n\n后结尾", vm.draft!!.raw)
+        } finally { vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); Dispatchers.resetMain() }
+    }
     @Test fun restoredDraftKeepsItsOriginalSnapshotAndEncoding() {
         val draft = PostEditDraft("原文", "标题", "修改 ![图](upload://a)", "新标题", "修正")
         assertEquals(draft, PostEditDraft.fromJson(draft.toJson()))

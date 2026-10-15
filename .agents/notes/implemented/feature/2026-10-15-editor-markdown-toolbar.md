@@ -14,6 +14,8 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 
 新话题、回复和已发布内容编辑共享 EditorForm。完整所见即所得编辑器不属于本轮用户选择的范围。用户确认预览使用独立弹窗，保持正文、选区和草稿不变。
 
+表情面板复用账号级 AvatarMetadataCache 的站点目录与单次合并请求，支持搜索及自定义表情，目录不可用时保留常用表情。图片选择前将 UTF-16 插入位置交给草稿所属 ViewModel；每次正文编辑按共同前后缀移动该位置，上传完成时向最新草稿插入，不覆盖上传期间输入。插入点不绑定短生命周期的编辑器 Composable，关闭重开面板仍保留上传定位；图片插在选区末尾而不删除选中文字。
+
 ## Existing note audit
 
 检索编辑器、工具栏和Markdown。[账号与编辑器](../../implemented/feature/2026-10-07-account-and-composer.md)、[酷安表单](../../implemented/feature/2026-10-10-coolapk-forms.md)、[已发布内容编辑](../../implemented/feature/2026-10-15-post-editing.md)部分重叠，保留草稿隔离、发布与保存契约、写操作不重放、编辑权限及回复面板承载，只扩展共享正文交互。[正文列表](../../implemented/feature/2026-10-13-markdown-lists.md)、[颜色](../../implemented/feature/2026-10-13-markdown-colors.md)、[脚注](../../implemented/feature/2026-10-13-markdown-footnotes.md)等属于接收cooked内容的解析决策，本轮预览生成内容后复用，不改变服务端正文契约。导航、回复目标、字数规则及其他搜索命中不受影响。无完全吸收或过时提案。
@@ -32,6 +34,8 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 ## Testing
 
 MarkdownEditingTest的6个单元测试通过，覆盖空选区、反向选区、段落中插入、多行列表、Unicode、重复格式操作、composition及异步插入点随编辑移动。完整工具栏真机回归随预览单元集中执行。
+
+PostEditViewModelTest增加延迟上传期间连续输入的回归，验证图片在移动后的原位置插入，前后文字保留。AvatarMetadataCacheTest验证既有目录缓存与合并请求不变。
 
 ## Consequences
 

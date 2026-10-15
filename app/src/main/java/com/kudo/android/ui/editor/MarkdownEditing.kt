@@ -95,3 +95,15 @@ internal fun TextFieldValue.syncMarkdown(raw: String): TextFieldValue = if (text
 
 internal fun insertUploadedMarkdown(raw: String, offset: Int, markdown: String): String =
     TextFieldValue(raw, TextRange(offset.coerceIn(0, raw.length))).blockMarkdown("", placeholder = markdown).text
+
+/** Lives with the draft owner so closing/reopening the editor during upload stays safe. */
+internal class EditorImageInsertion {
+    private var offset: Int? = null
+    fun prepare(raw: String, selection: TextRange) { offset = selection.max.coerceIn(0, raw.length) }
+    fun edited(old: String, new: String) { offset = offset?.let { rebaseMarkdownOffset(old, new, it) } }
+    fun insert(raw: String, markdown: String): String {
+        val target = offset ?: raw.length
+        offset = null
+        return insertUploadedMarkdown(raw, target, markdown)
+    }
+}

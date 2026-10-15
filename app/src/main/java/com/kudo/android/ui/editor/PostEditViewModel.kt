@@ -1,6 +1,7 @@
 package com.kudo.android.ui.editor
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kudo.android.data.*
@@ -25,6 +26,8 @@ class PostEditViewModel(
     var writeLocked by mutableStateOf(false); private set
     private val results = Channel<PostEditResult>(Channel.BUFFERED)
     val saved = results.receiveAsFlow()
+    private val imageInsertion = EditorImageInsertion()
+    fun prepareImageUpload(selection: TextRange) { if (!loading && !sending && !uploading) draft?.let { imageInsertion.prepare(it.raw, selection) } }
     val canSave get() = source != null && !loading && !sending && !uploading && !conflict && !writeLocked &&
         draft?.let { it.raw.isNotBlank() && (source?.post?.number != 1 || it.title.isNotBlank()) &&
             (it.raw != it.originalRaw || it.title != it.originalTitle) } == true
@@ -57,6 +60,7 @@ class PostEditViewModel(
     }
     fun edit(value: PostEditDraft) {
         if (loading || sending) return
+        imageInsertion.edited(draft?.raw.orEmpty(), value.raw)
         draft = value; persist(value); error = null
     }
     fun save() {
@@ -82,7 +86,7 @@ class PostEditViewModel(
         viewModelScope.launch {
             try {
                 val markdown = withContext(Dispatchers.IO) { request() }
-                draft?.let { edit(it.copy(raw = it.raw + "\n\n" + markdown + "\n")) }
+                draft?.let { edit(it.copy(raw = imageInsertion.insert(it.raw, markdown))) }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = e }
             finally { uploading = false }

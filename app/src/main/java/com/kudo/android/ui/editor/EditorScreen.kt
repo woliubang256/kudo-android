@@ -38,7 +38,8 @@ fun EditorScreen(vm: EditorViewModel, categories: List<Category>, categoryError:
     EditorForm(vm.draft, categories, vm::edit, vm::publish, { picker.launch("image/*") }, back,
         reply = vm.topicId != null, categoryError = categoryError, reloadCategories = reloadCategories,
         sending = vm.sending, uploading = vm.uploading, error = vm.error,
-        replyRules = vm.replyRules, rulesError = vm.rulesError, reloadRules = vm::reloadReplyRules, replyAuthor = replyAuthor)
+        replyRules = vm.replyRules, rulesError = vm.rulesError, reloadRules = vm::reloadReplyRules, replyAuthor = replyAuthor,
+        imageSelection = vm::prepareImageUpload)
 }
 
 @Composable
@@ -54,7 +55,8 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
     reloadCategories: () -> Unit = {}, sending: Boolean = false, uploading: Boolean = false, error: String? = null,
     replyRules: ReplyRules? = null, rulesError: String? = null, reloadRules: () -> Unit = {}, replyAuthor: Member? = null,
     editing: Boolean = false, editingReply: Boolean = false, canSave: Boolean = false,
-    editReason: String = "", reasonChange: (String) -> Unit = {}, extra: @Composable ColumnScope.() -> Unit = {}) {
+    editReason: String = "", reasonChange: (String) -> Unit = {}, imageSelection: (TextRange) -> Unit = {},
+    extra: @Composable ColumnScope.() -> Unit = {}) {
     val categorySheet = remember { MutableTransitionState(false) }
     val categoryShowing = categorySheet.currentState || categorySheet.targetState
     val bodyFocus = remember { FocusRequester() }
@@ -125,7 +127,8 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             } else "草稿已自动保存 · ${draft.raw.length} 字",
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp).then(if (reply) Modifier.testTag("reply-length") else Modifier), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth().then(if (reply) Modifier else Modifier.navigationBarsPadding()).padding(start = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                EditorToolbar(body, ::changeBody, pickImage, enabled, uploading, { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f))
+                EditorToolbar(body, ::changeBody, { imageSelection(body.selection); pickImage() }, enabled, uploading,
+                    { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f))
                 if (reply) CommunityButton(publishText, publish, enabled = canPublish, compact = true)
             }
         }
