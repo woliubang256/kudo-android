@@ -1,6 +1,7 @@
 package com.kudo.android.ui.account
 
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +37,13 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.feed.FeedTabBar
 import com.kudo.android.ui.theme.LogoYellow
+import com.kudo.android.ui.theme.LocalDisplaySettings
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 
 @Composable
 internal fun CommunityDirectoryHost(model: CommunityDirectoryViewModel, accountId: Int?, sessionReady: Boolean,
@@ -78,9 +86,23 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
     LaunchedEffect(state.accountId, tab, allTags, directory?.showTags) {
         if (tab == "tags" && allTags && directory?.showTags == true) loadTags()
     }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-        .then(if (inHome) Modifier else Modifier.statusBarsPadding()).testTag("community-directory")) {
-        FeedTabBar(listOf("categories" to "类别", "tags" to "标签"), tab) { tab = it }
+    val settings = LocalDisplaySettings.current
+    val glass = settings.glass
+    val backdrop = rememberLayerBackdrop()
+    val canBlur = glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
+    val canRefract = glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
+    val surface = MaterialTheme.colorScheme.surface
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).layerBackdrop(backdrop)
+        .testTag("community-directory")) {
+        Box(Modifier.fillMaxWidth().then(if (inHome) Modifier else Modifier.statusBarsPadding())
+            .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
+                drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
+            }, effects = {
+                if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
+                if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
+            }).testTag("directory-toolbar-material")) {
+            FeedTabBar(listOf("categories" to "类别", "tags" to "标签"), tab, containerColor = Color.Transparent) { tab = it }
+        }
         if (expanded) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = ::collapse) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回侧栏目录") }
             Text(if (tab == "categories") "所有类别" else "所有标签", style = MaterialTheme.typography.titleMedium)

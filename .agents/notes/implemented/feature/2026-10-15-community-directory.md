@@ -14,7 +14,7 @@ Status: implemented
 
 CommunityDirectoryViewModel 按账号代次取消并隔离目录与全部标签请求，UI 通过 forAccount 在切换帧立即遮蔽旧账号数据。成功结果缓存，失败保留同账号成功数据，全部标签失败不影响类别和侧栏。切 Tab 读取缓存，进入或前台恢复时只在成功快照超过60秒后刷新，用户主动刷新可越过时限，同类在途请求合并。
 
-底栏分类和首页类别入口共享目录 ViewModel。CommunityDirectoryScreen 顶部复用首页 FeedTabBar 的紧凑标签与渐变指示器，类别保留原生卡片，标签用 LazyVerticalGrid 自适应宫格；最小列宽随字号放大，同时保证280dp窄窗口仍可显示两列。普通手机三列，宽窗口增加列数，标签名称最多两行。所有类别和所有标签作为独立模式，分别保存侧栏与完整目录的四份滚动状态；Tab、模式随导航保存，账号切换时重置。返回键先退出完整目录模式，下拉刷新复用相应请求。私信专用标签进入账号的私信标签网页，普通标签打开现有原生标签流。
+底栏分类和首页类别入口共享目录 ViewModel。CommunityDirectoryScreen 顶部复用首页 FeedTabBar 的紧凑标签与渐变指示器，并在 Backdrop 层中按用户选择的 GlassMode 呈现液态、模糊或半透明材质；类别保留原生卡片，标签用 LazyVerticalGrid 自适应宫格；最小列宽随字号放大，同时保证280dp窄窗口仍可显示两列。普通手机三列，宽窗口增加列数，标签名称最多两行。所有类别和所有标签作为独立模式，分别保存侧栏与完整目录的四份滚动状态；Tab、模式随导航保存，账号切换时重置。返回键先退出完整目录模式，下拉刷新复用相应请求。私信专用标签进入账号的私信标签网页，普通标签打开现有原生标签流。
 
 ## Related decisions
 
@@ -32,7 +32,7 @@ CommunityDirectoryTest 的6项用例验证个人显示项与站点顺序、两�
 
 CommunityDirectoryViewModelTest 验证在途合并、缓存过期、主动刷新、迟到旧账号结果拒绝、退出清空、同账号刷新失败保留和全部标签独立重试。
 
-CommunityDirectoryUiTest 覆盖侧栏成员筛选、标签三列与服务器顺序、分组与独立失败重试、侧栏和完整目录进入详情后的 Tab/模式/位置恢复，以及深色280dp/130%字号和宽窗口增加列数。CategoriesUiTest 保留卡片、图标、状态栏安全区与错误入口的回归。首轮界面测试因顶部 Tab 同样可滚动，通用 hasScrollAction 定位器匹配两个节点；列表添加唯一 testTag 后，返回位置用例通过。此前 HomePagerUiTest、TagFeedUiTest、CategoryFeedUiTest 共10项通过，后续只重跑受改动影响的目录与类别测试。
+CommunityDirectoryUiTest 覆盖侧栏成员筛选、标签三列与服务器顺序、分组与独立失败重试、侧栏和完整目录进入详情后的 Tab/模式/位置恢复，以及深色280dp/130%字号和宽窗口增加列数；新增用例验证目录顶部的 Backdrop 容器、Tab 选择和深色液态模式。CategoriesUiTest 保留卡片、图标、状态栏安全区与错误入口的回归。首轮界面测试因顶部 Tab 同样可滚动，通用 hasScrollAction 定位器匹配两个节点；列表添加唯一 testTag 后，返回位置用例通过。此前 HomePagerUiTest、TagFeedUiTest、CategoryFeedTest 共10项通过，后续只重跑受改动影响的目录与类别测试。
 
 最终12项定向JVM测试及合计17项相关真机用例通过。日志 artifacts/community-directory-state-tests.txt、community-directory-ui-final-device.txt（4项目录+2项旧类别）、community-directory-final-device.txt（新增完整目录返回场景后5项目录）及首轮 community-directory-ui-device.txt（含10项列表相关回归）。最终 assembleDebug、assembleDebugAndroidTest、lintDebug 成功，Lint为0 errors / 46 warnings，目录源码无警告；日志 community-directory-final-build.txt。已目视浅色三列、深色窄屏大字两列与宽窗口五列截图 directory-tags-light.png / directory-tags-dark-narrow-large.png / directory-tags-wide-large.png，点击后的单元灰底为涟漪状态。签名与真机已安装开发版一致，使用 adb install -r 覆盖安装，保持0.2.5 / 2006及账号数据，测试包单独 install -r -t 后 am instrument，不使用自动卸载任务。
 

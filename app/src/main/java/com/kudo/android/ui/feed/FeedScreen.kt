@@ -220,8 +220,9 @@ internal fun FeedPage(state: FeedState, active: Boolean, scrollToTop: () -> Unit
 }
 
 @Composable
-internal fun FeedTabBar(tabs: List<Pair<String, String>>, selected: String, containerColor: Color = MaterialTheme.colorScheme.surface, select: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(containerColor).horizontalScroll(rememberScrollState()).selectableGroup().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+internal fun FeedTabBar(tabs: List<Pair<String, String>>, selected: String, containerColor: Color = MaterialTheme.colorScheme.surface,
+    modifier: Modifier = Modifier, select: (String) -> Unit) {
+    Row(modifier.fillMaxWidth().background(containerColor).horizontalScroll(rememberScrollState()).selectableGroup().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         tabs.forEach { (value, label) ->
             key(value) {
                 val active = selected == value

@@ -27,6 +27,15 @@ class CommunityDirectoryUiTest {
     private fun state() = CommunityDirectoryState(accountId = 7,
         directory = CommunityDirectory(7, "fixture", categories.take(2), categories, tags, true))
 
+    @Test fun directoryTabsUseTheSelectedMaterialBar() {
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK, glass = GlassMode.LIQUID)) {
+            CommunityDirectoryScreen(state(), {}, {}, {}, {}, {}, {})
+        } }
+        compose.onNodeWithTag("directory-toolbar-material").assertIsDisplayed()
+        compose.onNodeWithText("类别").assertIsSelected()
+        compose.onNodeWithText("标签").performClick().assertIsSelected()
+    }
+
     @Test fun tabsKeepSidebarMembershipAndTagsUseThreeColumnsInServerOrder() {
         val clicks = mutableListOf<String>()
         compose.setContent { KudoTheme(DisplaySettings()) {
