@@ -89,6 +89,22 @@ class EditorToolbarUiTest {
         compose.waitUntil(5000) { compose.onAllNodesWithText("摘要").fetchSemanticsNodes().isNotEmpty() }
         capture("markdown-preview", "editor-preview-dark-large.png")
     }
+    @Test fun emojiPickerMirrorsWebsiteGroupsSearchAndRecentUse() {
+        var draft by mutableStateOf(Draft(raw = ""))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
+        } }
+        tool("表情")
+        compose.onNodeWithTag("editor-emoji-groups").assertIsDisplayed()
+        compose.onNodeWithText("最近使用").assertIsDisplayed()
+        compose.onNodeWithTag("editor-emoji-search").performTextInput("smile")
+        compose.onNodeWithText("搜索结果").assertIsDisplayed()
+        compose.onNodeWithContentDescription(":smile:").performClick()
+        compose.waitUntil(5000) { draft.raw == ":smile:" }
+        tool("表情")
+        compose.onNodeWithText("最近使用").assertIsDisplayed()
+        compose.onNodeWithContentDescription(":smile:").assertIsDisplayed()
+    }
     @Test fun sendingLocksAllFormattingAndPreviewAndImageControls() {
         compose.setContent { KudoTheme(DisplaySettings()) {
             EditorForm(Draft(raw = "待发布内容"), emptyList(), {}, {}, {}, {}, sending = true, reply = true, replyRules = ReplyRules(1, 64000))

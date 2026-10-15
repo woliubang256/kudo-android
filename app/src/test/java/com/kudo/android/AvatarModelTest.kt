@@ -59,7 +59,11 @@ class AvatarModelTest {
     }
 
     @Test fun emojiDirectoryIncludesCustomUploadsAndIgnoresMalformedEntries() {
-        val urls = DiscourseParser.emojiUrls(JSONObject("""{"symbols":[{"name":"lollipop","url":"/images/emoji/twemoji/lollipop.png?v=15"}],"b站":[{"name":"bili_118","url":"//cdn.example/custom.png"},null,{"name":"bad","url":{}},{"name":"","url":"/wrong"}],"unknown":null}"""))
+        val json = JSONObject("""{"symbols":[{"name":"lollipop","url":"/images/emoji/twemoji/lollipop.png?v=15"}],"b站":[{"name":"bili_118","url":"//cdn.example/custom.png"},null,{"name":"bad","url":{}},{"name":"","url":"/wrong"}],"unknown":null}""")
+        val groups = DiscourseParser.emojiGroups(json)
+        val urls = DiscourseParser.emojiUrls(json)
         assertEquals(mapOf("lollipop" to "/images/emoji/twemoji/lollipop.png?v=15", "bili_118" to "//cdn.example/custom.png"), urls)
+        assertEquals(setOf("symbols", "b站"), groups.map { it.name }.toSet())
+        assertEquals("b站", groups.first { it.name == "b站" }.items.single().group)
     }
 }

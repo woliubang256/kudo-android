@@ -31,7 +31,7 @@ internal fun EditorPreviewDialog(raw: String, dismiss: () -> Unit) {
         try { preview = withContext(Dispatchers.Default) { MarkdownPreviewRenderer.render(raw) } }
         catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { failure = true }
-        val emojis = metadata?.emojiDirectory().orEmpty()
+        val emojis = metadata?.emojiDirectory().orEmpty().flatMap { it.items }.associate { it.name to it.url }
         if (emojis.isNotEmpty()) {
             try { preview = withContext(Dispatchers.Default) { MarkdownPreviewRenderer.render(raw, emojis) } }
             catch (e: kotlinx.coroutines.CancellationException) { throw e }

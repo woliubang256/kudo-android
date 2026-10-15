@@ -69,7 +69,8 @@ class CommunityRepository(val client: DiscourseClient) {
         return client.get("/user-cards.json", mapOf("user_ids" to users.joinToString(",")))
             .optJSONArray("users").objects().map { DiscourseParser.member(it, avatarDetailsLoaded = true) }
     }
-    suspend fun emojiUrls(): Map<String, String> = DiscourseParser.emojiUrls(client.get("/emojis.json"))
+    suspend fun emojiGroups(): List<SiteEmojiGroup> = DiscourseParser.emojiGroups(client.get("/emojis.json"))
+    suspend fun emojiUrls(): Map<String, String> = emojiGroups().flatMap { it.items }.associate { it.name to it.url }
     suspend fun detail(id: Int, number: Int? = null, trackVisit: Boolean = false) = DiscourseParser.detail(
         client.get(if (number == null) "/t/$id.json" else "/t/$id/$number.json",
             if (trackVisit) mapOf("track_visit" to "true") else emptyMap()))

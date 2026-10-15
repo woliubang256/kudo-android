@@ -132,13 +132,16 @@ object DiscourseParser {
         return UserStatus(emoji, json.stringField("description"), endsAt)
     }
 
-    fun emojiUrls(json: JSONObject): Map<String, String> = json.keys().asSequence()
-        .flatMap { json.optJSONArray(it).objects().asSequence() }
-        .mapNotNull { emoji ->
+    fun emojiGroups(json: JSONObject): List<SiteEmojiGroup> = json.keys().asSequence().mapNotNull { group ->
+        val items = json.optJSONArray(group)?.objects()?.mapNotNull { emoji ->
             val name = emoji.stringField("name")
             val url = emoji.stringField("url")
-            if (name.isEmpty() || url.isEmpty()) null else name to url
-        }.toMap()
+            if (name.isEmpty() || url.isEmpty()) null else SiteEmoji(name, url, group)
+        }.orEmpty()
+        items.takeIf { it.isNotEmpty() }?.let { SiteEmojiGroup(group, it) }
+    }.toList()
+
+    fun emojiUrls(json: JSONObject): Map<String, String> = emojiGroups(json).flatMap { it.items }.associate { it.name to it.url }
 
     fun categories(json: JSONObject): List<Category> =
         (json.optJSONArray("categories") ?: json.optJSONObject("category_list")?.optJSONArray("categories")).objects().map {

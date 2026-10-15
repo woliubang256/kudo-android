@@ -68,7 +68,8 @@ internal val LocalAvatarMetadata = staticCompositionLocalOf<AvatarMetadataCache?
 internal fun AvatarEnvironment(repository: CommunityRepository, accountId: Int?, content: @Composable () -> Unit) {
     val parentScope = rememberCoroutineScope()
     val cache = remember(repository, accountId) {
-        AvatarMetadataCache(CoroutineScope(parentScope.coroutineContext + Dispatchers.IO), repository::userCards, repository::emojiUrls)
+        AvatarMetadataCache(CoroutineScope(parentScope.coroutineContext + Dispatchers.IO), repository::userCards, repository::emojiUrls,
+            loadEmojiGroups = repository::emojiGroups)
     }
     DisposableEffect(cache) { onDispose { cache.close() } }
     CompositionLocalProvider(LocalAvatarMetadata provides cache, content = content)

@@ -12,12 +12,13 @@ class AvatarMetadataCache(
     private val loadEmojis: suspend () -> Map<String, String>,
     private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000 },
     private val capacity: Int = 256,
+    private val loadEmojiGroups: (suspend () -> List<SiteEmojiGroup>)? = null,
 ) : AutoCloseable {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + job)
     private data class Key(val id: Int, val username: String)
     private data class Cached(val member: Member?, val expires: Long)
-    private data class Emojis(val urls: Map<String, String>, val expires: Long)
+    private data class Emojis(val groups: List<SiteEmojiGroup>, val expires: Long)
     private val lock = Mutex()
     private val cache = LinkedHashMap<Key, Cached>(16, 0.75f, true)
     private val pending = linkedMapOf<Key, CompletableDeferred<Member?>>()
@@ -84,24 +85,24 @@ class AvatarMetadataCache(
 
     suspend fun emojiUrl(name: String): String? {
         if (name.isBlank()) return null
-        return emojiDirectory()[name] ?: standardEmojiUrl(name)
+        return emojiDirectory().flatMap { it.items }.firstOrNull { it.name == name }?.url ?: standardEmojiUrl(name)
     }
 
-    suspend fun emojiDirectory(): Map<String, String> {
+    suspend fun emojiDirectory(): List<SiteEmojiGroup> {
         job.ensureActive()
         val request = emojiLock.withLock {
             val cached = emojis?.takeIf { it.expires > nowMillis() }
             if (cached != null) CompletableDeferred(cached)
             else emojiRequest ?: scope.async(start = CoroutineStart.LAZY) {
-                val result = optionalRequest { loadEmojis() }
+                val result = optionalRequest { loadEmojiGroups?.invoke() ?: listOf(SiteEmojiGroup("custom", loadEmojis().map { (name, url) -> SiteEmoji(name, url, "custom") })) }
                 val entry = Emojis(result.orEmpty(), if (result == null) nowMillis() + RETRY_MILLIS else Long.MAX_VALUE)
                 emojiLock.withLock { emojis = entry; emojiRequest = null }
                 entry
             }.also { emojiRequest = it; it.start() }
         }
-        val urls = request.await().urls
+        val groups = request.await().groups
         job.ensureActive()
-        return urls
+        return groups
     }
 
     override fun close() { job.cancel() }

@@ -18,7 +18,7 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 
 基础BBCode和行内脚注只在代码节点的源范围之外转换，代码示例保持原样；upload://图片使用已核对的Discourse只读路由/uploads/short-url/解析。预览使用独立图片浏览宿主，防止图片浏览落到弹窗下方；预览链接展示可复制地址，避免离开当前草稿。公式、图表、目录、日期等复杂站点插件保留源码并说明边界，最终以站点发布为准。正文共享解析器补齐small标签字号。
 
-表情面板复用账号级 AvatarMetadataCache 的站点目录与单次合并请求，支持搜索及自定义表情，目录不可用时保留常用表情。图片选择前将 UTF-16 插入位置交给草稿所属 ViewModel；每次正文编辑按共同前后缀移动该位置，上传完成时向最新草稿插入，不覆盖上传期间输入。插入点不绑定短生命周期的编辑器 Composable，关闭重开面板仍保留上传定位；图片插在选区末尾而不删除选中文字。
+表情面板复用账号级 AvatarMetadataCache 的站点目录与单次合并请求，保留 `/emojis.json` 的分组、分组内顺序和服务端自定义分组；网页标准分组显示中文标题，自定义分组保留服务器名称。搜索跨分组过滤，最近使用按名称写入本地偏好并限制为32项，点击后立即出现在“最近使用”，目录失败时使用内置常用表情回退。标准与自定义表情都以站点短代码插入，避免把不同平台的 Unicode 组合写进帖子。图片选择前将 UTF-16 插入位置交给草稿所属 ViewModel；每次正文编辑按共同前后缀移动该位置，上传完成时向最新草稿插入，不覆盖上传期间输入。插入点不绑定短生命周期的编辑器 Composable，关闭重开面板仍保留上传定位；图片插在选区末尾而不删除选中文字。
 
 ## Existing note audit
 
@@ -42,6 +42,8 @@ MarkdownEditingTest的7个单元测试通过，覆盖空选区、反向选区、
 PostEditViewModelTest增加延迟上传期间连续输入的回归，验证图片在移动后的原位置插入，前后文字保留。AvatarMetadataCacheTest验证既有目录缓存与合并请求不变。
 
 MarkdownPreviewTest的5个用例验证常用格式、表格任务、details/spoiler、表情脚注、代码示例不被转换、短图片URL、安全链接和插件源码提示。MarkdownInlineParserTest复查共享正文样式。共31个针对性JVM用例通过。
+
+AvatarModelTest补充分组与自定义组字段解析；EditorToolbarUiTest增加网页式分组、跨组搜索及最近使用回显，5项编辑器真机用例全部通过。分组顺序测试不依赖 `org.json.JSONObject.keys()` 的实现顺序，但每个组及组内项目仍按解析结果保留。
 
 真机1618704c：CommunityFormsUiTest、PostEditingUiTest和EditorLifecycleUiTest共14项通过；EditorToolbarUiTest与MarkdownContentUiTest共9项通过，覆盖选择格式、独立预览保留选区且不发布、回复内的链接/列表弹层、固定发布、表情与模板、深色大字及发送锁。首轮截图API在嵌套弹窗退出时失败，改用UiAutomation并等待菜单消失采集证据，功能断言没有失败。构建与Lint通过；覆盖前核对版本0.2.5/2006及相同开发签名，仅adb install -r/-r -t，保留开发版数据。证据为artifacts/editor-device-tests.log、editor-device-retest.log、editor-preview-light.png、editor-preview-dark-large.png和editor-reply-toolbar.png。
 
