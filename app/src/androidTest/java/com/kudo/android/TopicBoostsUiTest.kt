@@ -164,6 +164,50 @@ class TopicBoostsUiTest {
             .outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    @Test fun ownMainPostUsesEditInBottomBarInsteadOfBoost() {
+        var edits = 0
+        val own = first.copy(canEdit = true)
+        val ownDetail = detail.copy(posts = listOf(own), stream = listOf(own.id))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            CompositionLocalProvider(LocalTopicActions provides TopicActionsController({}, { _, _, _ -> },
+                edit = { _, _ -> edits++ })) {
+                TopicScreen(
+                    state = TopicState(ownDetail, loading = false, viewerId = author.id),
+                    glass = GlassMode.TRANSLUCENT,
+                    back = {}, retry = {}, more = {}, login = {}, like = {}, bookmark = {},
+                    reply = {}, user = {}, image = {}, openLink = {}, share = {},
+                )
+            }
+        } }
+        compose.onNodeWithContentDescription("编辑主帖").performClick()
+        compose.onNodeWithContentDescription("Boost 主帖").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, edits) }
+    }
+
+    @Test fun ownReplyUsesOneEditActionInsteadOfBoost() {
+        var edits = 0
+        val ownReply = root.copy(canEdit = true)
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            CompositionLocalProvider(LocalTopicActions provides TopicActionsController({}, { _, _, _ -> },
+                edit = { _, _ -> edits++ })) {
+                TopicPost(ownReply, detail, TopicState(detail, loading = false, viewerId = author.id), true,
+                    {}, {}, {}, {}, {}, {}, {}, boost = {})
+            }
+        } }
+        compose.onAllNodesWithContentDescription("编辑第 2 楼").assertCountEquals(1).onFirst().performClick()
+        compose.onNodeWithContentDescription("Boost 此帖子").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, edits) }
+    }
+
+    @Test fun ownUneditableReplyDoesNotFallBackToBoost() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicPost(root, detail, TopicState(detail, loading = false, viewerId = author.id), true,
+                {}, {}, {}, {}, {}, {}, {}, boost = {})
+        } }
+        compose.onNodeWithContentDescription("编辑第 2 楼").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("Boost 此帖子").assertDoesNotExist()
+    }
+
     @Test fun boostAvatarsHideDecorationsWithoutChangingOtherAvatarScenes() {
         val flaired = author.copy(flair = AvatarFlair("测试资质", "battery-quarter"))
         val status = author.copy(id = 2, username = "status", status = UserStatus("smile", "测试状态"))

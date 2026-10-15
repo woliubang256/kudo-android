@@ -94,16 +94,21 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.weight(1f))
                 val actions = LocalTopicActions.current
-                if (post.editableBy(state.viewerId)) IconButton(onClick = { actions.edit(detail.id, post) },
-                    enabled = enabled && !state.loading && post.id !in state.busy, modifier = Modifier.testTag("post-edit-${post.number}")) {
-                    Icon(Icons.Rounded.Edit, "编辑第 ${post.number} 楼", Modifier.size(20.dp))
-                }
                 TopicReactionButton(post, enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canReact),
                     choose = if (post.reactionsAvailable && detail.validReactions.isNotEmpty()) ({ choose(post) }) else null,
                     click = { like(post) })
-                IconButton(onClick = { boost(post) }, enabled = enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canBoost)) {
-                    Icon(CategoryIcons.get("rocket"), "Boost 此帖子", Modifier.size(17.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
+                if (state.viewerId != null && post.author.id == state.viewerId) {
+                    IconButton(onClick = { actions.edit(detail.id, post) },
+                        enabled = enabled && !state.loading && post.id !in state.busy && post.editableBy(state.viewerId),
+                        modifier = Modifier.testTag("post-edit-${post.number}")) {
+                        Icon(Icons.Rounded.Edit, "编辑第 ${post.number} 楼", Modifier.size(17.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
+                    }
+                } else {
+                    IconButton(onClick = { boost(post) }, enabled = enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canBoost)) {
+                        Icon(CategoryIcons.get("rocket"), "Boost 此帖子", Modifier.size(17.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
+                    }
                 }
                 TextButton(onClick = { reply(post) }, enabled = enabled && !detail.closed) { Text("回复") }
             }

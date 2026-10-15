@@ -153,6 +153,8 @@ internal fun TopicBottomBar(
 ) {
     val detail = state.detail ?: return
     val first = detail.originalPost
+    val actions = LocalTopicActions.current
+    val ownFirst = first?.let { state.viewerId != null && it.author.id == state.viewerId } == true
     val available = enabled && !floorEditing && !state.loading && first != null && first.id !in state.busy
     BoxWithConstraints(modifier.navigationBarsPadding().then(if (floorEditing) Modifier.imePadding() else Modifier)
         .padding(horizontal = 16.dp, vertical = 20.dp).fillMaxWidth()) {
@@ -224,9 +226,17 @@ internal fun TopicBottomBar(
                 TopicReactionButton(first, available && (state.viewerId == null || first?.canReact == true),
                     choose = if (first?.reactionsAvailable == true && detail.validReactions.isNotEmpty()) ({ choose(first) }) else null,
                     click = { first?.let(like) }, bottom = true)
-                IconButton(onClick = { first?.let(boost) }, enabled = available && (state.viewerId == null || first?.canBoost == true)) {
-                    Icon(CategoryIcons.get("rocket"), "Boost 主帖", Modifier.size(19.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
+                if (ownFirst) {
+                    IconButton(onClick = { first?.let { actions.edit(detail.id, it) } },
+                        enabled = available && first?.editableBy(state.viewerId) == true, modifier = Modifier.testTag("topic-edit")) {
+                        Icon(Icons.Rounded.Edit, "编辑主帖", Modifier.size(19.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
+                    }
+                } else {
+                    IconButton(onClick = { first?.let(boost) }, enabled = available && (state.viewerId == null || first?.canBoost == true)) {
+                        Icon(CategoryIcons.get("rocket"), "Boost 主帖", Modifier.size(19.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
+                    }
                 }
             }
         }

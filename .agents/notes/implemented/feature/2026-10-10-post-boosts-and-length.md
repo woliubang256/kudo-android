@@ -18,6 +18,8 @@ Boost输入底部只显示“当前/16字”，有效表情各计1字，合并�
 
 帖子操作栏移除左侧灰色“正文 / 回复”标记，保留右侧回复入口和楼层目标。Boost 在各楼层及底部主帖操作栏统一复用官网 Font Awesome rocket 矢量；官网插件 @icon=rocket 的只读证据位于 artifacts/boost-web-source.js。火箭分别为17dp和19dp，与爱心实际图形高度接近；使用主题 onSurfaceVariant 的75%灰色，并继续服从禁用透明度。列表点赞数量用空心爱心表示，帖子和底部已选爱心使用 Discourse love 红色（#FA6C8D），其他品牌选中色继续使用 LogoYellow。
 
+当前查看者与帖子作者相同时，主帖底部和楼层操作栏不再提供 Boost。可编辑内容在原 Boost 位置显示编辑图标并复用 TopicActionsController.edit；没有编辑权限时编辑图标保持禁用，绝不退回 Boost。未登录用户和他人帖子仍按 canBoost 展示原火箭入口，避免把作者权限误判为 Boost 权限。
+
 ## Existing note audit
 
 已检索回帖、编辑器、楼中楼和阅读笔记。[账号与草稿](../../implemented/feature/2026-10-07-account-and-composer.md)的账号/楼层草稿隔离与确认后清理契约继续成立；[酷安式表单](../../implemented/feature/2026-10-10-coolapk-forms.md)约束输入与可拖动面板；[回应](../../implemented/feature/2026-10-09-topic-author-and-responses.md)的短按/长按行为保留；[阅读同步](../../implemented/bug-fix/2026-10-10-topic-reading-sync.md)对遮挡暂停与真实正文曝光继续成立。无完全吸收或过时提案。
@@ -35,6 +37,8 @@ Boost输入底部只显示“当前/16字”，有效表情各计1字，合并�
 精简计数先新增离线输入用例，在旧版因缺少“0/16字”失败（artifacts/boost-counter-repro-ui.txt）。修改后2项真机用例通过（boost-counter-fixed-ui.txt），覆盖文字与Unicode/自定义shortcode合计、16字含5表情可发送、6表情及17字明确提示、纠正后恢复发送，以及发送确认前保留内容。PostBoostsTest的3项JVM测试及Debug/AndroidTest构建通过（boost-counter-fixed-build.txt）；真机同签名install -r覆盖，保留账号数据。
 
 PostBoostsTest验证16/17字、5/6表情、旗帜/ZWJ/肤色、UTF-16普通补充字符、标准别名、自定义shortcode、CSRF独立接口及失败不重试。TopicViewModelTest验证仅确认后更新与回调、Boost和点赞共享逐帖互斥。真机夹具检查输入边界、忙碌禁用、失败保留与成功清理、主帖和楼中楼胶囊、深色大字、拖动关闭及各玻璃材质按钮。
+
+新增自己的主帖底栏、自己的回复和无编辑权限的自有回复回归用例先在旧实现复现失败（找不到编辑主帖、仍存在Boost），修复后三项真机用例通过；同时验证了自己的内容只显示编辑、他人内容继续显示Boost。
 
 ## Consequences
 
