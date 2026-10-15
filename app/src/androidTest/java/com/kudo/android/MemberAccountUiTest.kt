@@ -94,6 +94,40 @@ class MemberAccountUiTest {
         capture("member-notifications-likes.png", "member-notifications")
         compose.runOnIdle { assertEquals(0, writes.get()) }
     }
+    @Test fun notificationsMaterialSurvivesSwitchingIntoThePageWithoutSamplingItsToolbar() {
+        noticesFixture = """{"notifications":[{"id":1,"notification_type":2,"read":false,"data":{"title":"消息材质回归夹具","display_username":"fixture"}}],"total_rows_notifications":1}"""
+        vm = AccountViewModel(repository, {}, {})
+        val account = vm!!
+        var visible by mutableStateOf(false)
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.DARK, glass = GlassMode.LIQUID))
+        compose.setContent { KudoTheme(settings) {
+            if (visible) NotificationsScreen(account, {}, { _, _ -> })
+            else Box(Modifier.fillMaxSize())
+        } }
+        for (theme in listOf(ThemeMode.DARK, ThemeMode.LIGHT)) {
+            for (glass in GlassMode.entries) {
+                compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass); visible = true }
+                compose.waitUntil(5000) { account.user != null && account.noticesLoaded }
+                compose.onNodeWithTag("notifications-toolbar-material").assertIsDisplayed()
+                    .assert(!hasAnyAncestor(hasTestTag("notifications-content-backdrop")))
+                val toolbar = compose.onNodeWithTag("notifications-toolbar-material").fetchSemanticsNode().boundsInRoot
+                val content = compose.onNodeWithText("消息材质回归夹具").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                assertTrue(content.top >= toolbar.bottom)
+                val tabs = compose.onNodeWithText("全部").fetchSemanticsNode().boundsInRoot
+                val refresh = compose.onNodeWithContentDescription("刷新通知").fetchSemanticsNode().boundsInRoot
+                val read = compose.onNodeWithContentDescription("全部标为已读").fetchSemanticsNode().boundsInRoot
+                assertEquals(tabs.center.y, refresh.center.y, 1f)
+                assertEquals(refresh.center.y, read.center.y, 1f)
+                compose.onNodeWithText("消息", substring = false).assertDoesNotExist()
+                compose.onNodeWithText("回复", useUnmergedTree = true).performClick()
+                compose.onNodeWithTag("notice-group-REPLIES").assertIsDisplayed()
+                compose.onNodeWithText("消息材质回归夹具").assertIsDisplayed()
+                compose.onRoot().captureToImage()
+                compose.runOnIdle { assertEquals(0, writes.get()); visible = false }
+            }
+        }
+    }
+
     @Test fun darkLargeTextKeepsAllFourQuickEntrancesReachable() {
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f)) {
             Box(Modifier.fillMaxSize()) { Box(Modifier.width(280.dp).height(480.dp)) {

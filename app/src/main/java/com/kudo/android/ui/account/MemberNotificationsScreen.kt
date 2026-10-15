@@ -21,6 +21,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
@@ -51,26 +53,11 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
     val canBlur = settings.glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
     val canRefract = settings.glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
     val surface = MaterialTheme.colorScheme.surface
-    Column(Modifier.fillMaxSize().layerBackdrop(backdrop).semantics { paneTitle = "消息" }.testTag("member-notifications")) {
-        Box(Modifier.fillMaxWidth().statusBarsPadding()
-            .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
-                drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
-            }, effects = {
-                if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
-                if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
-            }).testTag("notifications-toolbar-material")) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                AccountTabs(NoticeGroup.entries.map { it.title }, pager.currentPage, Modifier.weight(1f), Color.Transparent) {
-                    scope.launch { pager.animateScrollToPage(it) }
-                }
-                Row(Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CommunityIconButton(Icons.Rounded.Refresh, "刷新通知", { vm.loadNotices() }, Modifier.testTag("refresh-notices"), !vm.noticesLoading)
-                    CommunityIconButton(Icons.Rounded.DoneAll, "全部标为已读", { vm.markRead() }, Modifier.testTag("mark-all-notices-read"),
-                        vm.unreadCount > 0 || vm.notices.any { !it.read })
-                }
-            }
-        }
-        HorizontalPager(pager, Modifier.weight(1f)) { index ->
+    var toolbarHeight by remember { mutableIntStateOf(0) }
+    val toolbarPadding = with(LocalDensity.current) { toolbarHeight.toDp() }
+    Box(Modifier.fillMaxSize().semantics { paneTitle = "消息" }.testTag("member-notifications")) {
+        HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+            .padding(top = toolbarPadding).testTag("notifications-content-backdrop")) { index ->
             val group = NoticeGroup.entries[index]
             val scroll = rememberLazyListState()
             val notices = vm.notices.filter(group::includes)
@@ -143,6 +130,24 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                     Text("向上滑动加载更早的通知", Modifier.fillMaxWidth().padding(18.dp), fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().onSizeChanged { toolbarHeight = it.height }
+            .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
+                drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
+            }, effects = {
+                if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
+                if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
+            }).statusBarsPadding().testTag("notifications-toolbar-material")) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                AccountTabs(NoticeGroup.entries.map { it.title }, pager.currentPage, Modifier.weight(1f), Color.Transparent) {
+                    scope.launch { pager.animateScrollToPage(it) }
+                }
+                Row(Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CommunityIconButton(Icons.Rounded.Refresh, "刷新通知", { vm.loadNotices() }, Modifier.testTag("refresh-notices"), !vm.noticesLoading)
+                    CommunityIconButton(Icons.Rounded.DoneAll, "全部标为已读", { vm.markRead() }, Modifier.testTag("mark-all-notices-read"),
+                        vm.unreadCount > 0 || vm.notices.any { !it.read })
                 }
             }
         }
