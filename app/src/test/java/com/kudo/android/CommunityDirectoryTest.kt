@@ -6,6 +6,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CommunityDirectoryTest {
+    @Test fun tagDirectoryRetainsNameSlugAndCanonicalId() {
+        val tag = parseDirectoryTagGroups(JSONObject("""{"tags":[{"id":444,"name":"公告","slug":"444-tag"}]}"""))
+            .single().tags.single().tag
+        assertEquals(TopicTag("公告", "444-tag", id = 444), tag)
+    }
+
     private val site = """{"categories":[{"id":98,"name":"国产替代","position":3},{"id":20,"name":"开发 Lv1","parent_category_id":4,"position":2},{"id":4,"name":"开发调优","position":1,"icon":"code"},{"id":2,"name":"运营反馈","position":4}],"navigation_menu_site_top_tags":[{"name":"热门甲"},{"name":"热门乙"}],"anonymous_default_navigation_menu_tags":[{"name":"站点乙"},{"name":"站点甲"}]}"""
     private val settings = """{"fixed_category_positions":true,"tagging_enabled":true,"default_navigation_menu_categories":"98|4"}"""
     private fun html(user: String = "null", config: String = settings, catalog: String = site, script: Boolean = true): String {

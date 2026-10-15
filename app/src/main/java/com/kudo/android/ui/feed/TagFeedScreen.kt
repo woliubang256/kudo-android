@@ -31,7 +31,8 @@ import kotlinx.coroutines.launch
 internal fun TagFeedScreen(slug: String, state: FeedState, user: Member?, select: (String) -> Unit,
     refresh: () -> Unit, more: () -> Unit, openTopic: (Int) -> Unit, openUser: (String) -> Unit,
     search: () -> Unit, login: () -> Unit, back: () -> Unit, listStyle: TopicListStyle,
-    pages: Map<String, FeedState>, modifier: Modifier = Modifier) {
+    pages: Map<String, FeedState>, modifier: Modifier = Modifier, name: String = "") {
+    val title = state.tag?.name ?: name.ifBlank { if (slug.matches(Regex("[0-9]+-tag"))) "标签" else slug }
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(48.dp).background(LogoYellow.copy(alpha = .10f))
             .testTag("tag-toolbar"), verticalAlignment = Alignment.CenterVertically) {
@@ -39,7 +40,7 @@ internal fun TagFeedScreen(slug: String, state: FeedState, user: Member?, select
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回", Modifier.size(24.dp))
             }
             Icon(Icons.Rounded.Tag, "标签", Modifier.size(21.dp), tint = LogoYellow)
-            Text(slug, Modifier.weight(1f).padding(horizontal = 8.dp).testTag("tag-toolbar-name"),
+            Text(title, Modifier.weight(1f).padding(horizontal = 8.dp).testTag("tag-toolbar-name"),
                 fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = search), contentAlignment = Alignment.Center) {

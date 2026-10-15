@@ -123,6 +123,10 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         fun authenticated(action: () -> Unit) { if (account.user == null) login() else action() }
         fun topic(id: Int, number: Int? = null) { if (id > 0) nav.navigate("topic/$id?post=${number ?: 0}") }
         fun user(username: String) { if (username.isNotBlank()) nav.navigate("user/${Uri.encode(username)}") }
+        fun openTag(tag: TopicTag) {
+            val slug = tag.slug.ifBlank { tag.name }
+            if (slug.isNotBlank()) nav.navigate("tag/${Uri.encode(slug)}?id=${tag.id ?: 0}&name=${Uri.encode(tag.name)}") { launchSingleTop = true }
+        }
         fun invalidLink() { showMessage("无法打开此链接") }
         fun openWebPage(url: String) { nav.openWebPage(url, ::invalidLink) }
         fun openLink(url: String) {
@@ -202,9 +206,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 when (selected) {
                                     0 -> FeedScreen(state.forUser(account.user), account.user, feed::select, feed::refresh, feed::more, { topic(it) }, ::user, { nav.navigate("search") }, { if (account.user == null) login() else user(account.user!!.username) }, { directory.useAccount(account.user?.id); if (account.sessionReady) directory.loadIfStale() }, listStyle = display.topicListStyle, pages = pages,
                                         categoryContent = { CommunityDirectoryHost(directory, account.user?.id, account.sessionReady, ::login,
-                                            { nav.navigate("category/${it.id}") }, { nav.navigate("tag/${Uri.encode(it.slug.ifBlank { it.name })}?id=0") }, ::openWebPage, inHome = true) })
+                                            { nav.navigate("category/${it.id}") }, ::openTag, ::openWebPage, inHome = true) })
                                     1 -> CommunityDirectoryHost(directory, account.user?.id, account.sessionReady, ::login,
-                                        { nav.navigate("category/${it.id}") }, { nav.navigate("tag/${Uri.encode(it.slug.ifBlank { it.name })}?id=0") }, ::openWebPage)
+                                        { nav.navigate("category/${it.id}") }, ::openTag, ::openWebPage)
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
                                         { nav.navigate("personal/${AccountDestination.MESSAGES.name}") })
                                     4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") },
@@ -238,7 +242,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             ?: Category(id, "社区分类", "", "", "", 0)
                         FeedScreen(state.forUser(account.user, inCategory = true), account.user, vm::select, vm::refresh, vm::more, { topic(it) }, ::user, { nav.navigate("search") }, ::login, {}, category = category, back = { nav.popBackStack() }, listStyle = display.topicListStyle, pages = pages, createTopic = { editor(categoryId = it) }, glass = display.glass)
                     }
-                    composable("tag/{slug}?id={id}", arguments = listOf(navArgument("slug") { type = NavType.StringType }, navArgument("id") { type = NavType.IntType; defaultValue = 0 })) { entry ->
+                    composable("tag/{slug}?id={id}&name={name}", arguments = listOf(navArgument("slug") { type = NavType.StringType }, navArgument("id") { type = NavType.IntType; defaultValue = 0 }, navArgument("name") { type = NavType.StringType; defaultValue = "" })) { entry ->
                         val slug = entry.arguments!!.getString("slug").orEmpty()
                         val id = entry.arguments!!.getInt("id").takeIf { it > 0 }
                         val vm = model("tag-$slug-${id ?: 0}") { FeedViewModel(app.repository, initialUser = account.user, tagSlug = slug, tagId = id) }
@@ -246,14 +250,14 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         val pages by vm.pages.collectAsStateWithLifecycle()
                         RefreshFeedOnResume(vm, account.user)
                         TagFeedScreen(slug, state.forUser(account.user, inCategory = true), account.user, vm::select, vm::refresh, vm::more,
-                            { topic(it) }, ::user, { nav.navigate("search") }, ::login, { nav.popBackStack() }, display.topicListStyle, pages)
+                            { topic(it) }, ::user, { nav.navigate("search") }, ::login, { nav.popBackStack() }, display.topicListStyle, pages, name = entry.arguments!!.getString("name").orEmpty())
                     }
                     composable("search") {
                         val vm = model("search") { SearchViewModel(app.repository, account.user?.id) }
                         val state by vm.state.collectAsStateWithLifecycle()
                         LaunchedEffect(vm, account.user?.id) { vm.useAccount(account.user?.id) }
                         SearchScreen(state.forAccount(account.user?.id), vm::search, { nav.popBackStack() }, ::topic, ::user, ::login, listStyle = display.topicListStyle,
-                            openCategory = { nav.navigate("category/$it") }, openTag = { tag -> nav.navigate("tag/${Uri.encode(tag.slug.ifBlank { tag.name })}?id=0") },
+                            openCategory = { nav.navigate("category/$it") }, openTag = ::openTag,
                             changeKind = vm::changeKind, changeSort = vm::changeSort, clear = vm::clear, refreshHistory = vm::refreshHistory,
                             loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory,
                             initialScrollIndex = vm.scrollIndex, initialScrollOffset = vm.scrollOffset, saveScrollPosition = vm::saveScrollPosition)
@@ -376,10 +380,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             loadBoostRules = vm::loadBoostRules, boost = vm::boost, jumpTo = vm::jumpTo, previous = vm::previous,
                             vote = { post, name, options -> authenticated { vm.vote(post, name, options) } },
                             openCategory = { categoryId -> if (categoryId > 0) nav.navigate("category/$categoryId") { launchSingleTop = true } },
-                            openTag = { tag ->
-                                val slug = tag.slug.ifBlank { tag.name }
-                                if (slug.isNotBlank()) nav.navigate("tag/${Uri.encode(slug)}?id=0") { launchSingleTop = true }
-                            })
+                            openTag = ::openTag)
                         }
                         val currentUser = account.user
                         val target = replyTarget
@@ -455,7 +456,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         val state by vm.state.collectAsStateWithLifecycle()
                         LaunchedEffect(vm, account.user?.id) { vm.useAccount(account.user?.id) }
                         SearchScreen(state.forAccount(account.user?.id), vm::search, { nav.popBackStack() }, ::topic, ::user, ::login, listStyle = display.topicListStyle,
-                            openCategory = { nav.navigate("category/$it") }, openTag = { tag -> nav.navigate("tag/${Uri.encode(tag.slug.ifBlank { tag.name })}?id=0") },
+                            openCategory = { nav.navigate("category/$it") }, openTag = ::openTag,
                             changeKind = vm::changeKind, changeSort = vm::changeSort, clear = vm::clear, refreshHistory = vm::refreshHistory,
                             loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory,
                             initialScrollIndex = vm.scrollIndex, initialScrollOffset = vm.scrollOffset, saveScrollPosition = vm::saveScrollPosition)

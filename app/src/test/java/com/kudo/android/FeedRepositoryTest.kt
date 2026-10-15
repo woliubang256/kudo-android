@@ -8,6 +8,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FeedRepositoryTest {
+    @Test fun generatedTagSlugWithoutExplicitIdStillUsesCanonicalIdPath() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse =
+                    if (request.path == "/tag/444-tag/444.json") MockResponse().setBody("""{"tag":{"id":444,"name":"公告","slug":"444-tag"},"topic_list":{"topics":[{"id":31}]}}""")
+                    else MockResponse().setResponseCode(404).setBody("{}")
+            }
+            val page = CommunityRepository(DiscourseClient(NoCookies, server.url("/"))).tagTopics("444-tag")
+            assertEquals(31, page.topics.single().id)
+            assertEquals(TopicTag("公告", "444-tag", id = 444), page.tag)
+            assertEquals("/tag/444-tag/444.json", server.takeRequest().path)
+        }
+    }
+
     @Test fun everyCategoryFilterAndServerCursorKeepCategoryScope() = runBlocking {
         MockWebServer().use { server ->
             server.start()

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 
-data class FeedState(val topics: List<Topic> = emptyList(), val categories: List<Category> = emptyList(), val filter: String = "latest", val loading: Boolean = true, val loadingMore: Boolean = false, val next: String? = null, val error: Throwable? = null, val moreError: Throwable? = null, val accountId: Int? = null, val newCount: Int? = null, val hasUpdates: Boolean = false, val scrollToTopRequest: Long = 0) {
+data class FeedState(val topics: List<Topic> = emptyList(), val categories: List<Category> = emptyList(), val filter: String = "latest", val loading: Boolean = true, val loadingMore: Boolean = false, val next: String? = null, val error: Throwable? = null, val moreError: Throwable? = null, val accountId: Int? = null, val newCount: Int? = null, val hasUpdates: Boolean = false, val scrollToTopRequest: Long = 0, val tag: TopicTag? = null) {
     fun forUser(user: Member?, inCategory: Boolean = false): FeedState =
         if (accountId == user?.id) this else FeedState(filter = defaultFeedFilter(user, inCategory), accountId = user?.id)
 }
@@ -60,7 +60,7 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
         val cached = _pages.value[filter]?.takeIf { !it.loading }
         baseline = cached?.topics?.associateBy(Topic::id)
         _state.value = cached?.copy(categories = previous.categories, loadingMore = false)
-            ?: FeedState(categories = previous.categories, filter = filter, accountId = user?.id)
+            ?: FeedState(categories = previous.categories, filter = filter, accountId = user?.id, tag = previous.tag)
         if (cached == null) refresh(manual = false)
         restartUpdates()
     }
@@ -191,7 +191,7 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
                 } else null
                 baseline = page.topics.associateBy(Topic::id)
                 acknowledgeOnProbe = arrivalRevision != refreshRevision
-                _state.update { it.copy(topics = page.topics.distinctBy(Topic::id), next = page.next, loading = false, hasUpdates = it.hasUpdates && acknowledgeOnProbe) }
+                _state.update { it.copy(topics = page.topics.distinctBy(Topic::id), next = page.next, loading = false, hasUpdates = it.hasUpdates && acknowledgeOnProbe, tag = page.tag ?: it.tag) }
                 if (categoryId == null && tagSlug == null) loadedNewCount?.takeIf { it > 0 }?.let(refreshResults::trySend)
                 if (acknowledgeOnProbe) signals?.trySend(Unit)
                 coroutineScope {

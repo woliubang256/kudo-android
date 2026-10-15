@@ -31,7 +31,8 @@ class CommunityRepository(val client: DiscourseClient) {
     suspend fun tagTopics(slug: String, id: Int? = null, filter: String = "latest", next: String? = null): TopicPage {
         require(slug.matches(Regex("[\\p{L}\\p{N}_-][\\p{L}\\p{N}_-]*")))
         require(FeedFilter.entries.any { it.value == filter })
-        val base = "/tag/$slug${id?.let { "/$it" }.orEmpty()}"
+        val canonicalId = id?.takeIf { it > 0 } ?: Regex("([0-9]+)-tag").matchEntire(slug)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it > 0 }
+        val base = "/tag/$slug${canonicalId?.let { "/$it" }.orEmpty()}"
         val endpoint = if (filter == FeedFilter.UNREAD.value) "unseen" else filter
         val path = next ?: if (filter == FeedFilter.LATEST.value) "$base.json" else "$base/l/$endpoint.json"
         return DiscourseParser.topicPage(client.get(path))

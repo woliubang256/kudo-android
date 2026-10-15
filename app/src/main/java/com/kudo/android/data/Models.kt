@@ -25,7 +25,7 @@ data class UserStatus(val emoji: String, val description: String, val endsAt: In
     fun isActive(now: Instant = Instant.now()): Boolean = endsAt?.isAfter(now) != false
 }
 data class Category(val id: Int, val name: String, val slug: String, val color: String, val description: String, val count: Int, val icon: String = "")
-data class TopicTag(val name: String, val slug: String = "", val icon: String = "", val color: String = "")
+data class TopicTag(val name: String, val slug: String = "", val icon: String = "", val color: String = "", val id: Int? = null)
 data class Topic(
     val id: Int, val title: String, val excerpt: String, val author: Member?, val categoryId: Int,
     val tags: List<String>, val replies: Int, val views: Int, val likes: Int, val image: String,
@@ -33,7 +33,7 @@ data class Topic(
     val tagDetails: List<TopicTag> = tags.map { TopicTag(it) },
     val unseen: Boolean = false, val unreadPosts: Int = 0,
 )
-data class TopicPage(val topics: List<Topic>, val next: String?)
+data class TopicPage(val topics: List<Topic>, val next: String?, val tag: TopicTag? = null)
 
 enum class FeedFilter(val value: String, val label: String, val personal: Boolean = false) {
     UNREAD("unread", "未读", true), LATEST("latest", "最新"), NEW("new", "新", true),
@@ -94,13 +94,13 @@ internal fun JSONArray?.strings(): List<String> = if (this == null) emptyList() 
 internal fun JSONArray?.topicTags(): List<TopicTag> = if (this == null) emptyList() else (0 until length()).mapNotNull {
     when (val value = opt(it)) {
         is String -> value.trim().takeIf(String::isNotEmpty)?.let { TopicTag(it) }
-        is JSONObject -> value.stringField("name").takeIf(String::isNotEmpty)?.let {
-            TopicTag(it, value.stringField("slug"), value.stringField("icon"), value.stringField("color"))
-        }
+        is JSONObject -> value.topicTag()
         else -> null
     }
 }.distinctBy { it.name }
 internal fun JSONArray?.tagNames(): List<String> = topicTags().map { it.name }
+internal fun JSONObject.topicTag(): TopicTag? = stringField("name").ifBlank { stringField("text") }
+    .takeIf(String::isNotBlank)?.let { TopicTag(it, stringField("slug"), stringField("icon"), stringField("color"), positiveInt("id")) }
 internal fun JSONObject.text(key: String): String = if (isNull(key)) "" else optString(key, "")
 internal fun JSONObject.stringField(key: String): String = (opt(key) as? String).orEmpty().trim()
 internal fun JSONObject.positiveInt(key: String): Int? = optInt(key).takeIf { it > 0 }
@@ -164,7 +164,7 @@ object DiscourseParser {
                 tagDetails = item.optJSONArray("tags").topicTags(), unseen = item.optBoolean("unseen"),
                 unreadPosts = (item.opt("unread_posts") as? Number)?.toInt()?.coerceAtLeast(0) ?: 0)
         }
-        return TopicPage(topics, list.text("more_topics_url").takeIf(String::isNotBlank))
+        return TopicPage(topics, list.text("more_topics_url").takeIf(String::isNotBlank), json.optJSONObject("tag")?.topicTag())
     }
 
     fun post(json: JSONObject): Post {

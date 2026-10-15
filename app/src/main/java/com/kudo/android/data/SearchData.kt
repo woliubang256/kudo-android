@@ -59,10 +59,7 @@ suspend fun CommunityRepository.searchResults(query: String, kind: SearchKind, p
 
 suspend fun CommunityRepository.searchTags(query: String): List<TopicTag> =
     client.get("/tags/filter/search", mapOf("q" to query))
-        .optJSONArray("results").objects().mapNotNull {
-            val name = it.stringField("text").ifBlank { it.stringField("name") }
-            name.takeIf(String::isNotBlank)?.let { name -> TopicTag(name, it.stringField("slug"), it.stringField("icon"), it.stringField("color")) }
-        }.distinctBy { it.name }
+        .optJSONArray("results").objects().mapNotNull { it.topicTag() }.distinctBy { it.name }
 
 suspend fun CommunityRepository.recentSearches(accountId: Int?): List<String> {
     if (accountId == null) return emptyList()

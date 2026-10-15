@@ -82,10 +82,7 @@ private fun parseDirectoryTags(array: JSONArray?): List<DirectoryTag> = if (arra
     (0 until array.length()).mapNotNull { index ->
         when (val value = array.opt(index)) {
             is String -> value.trim().takeIf(String::isNotEmpty)?.let { DirectoryTag(TopicTag(it)) }
-            is JSONObject -> value.stringField("name").takeIf(String::isNotEmpty)?.let { name ->
-                DirectoryTag(TopicTag(name, value.stringField("slug"), value.stringField("icon"), value.stringField("color")),
-                    value.optBoolean("pm_only"))
-            }
+            is JSONObject -> value.topicTag()?.let { DirectoryTag(it, value.optBoolean("pm_only")) }
             else -> null
         }
     }.distinctBy { it.tag.name }
