@@ -4,6 +4,9 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.*
@@ -11,6 +14,14 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.Uri
+import coil3.asImage
+import coil3.decode.DataSource
+import coil3.fetch.Fetcher
+import coil3.fetch.ImageFetchResult
+import coil3.request.Options
 import com.kudo.android.data.*
 import com.kudo.android.ui.feed.*
 import com.kudo.android.ui.theme.KudoTheme
@@ -44,7 +55,7 @@ class FeedHeaderUiTest {
         compose.onNodeWithContentDescription("Linux.do 社区 Logo").assertIsNotDisplayed()
         list.performTouchInput { swipeUp(durationMillis = 800) }
         assertEquals(pinnedTop, compose.onNodeWithText("最新").fetchSemanticsNode().boundsInRoot.top, 1f)
-        list.performTouchInput { swipeDown(durationMillis = 800) }
+        swipeFeedDown("feed-list-latest")
         compose.onNodeWithContentDescription("Linux.do 社区 Logo").assertIsDisplayed()
         assertEquals(initialTop, compose.onNodeWithText("最新").fetchSemanticsNode().boundsInRoot.top, 1f)
     }
@@ -54,6 +65,93 @@ class FeedHeaderUiTest {
         compose.onNodeWithText("认真交流，自在分享").assertDoesNotExist()
         listOf("新鲜事", "热议中", "值得看", "逛分类").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
         compose.onNodeWithText("吸顶测试话题 1").assertIsDisplayed()
+        assertTrue("首屏话题不能被顶部遮挡", compose.onNodeWithTag("topic-card-1").fetchSemanticsNode().boundsInRoot.top >=
+            compose.onNodeWithTag("home-header").fetchSemanticsNode().boundsInRoot.bottom)
+    }
+
+    @OptIn(coil3.annotation.DelicateCoilApi::class)
+    @Test fun pinnedHeaderSamplesLiveContentInLightAndDarkThemes() {
+        var theme by mutableStateOf(ThemeMode.LIGHT)
+        var source by mutableStateOf("red")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val previous = SingletonImageLoader.get(context)
+        val loader = ImageLoader.Builder(context).components {
+            add(object : Fetcher.Factory<Uri> {
+                override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
+                    if (!data.toString().startsWith("https://header-glass.test/")) return null
+                    return object : Fetcher {
+                        override suspend fun fetch(): ImageFetchResult {
+                            val bitmap = Bitmap.createBitmap(600, 320, Bitmap.Config.ARGB_8888)
+                            bitmap.eraseColor(if (data.toString().contains("red")) android.graphics.Color.RED else android.graphics.Color.BLUE)
+                            return ImageFetchResult(bitmap.asImage(), false, DataSource.MEMORY)
+                        }
+                    }
+                }
+            })
+        }.build()
+        SingletonImageLoader.setUnsafe(loader)
+        try {
+            compose.setContent {
+                KudoTheme(DisplaySettings(theme = theme)) {
+                    key(theme) {
+                        val topics = (1..12).map {
+                            Topic(it, "玻璃采样话题 $it", "", null, 1, emptyList(), 0, 0, 0, "https://header-glass.test/$source.png", "")
+                        }
+                        FeedScreen(FeedState(topics = topics, loading = false), null, {}, {}, {}, {}, {}, {}, {}, {})
+                    }
+                }
+            }
+            for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+                compose.runOnIdle { theme = mode; source = "red" }
+                awaitCover()
+                val expanded = headerPixel()
+                val imageTop = compose.onNodeWithTag("topic-image-1").fetchSemanticsNode().boundsInRoot.top
+                val headerTop = compose.onNodeWithTag("home-header").fetchSemanticsNode().boundsInRoot.top
+                compose.onNodeWithTag("feed-list-latest").performTouchInput {
+                    val start = Offset(center.x, height * 0.85f)
+                    swipe(start, start - Offset(0f, imageTop - headerTop + 24f), durationMillis = 1000)
+                }
+                compose.onNodeWithContentDescription("Linux.do 社区 Logo").assertIsNotDisplayed()
+                for (pixel in listOf(headerPixel(), headerPixel(statusBar = true))) {
+                    assertTrue("吸顶后应采样红色封面：$mode $pixel", pixel.red - pixel.blue > 0.18f)
+                }
+                capture("home-header-glass-${mode.name.lowercase()}-red.png")
+                compose.runOnIdle { source = "blue" }
+                awaitCover()
+                val blue = headerPixel()
+                assertTrue("顶部材质应随封面变化：$mode $blue", blue.blue - blue.red > 0.18f)
+                capture("home-header-glass-${mode.name.lowercase()}-blue.png")
+                swipeFeedDown("feed-list-latest")
+                compose.onNodeWithContentDescription("Linux.do 社区 Logo").assertIsDisplayed()
+                val restored = headerPixel()
+                assertEquals(expanded.red, restored.red, 0.04f)
+                assertEquals(expanded.blue, restored.blue, 0.04f)
+            }
+        } finally {
+            SingletonImageLoader.setUnsafe(previous)
+            loader.shutdown()
+        }
+    }
+
+    private fun awaitCover() = compose.waitUntil(5000) {
+        compose.onAllNodesWithTag("topic-image-1-loading", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
+    }
+
+    private fun swipeFeedDown(tag: String) {
+        val header = compose.onNodeWithTag("home-header").fetchSemanticsNode().boundsInRoot
+        val list = compose.onNodeWithTag(tag)
+        val bounds = list.fetchSemanticsNode().boundsInRoot
+        list.performTouchInput {
+            swipe(Offset(center.x, maxOf(header.bottom - bounds.top + 16f, height * 0.1f)),
+                Offset(center.x, height * 0.9f), durationMillis = 800)
+        }
+    }
+
+    private fun headerPixel(statusBar: Boolean = false): Color {
+        compose.waitForIdle()
+        val header = compose.onNodeWithTag("home-header").fetchSemanticsNode().boundsInRoot
+        val root = compose.onRoot().captureToImage().toPixelMap()
+        return root[header.center.x.toInt(), (if (statusBar) header.top + 8f else header.bottom - 3f).toInt()]
     }
 
     @Test fun accountTabsScrollSelectAndResetToGuestWithoutPersonalEntries() {
@@ -113,8 +211,8 @@ class FeedHeaderUiTest {
         compose.onNodeWithText("未读").performScrollTo().performClick()
         compose.onNodeWithTag("feed-list-unread").performTouchInput { swipeUp(durationMillis = 600) }
         compose.onNodeWithText("未读").assertIsDisplayed()
-        compose.onNodeWithTag("feed-list-unread").performTouchInput { swipeDown(durationMillis = 800) }
-        compose.onNodeWithTag("feed-list-unread").performTouchInput { swipeDown(durationMillis = 800) }
+        swipeFeedDown("feed-list-unread")
+        swipeFeedDown("feed-list-unread")
         compose.runOnIdle { assertTrue("顶部展开后仍能下拉刷新", refreshes > 0) }
         capture("home-tabs-dark-large.png")
     }

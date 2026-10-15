@@ -1,5 +1,6 @@
 package com.kudo.android.ui.feed
 
+import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +38,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -44,45 +47,42 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.kudo.android.R
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
+import com.kudo.android.ui.theme.LocalDisplaySettings
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.vibrancy
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refresh: () -> Unit, more: () -> Unit, openTopic: (Int) -> Unit, openUser: (String) -> Unit, search: () -> Unit, login: () -> Unit, categories: () -> Unit, modifier: Modifier = Modifier, category: Category? = null, back: () -> Unit = {}, listStyle: TopicListStyle = TopicListStyle.FEED, pages: Map<String, FeedState> = emptyMap(), categoryContent: (@Composable () -> Unit)? = null, createTopic: (Int) -> Unit = {}, glass: GlassMode = GlassMode.LIQUID) {
+fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refresh: () -> Unit, more: () -> Unit, openTopic: (Int) -> Unit, openUser: (String) -> Unit, search: () -> Unit, login: () -> Unit, categories: () -> Unit, modifier: Modifier = Modifier, category: Category? = null, back: () -> Unit = {}, listStyle: TopicListStyle = TopicListStyle.FEED, pages: Map<String, FeedState> = emptyMap(), categoryContent: (@Composable () -> Unit)? = null, createTopic: (Int) -> Unit = {}, glass: GlassMode = LocalDisplaySettings.current.glass) {
     if (category != null) {
         CategoryFeedScreen(category, state, user, select, refresh, more, openTopic, openUser, search, login, back, modifier, listStyle, pages, createTopic, glass)
         return
     }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val resetHeader = { scrollBehavior.state.heightOffset = 0f; scrollBehavior.state.contentOffset = 0f }
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).statusBarsPadding().nestedScroll(scrollBehavior.nestedScrollConnection)) {
-        Row(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
-            val placeable = measurable.measure(constraints)
-            scrollBehavior.state.heightOffsetLimit = -placeable.height.toFloat()
-            val offset = scrollBehavior.state.heightOffset.roundToInt()
-            layout(placeable.width, (placeable.height + offset).coerceAtLeast(0)) { placeable.placeRelative(0, offset) }
-        }.background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(40.dp).clickable(onClick = login), contentAlignment = Alignment.Center) {
-                if (user == null) Image(painterResource(R.drawable.ic_linux_do), "Linux.do 社区 Logo", Modifier.size(28.dp))
-                else Avatar(user, 28.dp, presentation = AvatarPresentation.ACCOUNT)
-            }
-            Box(Modifier.weight(1f).heightIn(min = 40.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = search), contentAlignment = Alignment.Center) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 30.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 10.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("真诚 · 友善 · 团结 · 专业", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Icon(Icons.Rounded.Search, "搜索", Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
+    val backdrop = rememberLayerBackdrop()
+    val surface = MaterialTheme.colorScheme.surface
+    val canBlur = glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
+    var headerHeight by remember { mutableIntStateOf(0) }
+    val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).nestedScroll(scrollBehavior.nestedScrollConnection)) {
         val tabs = FeedFilter.available(user != null).map {
             it.value to if (it == FeedFilter.NEW && state.newCount != null) "新 (${state.newCount})" else it.label
         } + listOf("categories" to "类别")
@@ -107,14 +107,12 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
                 val index = tabs.indexOfFirst { it.first == state.filter }
                 if (index >= 0 && pager.currentPage != index && !pager.isScrollInProgress) pager.scrollToPage(index)
             }
-            FeedTabBar(tabs, tabs.getOrNull(pager.currentPage)?.first ?: state.filter) { value ->
-                val index = tabs.indexOfFirst { it.first == value }
-                if (index >= 0) scope.launch { pager.animateScrollToPage(index) }
-            }
-            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("home-pager"), key = { tabs[it].first }) { index ->
+            HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("home-pager"), key = { tabs[it].first }) { index ->
                 val value = tabs[index].first
                 if (value == "categories") {
-                    categoryContent?.invoke() ?: EmptyState("社区分类", "按分类浏览话题", actionLabel = "查看分类", action = categories)
+                    Box(Modifier.fillMaxSize().padding(top = contentTopPadding)) {
+                        categoryContent?.invoke() ?: EmptyState("社区分类", "按分类浏览话题", actionLabel = "查看分类", action = categories)
+                    }
                 } else {
                     val page = if (value == state.filter) state else pages[value]?.takeIf { it.accountId == user?.id }
                         ?: FeedState(filter = value, accountId = user?.id, categories = state.categories)
@@ -123,7 +121,37 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
                         expandHeader = {
                             androidx.compose.animation.core.animate(scrollBehavior.state.heightOffset, 0f) { value, _ -> scrollBehavior.state.heightOffset = value }
                             scrollBehavior.state.contentOffset = 0f
-                        })
+                        }, contentTopPadding = contentTopPadding)
+                }
+            }
+            Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }
+                .drawPlainBackdrop(backdrop, shape = { RectangleShape }, effects = {
+                    val collapsed = scrollBehavior.state.collapsedFraction
+                    if (canBlur && collapsed > 0f) { vibrancy(); blur(14.dp.toPx() * collapsed) }
+                }, onDrawSurface = {
+                    val collapsed = scrollBehavior.state.collapsedFraction
+                    drawRect(surface.copy(alpha = 1f - collapsed * if (canBlur) 0.46f else 0.1f))
+                }).testTag("home-header").statusBarsPadding()) {
+                Row(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    scrollBehavior.state.heightOffsetLimit = -placeable.height.toFloat()
+                    val offset = scrollBehavior.state.heightOffset.roundToInt()
+                    layout(placeable.width, (placeable.height + offset).coerceAtLeast(0)) { placeable.placeRelative(0, offset) }
+                }.padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(40.dp).clickable(onClick = login), contentAlignment = Alignment.Center) {
+                        if (user == null) Image(painterResource(R.drawable.ic_linux_do), "Linux.do 社区 Logo", Modifier.size(28.dp))
+                        else Avatar(user, 28.dp, presentation = AvatarPresentation.ACCOUNT)
+                    }
+                    Box(Modifier.weight(1f).heightIn(min = 40.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = search), contentAlignment = Alignment.Center) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 30.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 10.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("真诚 · 友善 · 团结 · 专业", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Icon(Icons.Rounded.Search, "搜索", Modifier.size(20.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                FeedTabBar(tabs, tabs.getOrNull(pager.currentPage)?.first ?: state.filter, containerColor = Color.Transparent) { value ->
+                    val index = tabs.indexOfFirst { it.first == value }
+                    if (index >= 0) scope.launch { pager.animateScrollToPage(index) }
                 }
             }
         }
@@ -135,7 +163,7 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
 internal fun FeedPage(state: FeedState, active: Boolean, scrollToTop: () -> Unit,
     refresh: () -> Unit, more: () -> Unit, openTopic: (Int) -> Unit, openUser: (String) -> Unit,
     login: () -> Unit, listStyle: TopicListStyle, nested: NestedScrollConnection? = null,
-    expandHeader: suspend () -> Unit = { scrollToTop() }) {
+    expandHeader: suspend () -> Unit = { scrollToTop() }, contentTopPadding: Dp = 0.dp) {
     val ignored = com.kudo.android.ui.topic.LocalIgnoredUsers.current
     val visibleTopics = state.topics.filterNot { it.author?.username?.lowercase(java.util.Locale.ROOT) in ignored }
         val listState = rememberLazyListState()
@@ -157,7 +185,7 @@ internal fun FeedPage(state: FeedState, active: Boolean, scrollToTop: () -> Unit
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { if (active) refresh() }, state = pullState,
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), indicator = {
                 PullToRefreshDefaults.IndicatorBox(state = pullState, isRefreshing = refreshing,
-                    modifier = Modifier.align(Alignment.TopCenter), containerColor = MaterialTheme.colorScheme.surface) {
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = contentTopPadding), containerColor = MaterialTheme.colorScheme.surface) {
                     CommunityLoadingIndicator(Modifier.size(16.dp).graphicsLayer {
                         rotationZ = if (refreshing) 0f else pullState.distanceFraction * 180f
                     }.clearAndSetSemantics {
@@ -168,7 +196,7 @@ internal fun FeedPage(state: FeedState, active: Boolean, scrollToTop: () -> Unit
                 }
             }) {
             val traditional = listStyle == TopicListStyle.TITLE
-            LazyColumn(state = listState, contentPadding = if (traditional) PaddingValues(bottom = 112.dp) else PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 112.dp), verticalArrangement = Arrangement.spacedBy(if (traditional) 0.dp else 8.dp), modifier = Modifier.fillMaxSize().then(if (nested != null) Modifier.nestedScroll(nested) else Modifier).testTag("feed-list-${state.filter}")
+            LazyColumn(state = listState, contentPadding = if (traditional) PaddingValues(top = contentTopPadding, bottom = 112.dp) else PaddingValues(start = 8.dp, end = 8.dp, top = contentTopPadding + 8.dp, bottom = 112.dp), verticalArrangement = Arrangement.spacedBy(if (traditional) 0.dp else 8.dp), modifier = Modifier.fillMaxSize().then(if (nested != null) Modifier.nestedScroll(nested) else Modifier).testTag("feed-list-${state.filter}")
                 .quickScrollTarget(listState, enabled = active, expandHeader = expandHeader)) {
                 if (state.loading && state.topics.isEmpty()) item { LoadingRow() }
                 if (state.error != null) item { ErrorState(state.error, refresh, login) }
@@ -188,8 +216,8 @@ internal fun FeedPage(state: FeedState, active: Boolean, scrollToTop: () -> Unit
 }
 
 @Composable
-internal fun FeedTabBar(tabs: List<Pair<String, String>>, selected: String, select: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).horizontalScroll(rememberScrollState()).selectableGroup().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+internal fun FeedTabBar(tabs: List<Pair<String, String>>, selected: String, containerColor: Color = MaterialTheme.colorScheme.surface, select: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().background(containerColor).horizontalScroll(rememberScrollState()).selectableGroup().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         tabs.forEach { (value, label) ->
             key(value) {
                 val active = selected == value
