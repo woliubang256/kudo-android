@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,6 +20,9 @@ import androidx.compose.ui.focus.*
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.*
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
@@ -55,6 +59,11 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
     val categoryShowing = categorySheet.currentState || categorySheet.targetState
     val bodyFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    var body by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(draft.raw, TextRange(draft.raw.length))) }
+    var rtl by rememberSaveable { mutableStateOf(false) }
+    // Acknowledged text keeps IME composition and selection; external changes are rebased.
+    body = body.syncMarkdown(draft.raw)
+    fun changeBody(value: TextFieldValue) { body = value; if (value.text != draft.raw) edit(draft.copy(raw = value.text)) }
     val enabled = !sending && !categoryShowing
     val canPublish = if (editing) enabled && !uploading && canSave else enabled && !uploading && draft.raw.isNotBlank() &&
         (if (reply) replyRules != null && replyRules.problem(draft.raw) == null else draft.title.isNotBlank() && draft.categoryId > 0)
@@ -90,11 +99,12 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                         textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
-                CommunityTextField(draft.raw, { edit(draft.copy(raw = it)) }, Modifier.fillMaxWidth()
+                CommunityTextField(body, ::changeBody, Modifier.fillMaxWidth()
                     .then(if (reply) Modifier.heightIn(min = 80.dp, max = 180.dp) else Modifier.heightIn(min = 280.dp))
                     .padding(vertical = 14.dp).focusRequester(bodyFocus).testTag("editor-body"),
                     placeholder = if (reply) replyAuthor?.displayName?.takeIf(String::isNotBlank)?.let { "回复 $it" } ?: "回复" else "正文",
-                    enabled = enabled, minLines = if (reply) 3 else 8)
+                    enabled = enabled, minLines = if (reply) 3 else 8,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp, textDirection = if (rtl) TextDirection.ContentOrRtl else TextDirection.ContentOrLtr))
                 if (editing) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     CommunityTextField(editReason, reasonChange, Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("edit-reason"),
@@ -115,12 +125,8 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             } else "草稿已自动保存 · ${draft.raw.length} 字",
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp).then(if (reply) Modifier.testTag("reply-length") else Modifier), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth().then(if (reply) Modifier else Modifier.navigationBarsPadding()).padding(start = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                CommunityIconButton(Icons.Rounded.AddPhotoAlternate, "上传图片", pickImage, enabled = enabled && !uploading)
-                CommunityIconButton(Icons.Rounded.Code, "插入代码块", { edit(draft.copy(raw = draft.raw + "\n```\n\n```\n")) }, enabled = enabled)
-                CommunityIconButton(Icons.Rounded.FormatQuote, "插入引用", { edit(draft.copy(raw = draft.raw + "\n> ")) }, enabled = enabled)
-                Spacer(Modifier.weight(1f))
+                EditorToolbar(body, ::changeBody, pickImage, enabled, uploading, { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f))
                 if (reply) CommunityButton(publishText, publish, enabled = canPublish, compact = true)
-                else Text("Markdown", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (!reply && !editing) CommunitySheet(categorySheet, "发布到", { categorySheet.targetState = false },
