@@ -32,6 +32,11 @@ class PersonalHistoryUiTest {
     private val http = OkHttpClient.Builder().addInterceptor { chain ->
         val request = chain.request()
         requests.incrementAndGet()
+        if (request.url.encodedPath == "/user_actions.json" && request.url.queryParameter("filter") == "5") {
+            val body = """{"user_actions":[{"id":8,"topic_id":7,"post_number":4,"title":"回复所在的主题","excerpt":"我的回复","action_type":5}]}"""
+            return@addInterceptor Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(body.toResponseBody("application/json".toMediaType())).build()
+        }
         val topics = if (request.url.queryParameter("page") == "1")
             """[{"id":3,"title":"更早的历史"}]"""
         else if (visited.get()) """[{"id":2,"title":"刚浏览的新帖子"},{"id":1,"title":"旧历史"}]"""
@@ -83,6 +88,18 @@ class PersonalHistoryUiTest {
         compose.runOnIdle {
             assertEquals(2, requests.get())
             assertEquals(listOf(1, 3), vm!!.topics.map { it.id })
+        }
+    }
+
+    @Test fun topicsPageOffersRepliesTabAndLoadsReplyActions() {
+        show(AccountDestination.TOPICS)
+        compose.onNodeWithText("回复").performClick()
+        compose.waitUntil(5000) { vm!!.replies.size == 1 && !vm!!.loading }
+        compose.onNodeWithText("回复所在的主题").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(2, requests.get())
+            assertEquals(7, vm!!.replies.single().topicId)
+            assertEquals(4, vm!!.replies.single().number)
         }
     }
 

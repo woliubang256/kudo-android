@@ -16,7 +16,7 @@ suspend fun CommunityRepository.userSummary(username: String): UserSummary {
 }
 
 enum class AccountDestination(val title: String) {
-    TOPICS("我的话题"), BOOKMARKS("我的收藏"), DRAFTS("我的草稿"), HISTORY("浏览历史"), LIKES("我的点赞"),
+    TOPICS("话题/回复"), BOOKMARKS("我的收藏"), DRAFTS("我的草稿"), HISTORY("浏览历史"), LIKES("我的点赞"),
     MESSAGES("私信"), CHAT("聊天"), PENDING("我的待审核"), BADGES("我的徽章"),
     TRUST("等级要求"), INVITES("邀请链接")
 }
