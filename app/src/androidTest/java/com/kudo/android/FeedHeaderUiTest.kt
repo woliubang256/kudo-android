@@ -1,6 +1,8 @@
 package com.kudo.android
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -82,7 +84,14 @@ class FeedHeaderUiTest {
                     return object : Fetcher {
                         override suspend fun fetch(): ImageFetchResult {
                             val bitmap = Bitmap.createBitmap(600, 320, Bitmap.Config.ARGB_8888)
-                            bitmap.eraseColor(if (data.toString().contains("red")) android.graphics.Color.RED else android.graphics.Color.BLUE)
+                            val canvas = Canvas(bitmap)
+                            val paint = Paint()
+                            for (stripe in 0 until 19) {
+                                val shade = if (stripe % 2 == 0) 255 else 80
+                                paint.color = if (data.toString().contains("red")) android.graphics.Color.rgb(shade, 0, 0)
+                                    else android.graphics.Color.rgb(0, 0, shade)
+                                canvas.drawRect(stripe * 32f, 0f, (stripe + 1) * 32f, 320f, paint)
+                            }
                             return ImageFetchResult(bitmap.asImage(), false, DataSource.MEMORY)
                         }
                     }
@@ -115,6 +124,10 @@ class FeedHeaderUiTest {
                 for (pixel in listOf(headerPixel(), headerPixel(statusBar = true))) {
                     assertTrue("吸顶后应采样红色封面：$mode $pixel", pixel.red - pixel.blue > 0.18f)
                 }
+                val detailContrast = headerDetailContrast()
+                println("Pinned header detail contrast: $mode $detailContrast")
+                assertTrue("玻璃应保留底层条纹至少一半对比度，不能糊成磨砂：$mode $detailContrast",
+                    detailContrast > (255f - 80f) / 255f * 0.5f)
                 capture("home-header-glass-${mode.name.lowercase()}-red.png")
                 compose.runOnIdle { source = "blue" }
                 awaitCover()
@@ -152,6 +165,14 @@ class FeedHeaderUiTest {
         val header = compose.onNodeWithTag("home-header").fetchSemanticsNode().boundsInRoot
         val root = compose.onRoot().captureToImage().toPixelMap()
         return root[header.center.x.toInt(), (if (statusBar) header.top + 8f else header.bottom - 3f).toInt()]
+    }
+
+    private fun headerDetailContrast(): Float {
+        val header = compose.onNodeWithTag("home-header").fetchSemanticsNode().boundsInRoot
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        val samples = ((header.left + header.width * 0.2f).toInt()..(header.left + header.width * 0.8f).toInt())
+            .map { pixels[it, (header.top + 8f).toInt()].red }
+        return samples.max() - samples.min()
     }
 
     @Test fun accountTabsScrollSelectAndResetToGuestWithoutPersonalEntries() {

@@ -39,7 +39,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -65,6 +64,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import kotlin.math.roundToInt
 
@@ -80,6 +80,7 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
     val backdrop = rememberLayerBackdrop()
     val surface = MaterialTheme.colorScheme.surface
     val canBlur = glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
+    val canRefract = glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
     var headerHeight by remember { mutableIntStateOf(0) }
     val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).nestedScroll(scrollBehavior.nestedScrollConnection)) {
@@ -125,12 +126,13 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
                 }
             }
             Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }
-                .drawPlainBackdrop(backdrop, shape = { RectangleShape }, effects = {
+                .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, effects = {
                     val collapsed = scrollBehavior.state.collapsedFraction
-                    if (canBlur && collapsed > 0f) { vibrancy(); blur(14.dp.toPx() * collapsed) }
+                    if (canBlur && collapsed > 0f) { vibrancy(); blur(4.dp.toPx() * collapsed) }
+                    if (canRefract && collapsed > 0f) lens(24.dp.toPx() * collapsed, 24.dp.toPx() * collapsed)
                 }, onDrawSurface = {
                     val collapsed = scrollBehavior.state.collapsedFraction
-                    drawRect(surface.copy(alpha = 1f - collapsed * if (canBlur) 0.46f else 0.1f))
+                    drawRect(surface.copy(alpha = 1f - collapsed * if (canBlur) 0.8f else 0.06f))
                 }).testTag("home-header").statusBarsPadding()) {
                 Row(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
                     val placeable = measurable.measure(constraints)
