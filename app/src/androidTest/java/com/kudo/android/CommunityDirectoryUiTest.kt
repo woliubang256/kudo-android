@@ -36,6 +36,32 @@ class CommunityDirectoryUiTest {
         compose.onNodeWithText("标签").performClick().assertIsSelected()
     }
 
+    @Test fun directoryMaterialSurvivesSwitchingIntoTheDirectory() {
+        var directoryVisible by mutableStateOf(false)
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.DARK, glass = GlassMode.LIQUID))
+        var inHome by mutableStateOf(false)
+        compose.setContent { KudoTheme(settings) {
+            if (directoryVisible) CommunityDirectoryScreen(state(), {}, {}, {}, {}, {}, {}, inHome)
+            else androidx.compose.foundation.layout.Box(Modifier.fillMaxSize())
+        } }
+        for (theme in listOf(ThemeMode.DARK, ThemeMode.LIGHT)) {
+            for (glass in GlassMode.entries) {
+                for (embedded in listOf(false, true)) {
+                    compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass); inHome = embedded; directoryVisible = true }
+                    compose.onNodeWithTag("directory-toolbar-material").assertIsDisplayed()
+                        .assert(!hasAnyAncestor(hasTestTag("directory-content-backdrop")))
+                    val toolbar = compose.onNodeWithTag("directory-toolbar-material").fetchSemanticsNode().boundsInRoot
+                    val category = compose.onNodeWithText("类别0").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                    assertTrue(category.top >= toolbar.bottom)
+                    compose.onNodeWithText("标签").performClick().assertIsSelected()
+                    compose.onNodeWithTag("directory-tag-公告").assertIsDisplayed()
+                    compose.onRoot().captureToImage()
+                    compose.runOnIdle { directoryVisible = false }
+                }
+            }
+        }
+    }
+
     @Test fun tabsKeepSidebarMembershipAndTagsUseThreeColumnsInServerOrder() {
         val clicks = mutableListOf<String>()
         compose.setContent { KudoTheme(DisplaySettings()) {

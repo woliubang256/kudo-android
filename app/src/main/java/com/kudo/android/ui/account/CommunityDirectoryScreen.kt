@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -92,17 +93,12 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
     val canBlur = glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
     val canRefract = glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
     val surface = MaterialTheme.colorScheme.surface
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).layerBackdrop(backdrop)
-        .testTag("community-directory")) {
-        Box(Modifier.fillMaxWidth().then(if (inHome) Modifier else Modifier.statusBarsPadding())
-            .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
-                drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
-            }, effects = {
-                if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
-                if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
-            }).testTag("directory-toolbar-material")) {
-            FeedTabBar(listOf("categories" to "类别", "tags" to "标签"), tab, containerColor = Color.Transparent) { tab = it }
-        }
+    var toolbarHeight by remember { mutableIntStateOf(0) }
+    val toolbarPadding = with(LocalDensity.current) { toolbarHeight.toDp() }
+    Box(Modifier.fillMaxSize().testTag("community-directory")) {
+        Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+            .testTag("directory-content-backdrop")) {
+        Spacer(Modifier.height(toolbarPadding))
         if (expanded) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = ::collapse) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回侧栏目录") }
             Text(if (tab == "categories") "所有类别" else "所有标签", style = MaterialTheme.typography.titleMedium)
@@ -159,6 +155,17 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
                     }
                 }
             }
+        }
+        }
+        Box(Modifier.fillMaxWidth().onSizeChanged { toolbarHeight = it.height }
+            .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
+                drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
+            }, effects = {
+                if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
+                if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
+            }).then(if (inHome) Modifier else Modifier.statusBarsPadding())
+            .testTag("directory-toolbar-material")) {
+            FeedTabBar(listOf("categories" to "类别", "tags" to "标签"), tab, containerColor = Color.Transparent) { tab = it }
         }
     }
 }
