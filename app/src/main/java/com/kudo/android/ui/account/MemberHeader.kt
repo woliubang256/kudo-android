@@ -77,8 +77,7 @@ internal fun MemberHeader(member: Member, summary: UserSummary?, loading: Boolea
 }
 
 @Composable
-internal fun MemberCompactHeader(member: Member, loaded: Boolean, profile: () -> Unit, trust: () -> Unit, modifier: Modifier) {
-    val ink = if (loaded) Color.White else Ink
+internal fun MemberCompactHeader(member: Member, ink: Color, profile: () -> Unit, trust: () -> Unit, modifier: Modifier) {
     Row(modifier.fillMaxWidth().statusBarsPadding().height(48.dp).clickable(role = Role.Button, onClick = profile)
         .padding(horizontal = 16.dp).testTag("member-compact-header"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

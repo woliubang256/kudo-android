@@ -18,25 +18,26 @@ import org.junit.Assert.*
 
 class MemberHeaderStatusUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
-    @Test fun statusBarKeepsHeaderStyleWhenCollapsedAndRestoresOnExit() {
+    @Test fun statusBarFollowsPinnedMaterialThemeAndRestoresOnExit() {
         compose.runOnUiThread { compose.activity.enableEdgeToEdge() }
         var style: Boolean? = null
         var inset = 0
-        var showing by mutableStateOf(true)
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        var showing by mutableStateOf(false)
+        var theme by mutableStateOf(ThemeMode.LIGHT)
+        compose.setContent { KudoTheme(DisplaySettings(theme = theme)) {
             inset = WindowInsets.statusBars.getTop(LocalDensity.current)
             Box(Modifier.fillMaxSize()) { Box(Modifier.height(480.dp)) {
                 if (showing) ProfileScreen(Member(42, "fixture", "资料测试", "", trustLevel = 3), {}, {}, {}, {}, statusBarStyle = { style = it })
             } }
         } }
-        compose.waitForIdle()
-        compose.runOnIdle { assertTrue(inset > 0); assertEquals(true, style) }
-        compose.onNodeWithTag("member-profile").performTouchInput { swipeUp() }
-        compose.waitForIdle()
-        compose.onNodeWithTag("member-compact-header").assertIsDisplayed()
-        compose.runOnIdle { assertEquals(true, style) }
-        compose.runOnIdle { showing = false }
-        compose.waitForIdle()
-        compose.runOnIdle { assertNull(style) }
+        for (selected in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            compose.runOnIdle { theme = selected; showing = true }
+            compose.runOnIdle { assertTrue(inset > 0); assertEquals(true, style) }
+            compose.onNodeWithTag("member-profile").performTouchInput { swipeUp() }
+            compose.onNodeWithTag("member-compact-header").assertIsDisplayed()
+            compose.runOnIdle { assertEquals(selected == ThemeMode.LIGHT, style) }
+            compose.runOnIdle { showing = false }
+            compose.runOnIdle { assertNull(style) }
+        }
     }
 }

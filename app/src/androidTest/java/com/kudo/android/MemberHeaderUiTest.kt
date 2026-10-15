@@ -6,9 +6,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import com.kudo.android.data.*
 import com.kudo.android.ui.account.ProfileScreen
@@ -26,6 +30,7 @@ import android.graphics.Bitmap
 import androidx.test.platform.app.InstrumentationRegistry
 import okio.Buffer
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 class MemberHeaderUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -53,7 +58,7 @@ class MemberHeaderUiTest {
     @After fun restore() { SingletonImageLoader.setUnsafe(previous); images.shutdown() }
     @Test fun accountStatusBadgeExtendsOutsideFaceWithoutBeingClipped() {
         var loaded = false
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
             Box(Modifier.width(360.dp).height(700.dp)) {
                 ProfileScreen(Member(42, "fixture", "角标测试", "", status = UserStatus("", "在线"),
                     profileBackground = "https://member-image.test/header"), {}, {}, {}, {}, statusBarStyle = { loaded = it == false })
@@ -124,12 +129,12 @@ class MemberHeaderUiTest {
         val header = compose.onNodeWithTag("member-header").fetchSemanticsNode().boundsInRoot
         val identity = compose.onNodeWithTag("member-identity").fetchSemanticsNode().boundsInRoot
         assertTrue("身份行应高于底部统计", header.bottom - identity.bottom > identity.height * 1.5f)
-        compose.onNodeWithTag("member-identity").performClick()
-        compose.onNodeWithText("Lv.3").performClick()
+        compose.onNodeWithTag("member-identity").performTouchInput { click() }
+        compose.onNodeWithText("Lv.3").performTouchInput { click() }
         compose.runOnIdle { assertEquals(1, profiles); assertEquals(1, levels) }
         compose.onNodeWithTag("member-profile").performTouchInput { swipeUp() }
-        compose.onNodeWithTag("member-compact-header").performClick()
-        compose.onNodeWithText("Lv.3").performClick()
+        compose.onNodeWithTag("member-compact-header").performTouchInput { click() }
+        compose.onNodeWithText("Lv.3").performTouchInput { click() }
         compose.runOnIdle { assertEquals(2, profiles); assertEquals(2, levels) }
     }
     @Test fun fontAndWindowChangesRemeasureContentAndKeepCollapsedIdentity() {
@@ -181,25 +186,56 @@ class MemberHeaderUiTest {
         compose.onNodeWithTag("member-header-viewport").performTouchInput { swipeUp() }
         compose.onNodeWithTag("member-compact-header").assertIsDisplayed()
     }
-    @Test fun collapseKeepsOriginalImageBottomWithOnlySlightlyDarkerMask() {
-        var loaded = false
-        compose.setContent { KudoTheme(DisplaySettings()) {
+    @Test fun pinnedHeaderUsesSelectedMaterialWithoutPictureAndRestoresExpandedHeader() {
+        compose.runOnUiThread { compose.activity.enableEdgeToEdge() }
+        var style: Boolean? = null
+        var showing by mutableStateOf(false)
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT, glass = GlassMode.LIQUID))
+        var expectedInk = androidx.compose.ui.graphics.Color.Unspecified
+        compose.setContent { KudoTheme(settings) {
+            expectedInk = MaterialTheme.colorScheme.onSurface
             Box(Modifier.width(360.dp).height(700.dp)) {
-                ProfileScreen(Member(42, "fixture", "图片底部", "https://member-image.test/avatar"), {}, {}, {}, {}, statusBarStyle = { loaded = it == false })
+                if (showing) ProfileScreen(Member(42, "fixture", "材质顶部", "https://member-image.test/avatar"),
+                    {}, {}, {}, {}, statusBarStyle = { style = it })
             }
         } }
-        compose.waitUntil(5000) { loaded }
-        val full = compose.onNodeWithTag("member-header-viewport").captureToImage().toPixelMap()
-        val upper = full[2, full.height / 4]
-        val lower = full[2, full.height - 5]
-        assertTrue(upper.red > upper.green * 2)
-        assertTrue(lower.green > lower.red * 2)
-        compose.onNodeWithTag("member-profile").performTouchInput { swipeUp() }
-        compose.onNodeWithTag("member-compact-header").assertIsDisplayed()
-        val compact = compose.onNodeWithTag("member-header-viewport").captureToImage().toPixelMap()
-        val bottom = compact[2, compact.height - 5]
-        assertTrue("吸顶应显示原图绿色底部", bottom.green > bottom.red * 2)
-        assertTrue("遮罩只略微加深", lower.green - bottom.green in .03f.. .13f)
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            for (glass in GlassMode.entries) {
+                compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass); showing = true }
+                compose.waitUntil(5000) { style == false }
+                val expandedHeight = compose.onNodeWithTag("member-header-viewport").fetchSemanticsNode().boundsInRoot.height
+                val full = compose.onNodeWithTag("member-header-viewport").captureToImage().toPixelMap()
+                assertTrue(full[2, full.height / 4].red > full[2, full.height / 4].green * 2)
+                assertTrue(full[2, full.height - 5].green > full[2, full.height - 5].red * 2)
+                compose.onNodeWithTag("member-profile").performTouchInput { swipeUp() }
+                compose.onNodeWithTag("member-compact-header").assertIsDisplayed()
+                val compact = compose.onNodeWithTag("member-header-viewport").captureToImage().toPixelMap()
+                val bottom = compact[2, compact.height - 5]
+                assertTrue("$theme/$glass 吸顶不应保留绿色头图", kotlin.math.abs(bottom.green - bottom.red) < .08f)
+                compose.onNodeWithTag("member-toolbar-material").assertIsDisplayed()
+                    .assert(!hasAnyAncestor(hasTestTag("member-content-backdrop")))
+                compose.onNodeWithTag("member-content-backdrop").assertExists()
+                val textLayouts = mutableListOf<TextLayoutResult>()
+                compose.onNode(hasText("材质顶部") and hasAnyAncestor(hasTestTag("member-compact-header")), useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(textLayouts) }
+                assertEquals(expectedInk, textLayouts.single().layoutInput.style.color)
+                compose.runOnIdle { assertEquals(theme == ThemeMode.LIGHT, style) }
+                val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+                val context = InstrumentationRegistry.getInstrumentation().targetContext
+                val directory = File(context.getExternalFilesDir(null), "ui-tests").apply { mkdirs() }
+                File(directory, "member-material-${theme.name.lowercase()}-${glass.name.lowercase()}.png").outputStream()
+                    .use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+                compose.onNodeWithTag("member-profile").performTouchInput { swipeDown(); swipeDown() }
+                compose.onNodeWithTag("member-compact-header").assertDoesNotExist()
+                compose.onNodeWithTag("member-toolbar-material").assertDoesNotExist()
+                assertEquals(expandedHeight, compose.onNodeWithTag("member-header-viewport").fetchSemanticsNode().boundsInRoot.height, 2f)
+                val restored = compose.onNodeWithTag("member-header-viewport").captureToImage().toPixelMap()
+                assertTrue(restored[2, restored.height - 5].green > restored[2, restored.height - 5].red * 2)
+                compose.runOnIdle { assertEquals(false, style); showing = false }
+                compose.runOnIdle { assertNull(style) }
+            }
+        }
     }
     @Test fun missingImageUsesWhiteBaseAndDarkStatusIcons() {
         var style: Boolean? = null

@@ -14,7 +14,7 @@ Status: implemented
 
 ## Related decisions
 
-本篇的1:1展开高度及多余上方空白由[内容撑高个人中心顶部](2026-10-11-member-content-header.md)部分替代。原先按窗口缩小头像和间距的边界继续有效，点击、滚动顺序、图片底部、遮罩、状态栏和完整角标规则继续使用，因此本篇保留。
+本篇的1:1展开高度及多余上方空白由[内容撑高个人中心顶部](2026-10-11-member-content-header.md)部分替代。吸顶保留图片底部、图片上的文字和状态栏样式由[我的吸顶材质](2026-10-16-member-pinned-material.md)部分替代。原先按窗口缩小头像和间距的边界继续有效，展开图片、点击、滚动顺序、退出恢复状态栏和完整角标规则继续使用，因此本篇保留；下列吸顶图片验证为旧决策的历史证据。
 
 检索个人中心、吸顶、1:1和头像角标。[原个人中心](../../implemented/feature/2026-10-10-member-account-dashboard.md)部分重叠，本篇替代其标题图的黄色回退与普通列表首项布局，菜单、统计来源与会话隔离继续有效。[公开主页连续滚动](../../implemented/bug-fix/2026-10-10-profile-header-scroll.md)部分重叠，沿用滚动顺序和惯性处理。[头像展示](../../implemented/feature/2026-10-08-avatar-presentation.md)保留ACCOUNT状态优先；没有完全吸收或过时提案。
 

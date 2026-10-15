@@ -18,6 +18,8 @@ MemberHeader与MemberProfileScreen以自然测量高度决定视口。状态栏�
 
 ## Related decisions
 
+吸顶仍显示同图底部的规则由[我的吸顶材质](2026-10-16-member-pinned-material.md)部分替代，吸顶改为用户选择的玻璃与主题身份/状态栏，反向展开恢复原图。本篇的自然测量、26dp留白、紧凑身份渐显、折叠顺序和高度重测继续有效；下列原图底部验收保留为旧规则的历史记录。
+
 检索member-square、个人中心顶部、内容撑高、26dp和identityGap。[方形个人中心顶部](../../implemented/feature/2026-10-10-member-square-header.md)部分重叠，本篇只替代1:1展开高度及其多余上方空白，点击、图片、角标及折叠顺序继续有效，两篇保留并互链。[个人中心仪表盘](../../implemented/feature/2026-10-10-member-account-dashboard.md)部分重叠，数据来源和菜单不变。[公开主页连续滚动](../../implemented/bug-fix/2026-10-10-profile-header-scroll.md)与[公开主页方形顶部](../../implemented/feature/2026-10-10-square-profile-header.md)属于其他页面，本次不修改；没有完全吸收或过时提案。
 
 ## Alternatives considered

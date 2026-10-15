@@ -1,5 +1,6 @@
 package com.kudo.android.ui.account
 
+import android.os.Build
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -23,6 +24,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
@@ -31,13 +34,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.kudo.android.BuildConfig
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.Avatar
 import com.kudo.android.ui.components.AvatarPresentation
 import com.kudo.android.ui.components.quickScrollTarget
 import com.kudo.android.ui.theme.Ink
+import com.kudo.android.ui.theme.LocalDisplaySettings
 import com.kudo.android.ui.theme.LogoYellow
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -54,6 +65,12 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
     var refresh by remember(user.id) { mutableIntStateOf(0) }
     var loading by remember(user.id) { mutableStateOf(repository != null) }
     val scroll = rememberLazyListState()
+    val backdrop = rememberLayerBackdrop()
+    val glass = LocalDisplaySettings.current.glass
+    val canBlur = glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
+    val canRefract = glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
+    val surface = MaterialTheme.colorScheme.surface
+    val themeInk = MaterialTheme.colorScheme.onSurface
     var backgroundLoaded by remember(user.id, member.profileBackground) { mutableStateOf(false) }
     LaunchedEffect(user.id, user.username, repository, refresh) {
         if (repository == null) return@LaunchedEffect
@@ -72,8 +89,6 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
             }
         }
     }
-    val requestedStatusStyle = !backgroundLoaded
-    SideEffect { statusBarStyle(requestedStatusStyle) }
     DisposableEffect(Unit) { onDispose { statusBarStyle(null) } }
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val density = LocalDensity.current
@@ -93,6 +108,9 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
         val fraction = if (maximum > 0f) visibleCollapse / maximum else 1f
         val compactIdentityAlpha = profileToolbarIdentityAlpha(fraction)
         val collapsed = fraction >= .999f
+        val viewportHeight = with(density) { (height - visibleCollapse).toDp() }
+        val requestedStatusStyle = if (compactIdentityAlpha >= .5f) surface.luminance() > .5f else !backgroundLoaded
+        SideEffect { statusBarStyle(requestedStatusStyle) }
         LaunchedEffect(maximum) { collapse = collapse.coerceIn(0f, maximum) }
         val nested = remember(user.id) { object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -108,8 +126,9 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                 return Offset(0f, previous - collapse)
             }
         } }
-        Column(Modifier.fillMaxSize().nestedScroll(nested)) {
-            Box(Modifier.fillMaxWidth().height(with(density) { (height - visibleCollapse).toDp() }).clipToBounds()
+        Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+            .nestedScroll(nested).testTag("member-content-backdrop")) {
+            Box(Modifier.fillMaxWidth().height(viewportHeight).clipToBounds().zIndex(1f)
                 .testTag("member-header-viewport")
                 .scrollable(rememberScrollableState { delta ->
                     val previous = collapse
@@ -120,7 +139,8 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                     { destination(AccountDestination.TRUST) }, fraction,
                     avatarSize = if (layoutRoom < 280.dp) 48.dp else 64.dp,
                     identityGap = if (layoutRoom < 320.dp) 12.dp else 40.dp,
-                    modifier = Modifier.offset { IntOffset(0, -visibleCollapse.toInt()) }
+                    modifier = Modifier.graphicsLayer { alpha = 1f - compactIdentityAlpha }
+                        .offset { IntOffset(0, -visibleCollapse.toInt()) }
                         .wrapContentHeight(Alignment.Top, unbounded = true)
                         .heightIn(min = minimumHeight, max = heightLimit)
                         .onSizeChanged {
@@ -130,11 +150,11 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                     backgroundLoaded = it
                 }
             }
-            LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("member-profile")
+            LazyColumn(Modifier.fillMaxSize().testTag("member-profile")
                 .quickScrollTarget(scroll, expandHeader = {
                     androidx.compose.animation.core.animate(collapse, 0f) { value, _ -> collapse = value }
                 }), state = scroll,
-                contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                contentPadding = PaddingValues(top = viewportHeight + 8.dp, bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item(key = "shortcuts") {
                     BoxWithConstraints(Modifier.padding(horizontal = 8.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp))
                         .background(MaterialTheme.colorScheme.surface).padding(horizontal = 4.dp, vertical = 12.dp)) {
@@ -177,9 +197,17 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                     fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
-        if (compactIdentityAlpha > 0f) MemberCompactHeader(member, backgroundLoaded, profile,
-            { destination(AccountDestination.TRUST) }, Modifier.align(Alignment.TopCenter)
-                .graphicsLayer { alpha = compactIdentityAlpha })
+        if (compactIdentityAlpha > 0f) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+            .graphicsLayer { alpha = compactIdentityAlpha }
+            .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
+                drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
+            }, effects = {
+                if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
+                if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
+            }).testTag("member-toolbar-material")) {
+            MemberCompactHeader(member, lerp(if (backgroundLoaded) Color.White else Ink, themeInk, compactIdentityAlpha), profile,
+                { destination(AccountDestination.TRUST) }, Modifier)
+        }
     }
 }
 
