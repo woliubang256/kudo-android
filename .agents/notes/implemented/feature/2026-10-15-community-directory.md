@@ -32,7 +32,7 @@ CommunityDirectoryTest 的6项用例验证个人显示项与站点顺序、两�
 
 CommunityDirectoryViewModelTest 验证在途合并、缓存过期、主动刷新、迟到旧账号结果拒绝、退出清空、同账号刷新失败保留和全部标签独立重试。
 
-CommunityDirectoryUiTest 覆盖侧栏成员筛选、标签三列与服务器顺序、分组与独立失败重试、侧栏和完整目录进入详情后的 Tab/模式/位置恢复，以及深色280dp/130%字号和宽窗口增加列数；新增用例验证目录顶部的 Backdrop 容器、Tab 选择和深色液态模式。CategoriesUiTest 保留卡片、图标、状态栏安全区与错误入口的回归。首轮界面测试因顶部 Tab 同样可滚动，通用 hasScrollAction 定位器匹配两个节点；列表添加唯一 testTag 后，返回位置用例通过。此前 HomePagerUiTest、TagFeedUiTest、CategoryFeedTest 共10项通过，后续只重跑受改动影响的目录与类别测试。
+CommunityDirectoryUiTest 覆盖侧栏成员筛选、标签三列与服务器顺序、分组与独立失败重试、侧栏和完整目录进入详情后的 Tab/模式/位置恢复，以及深色280dp/130%字号和宽窗口增加列数；新增用例验证目录顶部的 Backdrop 容器、Tab 选择和深色液态模式。CategoriesUiTest 保留卡片、图标、状态栏安全区与错误入口的回归。首轮界面测试因顶部 Tab 同样可滚动，通用 hasScrollAction 定位器匹配两个节点；列表添加唯一 testTag 后，返回位置用例通过。此前 HomePagerUiTest、TagFeedUiTest、CategoryFeedUiTest 共10项通过，后续只重跑受改动影响的目录与类别测试。
 
 最终12项定向JVM测试及合计17项相关真机用例通过。日志 artifacts/community-directory-state-tests.txt、community-directory-ui-final-device.txt（4项目录+2项旧类别）、community-directory-final-device.txt（新增完整目录返回场景后5项目录）及首轮 community-directory-ui-device.txt（含10项列表相关回归）。最终 assembleDebug、assembleDebugAndroidTest、lintDebug 成功，Lint为0 errors / 46 warnings，目录源码无警告；日志 community-directory-final-build.txt。已目视浅色三列、深色窄屏大字两列与宽窗口五列截图 directory-tags-light.png / directory-tags-dark-narrow-large.png / directory-tags-wide-large.png，点击后的单元灰底为涟漪状态。签名与真机已安装开发版一致，使用 adb install -r 覆盖安装，保持0.2.5 / 2006及账号数据，测试包单独 install -r -t 后 am instrument，不使用自动卸载任务。
 

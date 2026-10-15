@@ -111,8 +111,9 @@ internal fun AccountPageTopBar(title: String, back: () -> Unit, actions: @Compos
 }
 
 @Composable
-internal fun AccountTabs(labels: List<String>, selection: Int, select: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).horizontalScroll(rememberScrollState())
+internal fun AccountTabs(labels: List<String>, selection: Int, modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surface, select: (Int) -> Unit) {
+    Row(modifier.fillMaxWidth().background(containerColor).horizontalScroll(rememberScrollState())
         .padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         labels.forEachIndexed { index, label ->
             Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Tab) { select(index) }

@@ -1,7 +1,7 @@
 package com.kudo.android.data
 
 enum class NoticeGroup(val title: String, private val types: Set<Int>) {
-    ALL("所有通知", emptySet()), REPLIES("回复", setOf(1, 2, 3, 15)),
+    ALL("全部", emptySet()), REPLIES("回复", setOf(1, 2, 3, 15)),
     LIKES("赞", setOf(5, 19, 25)), MESSAGES("私信", setOf(6, 7, 16));
     fun includes(notice: Notice) = this == ALL || notice.type in types
 }

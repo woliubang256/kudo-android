@@ -1,5 +1,6 @@
 package com.kudo.android.ui.account
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,12 +22,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
+import com.kudo.android.ui.theme.LocalDisplaySettings
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -36,16 +46,30 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
     website: (String) -> Unit, privateMessages: () -> Unit) {
     val pager = rememberPagerState(pageCount = { NoticeGroup.entries.size })
     val scope = rememberCoroutineScope()
-    Column(Modifier.fillMaxSize().testTag("member-notifications")) {
-        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).statusBarsPadding()
-            .heightIn(min = 48.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("消息", fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
-            MessageCountBadge(vm.unreadCount, Modifier.padding(start = 6.dp))
-            Spacer(Modifier.weight(1f))
-            CommunityIconButton(Icons.Rounded.Refresh, "刷新通知", { vm.loadNotices() }, enabled = !vm.noticesLoading)
-            TextButton({ vm.markRead() }, enabled = vm.unreadCount > 0 || vm.notices.any { !it.read }) { Text("全部已读", fontSize = 12.sp) }
+    val settings = LocalDisplaySettings.current
+    val backdrop = rememberLayerBackdrop()
+    val canBlur = settings.glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
+    val canRefract = settings.glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
+    val surface = MaterialTheme.colorScheme.surface
+    Column(Modifier.fillMaxSize().layerBackdrop(backdrop).semantics { paneTitle = "消息" }.testTag("member-notifications")) {
+        Box(Modifier.fillMaxWidth().statusBarsPadding()
+            .drawPlainBackdrop(backdrop, shape = { RoundedCornerShape(0.dp) }, onDrawSurface = {
+                drawRect(surface.copy(alpha = if (canBlur) .2f else .94f))
+            }, effects = {
+                if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
+                if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
+            }).testTag("notifications-toolbar-material")) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                AccountTabs(NoticeGroup.entries.map { it.title }, pager.currentPage, Modifier.weight(1f), Color.Transparent) {
+                    scope.launch { pager.animateScrollToPage(it) }
+                }
+                Row(Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CommunityIconButton(Icons.Rounded.Refresh, "刷新通知", { vm.loadNotices() }, Modifier.testTag("refresh-notices"), !vm.noticesLoading)
+                    CommunityIconButton(Icons.Rounded.DoneAll, "全部标为已读", { vm.markRead() }, Modifier.testTag("mark-all-notices-read"),
+                        vm.unreadCount > 0 || vm.notices.any { !it.read })
+                }
+            }
         }
-        AccountTabs(NoticeGroup.entries.map { it.title }, pager.currentPage) { scope.launch { pager.animateScrollToPage(it) } }
         HorizontalPager(pager, Modifier.weight(1f)) { index ->
             val group = NoticeGroup.entries[index]
             val scroll = rememberLazyListState()

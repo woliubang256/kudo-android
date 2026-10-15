@@ -65,7 +65,10 @@ class GuestNotificationsUiTest {
         compose.waitUntil(5000) { !vm.noticesLoading && vm.notices.isNotEmpty() }
         compose.onNodeWithText("账号通知夹具").assertIsDisplayed()
         compose.onNodeWithContentDescription("刷新通知").assertIsDisplayed()
-        compose.onNodeWithText("全部已读").assertIsDisplayed()
+        compose.onNodeWithContentDescription("全部标为已读").assertIsDisplayed()
+        compose.onNodeWithText("全部").assertIsDisplayed()
+        compose.onNodeWithText("所有通知").assertDoesNotExist()
+        compose.onNodeWithText("消息", substring = false).assertDoesNotExist()
         signedIn.set(false)
         compose.runOnIdle { vm.viewModelScope.launch { vm.checkSession() } }
         compose.waitUntil(5000) { vm.user == null && !vm.checkingSession }
@@ -73,7 +76,7 @@ class GuestNotificationsUiTest {
         compose.runOnIdle { assertEquals(0, vm.notices.size) }
         compose.onNodeWithText("账号通知夹具").assertDoesNotExist()
         compose.onNodeWithContentDescription("刷新通知").assertDoesNotExist()
-        compose.onNodeWithText("全部已读").assertDoesNotExist()
+        compose.onNodeWithContentDescription("全部标为已读").assertDoesNotExist()
         compose.onNodeWithText("不错过每一份回应").assertDoesNotExist()
         compose.onNodeWithText("点击登录").assertIsDisplayed()
         capture("guest-notifications-light.png", "guest-notifications")

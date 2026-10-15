@@ -167,8 +167,6 @@ fun NotificationsScreen(vm: AccountViewModel, login: () -> Unit, open: (Int, Int
 private fun GuestNotificationsScreen(login: () -> Unit) {
     val scroll = rememberLazyListState()
     Column(Modifier.fillMaxSize().statusBarsPadding().semantics { paneTitle = "消息" }.testTag("guest-notifications")) {
-        Text("消息", Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 12.dp),
-            fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onBackground)
         LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 112.dp)) {
             item { GuestLoginPanel("登录后查看回复、提及和点赞通知", login) }
         }

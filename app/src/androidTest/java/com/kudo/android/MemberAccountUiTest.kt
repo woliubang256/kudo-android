@@ -118,6 +118,14 @@ class MemberAccountUiTest {
         var target: Pair<Int, Int?>? = null
         compose.setContent { KudoTheme(DisplaySettings()) { NotificationsScreen(account, {}, { topic, post -> target = topic to post }) } }
         compose.waitUntil(5000) { account.noticesLoaded }
+        compose.onNodeWithTag("notifications-toolbar-material").assertIsDisplayed()
+        compose.onNodeWithText("全部").assertIsDisplayed()
+        compose.onNodeWithText("消息", substring = false).assertDoesNotExist()
+        val tabs = compose.onNodeWithText("全部").fetchSemanticsNode().boundsInRoot
+        val refresh = compose.onNodeWithContentDescription("刷新通知").fetchSemanticsNode().boundsInRoot
+        val read = compose.onNodeWithContentDescription("全部标为已读").fetchSemanticsNode().boundsInRoot
+        assertEquals(tabs.center.y, refresh.center.y, 1f)
+        assertEquals(refresh.center.y, read.center.y, 1f)
         compose.onNodeWithText("新来的前端女同事，怎么深入交流？").assertIsDisplayed()
         compose.onNodeWithText("3023599024 将话题标记为已解决").assertIsDisplayed()
         for (id in listOf(101, 102)) compose.onNodeWithTag("notice-solved-$id", useUnmergedTree = true).assertIsDisplayed()
