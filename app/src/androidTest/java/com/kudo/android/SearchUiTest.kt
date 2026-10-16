@@ -98,6 +98,29 @@ class SearchUiTest {
         compose.waitUntil(5000) { vm!!.state.value.searched && !vm!!.state.value.loading }
     }
 
+    @Test fun searchAndFilterUseSiblingMaterialsWithSearchActionInsideTheOval() {
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT, fontScale = 1.3f))
+        compose.setContent { KudoTheme(settings) {
+            Box(Modifier.fillMaxSize().widthIn(max = 280.dp)) {
+                SearchScreen(SearchState(), { _, _ -> }, {}, { _, _ -> }, {}, {})
+            }
+        } }
+        compose.onNodeWithTag("search-submit").assert(hasAnyAncestor(hasTestTag("search-input"))).assertIsNotEnabled()
+        compose.onNodeWithTag("search-query").performTextReplacement("测试")
+        compose.onNodeWithTag("search-submit").assertIsEnabled().performClick()
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
+            compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass) }
+            compose.onNodeWithTag("search-header").assert(!hasAnyAncestor(hasTestTag("search-results")))
+            val before = compose.onNodeWithTag("search-results").fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithTag("search-filter-toggle").performClick()
+            compose.onNodeWithTag("search-filters-panel").assertIsDisplayed().assert(!hasAnyAncestor(hasTestTag("search-results")))
+            assertEquals(before, compose.onNodeWithTag("search-results").fetchSemanticsNode().boundsInRoot)
+            compose.onNodeWithTag("search-filter-apply").assertIsDisplayed()
+            capture("search-material-${theme.name}-${glass.name}.png")
+            compose.onNodeWithContentDescription("收起高级筛选").performClick()
+        }
+    }
+
     @Test fun recentSearchesComeFromServerAndLogoutRemovesThem() {
         show()
         compose.onNodeWithText("最近搜索").assertIsDisplayed()

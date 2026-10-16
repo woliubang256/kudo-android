@@ -8,6 +8,10 @@ Status: implemented
 
 ## Decision
 
+搜索顶部和高级筛选下拉使用用户设置的 screenMaterial，光学参数与首页一致。全屏结果列表是独立采样层，顶部和下拉为兄弟节点；首屏用列表 contentPadding 避让实测顶部高度，滚动后内容经过玻璃后方。筛选作为顶部下方的覆盖下拉，不挤压列表视口；高度按扣除顶部后的可用空间限制，底部动作仍可见。清空确认弹窗使用包含顶部的独立全屏采样源，不能让顶部采样到自身。
+
+搜索框使用随字号增高的椭圆容器，内部右侧保留分隔线和可点击搜索按钮；清空、键盘提交、空白禁用和输入状态保持既有语义。
+
 最近搜索支持账号同步清空：`clearRecentSearches` 调用网页对应的 `DELETE /u/recent-searches.json`，沿用同源会话和 CSRF 写请求，访客不写。请求成功才清空当前状态；失败保留词条和独立错误，不自动重放删除。历史读取与删除共用互斥状态和独立代际令牌，删除期间不启动历史刷新，旧读取或旧账号的迟到响应不能复活历史。
 
 标题右侧提供垃圾桶图标，先打开居中的 LiquidModal 并使用统一的胶囊确认按钮；发送期间仅显示“正在清空…”，防止重复点击。弹窗显示时隔离底层焦点与可访问语义，禁用快速回顶；账号切换、开始搜索或清空成功都会关闭弹窗。成功后最近搜索标题与词条整块隐藏，初始空历史也不展示“暂无最近搜索”；读取中及读取失败仍提供加载和重试反馈。失败则在弹窗中显示独立错误，取消后保留历史。
@@ -78,6 +82,8 @@ The search ViewModel now keeps the latest result-list index and pixel offset sep
 `SearchUiTest.returningFromTopicRestoresTheSearchResultPosition` failed before this follow-up because the twentieth result disappeared after the simulated detail return; it passes with the ViewModel-backed position.
 
 ## Consequences
+
+2026-10-16 搜索材质相关13项真机回归通过（artifacts/top-material-tests.txt，另含类别和标签2项）。覆盖椭圆内提交与空白禁用、浅深色三种材质、筛选覆盖不改变列表视口、短窗口动作可见、清空历史、详情返回位置、键盘与服务器筛选；已查看浅色大字截图。版本2011/0.2.6-dev且签名与已安装包一致，覆盖安装保留账号数据。
 
 历史依赖服务端搜索日志，可能延后出现；站点关闭日志时独立显示读取错误，不阻塞搜索。插件能力读取可能被验证页阻挡，提供重试。用户接口按网页最多二十项，标签请求有限额；这些结果不声称无限分页。真机仅使用覆盖安装，版本为2005/0.2.3，签名与已安装包匹配，保留账号及数据。线上接口已参考官方源码核对，真机使用离线夹具，尚未完成真实登录账号的跨设备最近搜索同步验收。
 

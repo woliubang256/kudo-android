@@ -28,7 +28,7 @@ internal fun SearchFiltersPanel(
     var tagQuery by remember { mutableStateOf("") }
     var categoryQuery by remember { mutableStateOf("") }
     var validation by remember { mutableStateOf<String?>(null) }
-    Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).testTag("search-filters-panel")) {
+    Column(modifier.fillMaxWidth().testTag("search-filters-panel")) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("高级筛选", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
             CommunityIconButton(Icons.Rounded.Close, "收起高级筛选", dismiss)

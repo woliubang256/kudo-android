@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -22,6 +22,9 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.selected
@@ -56,6 +59,9 @@ fun SearchScreen(
     var draft by remember(state.accountId) { mutableStateOf(SearchFilters()) }
     val clearVisibility = remember(state.accountId) { MutableTransitionState(false) }
     val backdrop = rememberLayerBackdrop()
+    val contentBackdrop = rememberLayerBackdrop()
+    var headerHeight by remember { mutableIntStateOf(0) }
+    val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     val showing = clearVisibility.currentState || clearVisibility.targetState
     fun dismissClear() { if (!state.historyClearing) clearVisibility.targetState = false }
     androidx.activity.compose.BackHandler(enabled = filtersOpen && !showing) { filtersOpen = false }
@@ -80,51 +86,12 @@ fun SearchScreen(
     val users = state.hits.users.filterNot { it.username.lowercase(Locale.ROOT) in ignored }
     val submit = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; search(query, false) }
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background).imePadding()
+    BoxWithConstraints(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background).imePadding()
         .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
         .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
-        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Search, null, Modifier.padding(start = 12.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp).testTag("search-query"),
-                    placeholder = "搜索社区", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
-                if (query.isNotEmpty()) CommunityIconButton(Icons.Rounded.Close, "清空搜索", { query = ""; clear(); filtersOpen = false })
-            }
-            Text("搜索", Modifier.clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.padding(start = 14.dp, top = 14.dp, bottom = 14.dp).testTag("search-submit"),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-        }
-        FeedTabBar(SearchKind.entries.map { it.name to it.label }, state.kind.name) { value ->
-            filtersOpen = false; focus.clearFocus(); keyboard?.hide(); changeKind(SearchKind.valueOf(value))
-        }
-        if (state.kind == SearchKind.POSTS) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                SearchSort.available(state.accountId != null).forEach { sort ->
-                    Text(sort.label, Modifier.clickable(role = Role.Button) { focus.clearFocus(); keyboard?.hide(); changeSort(sort) }.semantics { selected = state.sort == sort }
-                        .testTag("search-sort-${sort.name}").padding(horizontal = 10.dp, vertical = 14.dp), style = MaterialTheme.typography.bodySmall,
-                        color = if (state.sort == sort) LogoYellow else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (state.sort == sort) FontWeight.Bold else FontWeight.Normal)
-                }
-            }
-            Box {
-                CommunityIconButton(Icons.Rounded.Tune, "高级筛选", {
-                    focus.clearFocus(); keyboard?.hide()
-                    if (!filtersOpen) { draft = parseSearchFilters(query); loadMetadata() }
-                    filtersOpen = !filtersOpen
-                }, Modifier.testTag("search-filter-toggle"))
-                if (state.filters.count > 0) Text(state.filters.count.toString(), Modifier.align(Alignment.TopEnd).padding(4.dp), color = LogoYellow, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f))
-        BoxWithConstraints(Modifier.weight(1f)) {
-            val panelHeight = maxHeight * .72f
-            Column {
-                if (filtersOpen) SearchFiltersPanel(state, draft, { draft = it }, suggestTags, loadMetadata,
-                    apply = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; applyFilters(query, draft) }, dismiss = { filtersOpen = false },
-                    modifier = Modifier.heightIn(max = panelHeight))
-                LazyColumn(state = scroll, modifier = Modifier.weight(1f).quickScrollTarget(scroll, enabled = !showing).testTag("search-results"),
-                    contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (listStyle == TopicListStyle.FEED) 8.dp else 0.dp)) {
+        val panelHeight = (maxHeight - contentTopPadding).coerceAtLeast(0.dp) * .72f
+                LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().layerBackdrop(contentBackdrop).quickScrollTarget(scroll, enabled = !showing).testTag("search-results"),
+                    contentPadding = PaddingValues(top = contentTopPadding, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (listStyle == TopicListStyle.FEED) 8.dp else 0.dp)) {
                     if (!state.searched) {
                         if (state.accountId != null && (state.recent.isNotEmpty() || state.historyLoading || state.historyError != null)) {
                             item {
@@ -190,7 +157,48 @@ fun SearchScreen(
                         }
                     }
                 }
+        Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(contentBackdrop).testTag("search-header")) {
+        Row(Modifier.fillMaxWidth().statusBarsPadding().padding(end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
+            Row(Modifier.weight(1f).heightIn(min = 40.dp).clip(CircleShape).testTag("search-input").background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Search, null, Modifier.padding(start = 12.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp).testTag("search-query"),
+                    placeholder = "搜索社区", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
+                if (query.isNotEmpty()) CommunityIconButton(Icons.Rounded.Close, "清空搜索", { query = ""; clear(); filtersOpen = false })
+                Box(Modifier.width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .3f)))
+            Text("搜索", Modifier.clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 14.dp).testTag("search-submit"),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
+
+        }
+        FeedTabBar(SearchKind.entries.map { it.name to it.label }, state.kind.name, containerColor = Color.Transparent) { value ->
+            filtersOpen = false; focus.clearFocus(); keyboard?.hide(); changeKind(SearchKind.valueOf(value))
+        }
+        if (state.kind == SearchKind.POSTS) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                SearchSort.available(state.accountId != null).forEach { sort ->
+                    Text(sort.label, Modifier.clickable(role = Role.Button) { focus.clearFocus(); keyboard?.hide(); changeSort(sort) }.semantics { selected = state.sort == sort }
+                        .testTag("search-sort-${sort.name}").padding(horizontal = 10.dp, vertical = 14.dp), style = MaterialTheme.typography.bodySmall,
+                        color = if (state.sort == sort) LogoYellow else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (state.sort == sort) FontWeight.Bold else FontWeight.Normal)
+                }
+            }
+            Box {
+                CommunityIconButton(Icons.Rounded.Tune, "高级筛选", {
+                    focus.clearFocus(); keyboard?.hide()
+                    if (!filtersOpen) { draft = parseSearchFilters(query); loadMetadata() }
+                    filtersOpen = !filtersOpen
+                }, Modifier.testTag("search-filter-toggle"))
+                if (state.filters.count > 0) Text(state.filters.count.toString(), Modifier.align(Alignment.TopEnd).padding(4.dp), color = LogoYellow, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f))
+            }
+            if (filtersOpen) SearchFiltersPanel(state, draft, { draft = it }, suggestTags, loadMetadata,
+                apply = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; applyFilters(query, draft) }, dismiss = { filtersOpen = false },
+                modifier = Modifier.heightIn(max = panelHeight).screenMaterial(contentBackdrop))
         }
     }
     LiquidModal(clearVisibility, "清空最近搜索？", false, backdrop, LocalDisplaySettings.current.glass, ::dismissClear,
