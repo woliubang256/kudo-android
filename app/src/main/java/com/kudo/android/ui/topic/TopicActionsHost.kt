@@ -183,10 +183,12 @@ private data class TopicMenuAction(val label: String, val icon: ImageVector, val
 @Composable
 private fun TopicCircleAction(label: String, icon: ImageVector, enabled: Boolean, action: () -> Unit, modifier: Modifier) {
     Column(modifier.clip(MaterialTheme.shapes.medium).clickable(enabled = enabled, role = Role.Button, onClick = action)
-        .padding(horizontal = 6.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.size(52.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), CircleShape), contentAlignment = Alignment.Center) {
-            Icon(icon, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.85f else 0.3f))
+        .padding(horizontal = 6.dp, vertical = 8.dp).heightIn(min = 88.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(56.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (enabled) 0.72f else 0.3f), CircleShape), contentAlignment = Alignment.Center) {
+            Icon(icon, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.88f else 0.3f))
         }
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.85f else 0.3f))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.88f else 0.3f),
+            maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
