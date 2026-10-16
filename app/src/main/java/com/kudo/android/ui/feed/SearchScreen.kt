@@ -195,14 +195,18 @@ fun SearchScreen(
                 Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(contentBackdrop).testTag("search-header")) {
                     Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = contentBackdrop)
-                        Row(Modifier.weight(1f).heightIn(min = 40.dp).clip(CircleShape).testTag("search-input").background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f).height(40.dp).clip(CircleShape).testTag("search-input").background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Search, null, Modifier.padding(start = 12.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                            CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp).testTag("search-query"),
+                            CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp).testTag("search-query"),
                                 placeholder = "搜索社区", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
-                            if (query.isNotEmpty()) CommunityIconButton(Icons.Rounded.Close, "清空搜索", { query = ""; clear(); filtersOpen = false })
+                            if (query.isNotEmpty()) Box(Modifier.size(32.dp).clickable(role = Role.Button) {
+                                query = ""; clear(); filtersOpen = false
+                            }, contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Close, "清空搜索", Modifier.size(20.dp))
+                            }
                             Box(Modifier.width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .3f)))
-                            Text("搜索", Modifier.clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 14.dp).testTag("search-submit"),
+                            Text("搜索", Modifier.clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.height(40.dp).padding(horizontal = 12.dp, vertical = 10.dp).testTag("search-submit"),
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                         }
 
@@ -224,7 +228,8 @@ fun SearchScreen(
                                 focus.clearFocus(); keyboard?.hide()
                                 if (!filtersOpen) { draft = parseSearchFilters(query); loadMetadata() }
                                 filtersOpen = !filtersOpen
-                            }, Modifier.testTag("search-filter-toggle"), backdrop = contentBackdrop)
+                            }, Modifier.testTag("search-filter-toggle"), backdrop = contentBackdrop,
+                                touchSize = 40.dp, visualSize = 36.dp, iconSize = 22.dp)
                             if (state.filters.count > 0) Text(state.filters.count.toString(), Modifier.align(Alignment.TopEnd).padding(4.dp), color = LogoYellow, style = MaterialTheme.typography.labelSmall)
                         }
                     }

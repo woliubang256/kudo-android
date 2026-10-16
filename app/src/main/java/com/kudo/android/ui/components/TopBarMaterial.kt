@@ -15,6 +15,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kudo.android.ui.components.liquid.LiquidButton
 import com.kudo.android.ui.theme.Ink
@@ -61,21 +62,24 @@ internal fun TopBarIconButton(
     modifier: Modifier = Modifier, enabled: Boolean = true,
     backdrop: Backdrop? = LocalToolbarBackdrop.current,
     tint: Color = MaterialTheme.colorScheme.onSurface,
+    touchSize: Dp = 48.dp,
+    visualSize: Dp = 40.dp,
+    iconSize: Dp = 23.dp,
 ) {
     if (backdrop != null) {
-        Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action),
+        Box(modifier.size(touchSize).clickable(enabled = enabled, role = Role.Button, onClick = action),
             contentAlignment = Alignment.Center) {
-            LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, Modifier.size(40.dp),
+            LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, Modifier.size(visualSize),
                 enabled = enabled, contentColor = tint, contentPadding = PaddingValues(0.dp),
-                surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = .3f), minimumHeight = 40.dp) {
-                Icon(icon, description, Modifier.size(23.dp))
+                surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = .3f), minimumHeight = visualSize) {
+                Icon(icon, description, Modifier.size(iconSize))
             }
         }
     } else {
-        Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(40.dp).clip(CircleShape)
+        Box(modifier.size(touchSize).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(visualSize).clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .85f)), contentAlignment = Alignment.Center) {
-                Icon(icon, description, Modifier.size(23.dp), tint = tint.copy(alpha = if (enabled) 1f else .38f))
+                Icon(icon, description, Modifier.size(iconSize), tint = tint.copy(alpha = if (enabled) 1f else .38f))
             }
         }
     }
