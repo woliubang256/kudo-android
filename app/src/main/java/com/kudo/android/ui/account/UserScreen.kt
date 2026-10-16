@@ -27,12 +27,18 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.*
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -41,6 +47,8 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
 import com.kudo.android.ui.topic.RichContent
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -71,19 +79,29 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("public-user-page")) {
         val profile = state.profile
         val pager = rememberPagerState(pageCount = { ProfileTab.entries.size })
+        val scrolls = ProfileTab.entries.map { tab -> key(profile?.member?.id, tab) { rememberLazyListState() } }
+        val activeScroll by rememberUpdatedState(scrolls[pager.settledPage])
         val scope = rememberCoroutineScope()
         val density = LocalDensity.current
+        val backdrop = rememberLayerBackdrop()
+        val surface = MaterialTheme.colorScheme.surface
         val minimum = WindowInsets.statusBars.getTop(density) + with(density) { 48.dp.toPx() }
         val expandedHeight = maxWidth.coerceAtMost((maxHeight - 120.dp).coerceAtLeast(with(density) { minimum.toDp() }))
         val headerHeight = with(density) { expandedHeight.toPx() }
         var collapse by remember(profile?.member?.id) { mutableFloatStateOf(0f) }
         val maximum = (headerHeight - minimum).coerceAtLeast(0f)
-        val collapsed = collapse >= maximum - 1 && maximum > 0
+        val visibleCollapse = collapse.coerceIn(0f, maximum)
+        val fraction = if (maximum > 0f) visibleCollapse / maximum else 1f
+        val compactIdentityAlpha = profileToolbarIdentityAlpha(fraction)
+        val collapsed = fraction >= .999f
+        val viewportHeight = with(density) { (headerHeight - visibleCollapse).toDp() }
+        var tabsHeight by remember { mutableStateOf(40.dp) }
+        val contentTop = viewportHeight + tabsHeight
         val latestMaximum by rememberUpdatedState(maximum)
         LaunchedEffect(maximum) { collapse = collapse.coerceIn(0f, maximum) }
         val nested = remember(profile?.member?.id) { object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y >= 0) return Offset.Zero
+                if (available.y == 0f || (available.y > 0f && activeScroll.canScrollBackward)) return Offset.Zero
                 val previous = collapse
                 collapse = (collapse - available.y).coerceIn(0f, latestMaximum)
                 return Offset(0f, previous - collapse)
@@ -102,7 +120,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
             if (activeTab != ProfileTab.SUMMARY && activeFeed?.loaded != true && activeFeed?.loading != true && activeFeed?.error == null)
                 latestLoad(activeTab, false, false)
         }
-        SideEffect { statusBarStyle(if (profile != null) false else null) }
+        SideEffect { statusBarStyle(if (profile == null) null else if (compactIdentityAlpha >= .5f) surface.luminance() > .5f else false) }
         DisposableEffect(Unit) { onDispose { statusBarStyle(null) } }
         val moreVisibility = remember { MutableTransitionState(false) }
         val detailsVisibility = remember(profile?.member?.id) { MutableTransitionState(false) }
@@ -118,8 +136,9 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
             PageTopBar("个人主页", back)
             if (state.loading) LoadingRow() else state.error?.let { ErrorState(it, refresh, login) }
         } else {
-            Column(Modifier.fillMaxSize().nestedScroll(nested)) {
-                Box(Modifier.fillMaxWidth().height(with(density) { (headerHeight - collapse.coerceAtMost(maximum)).toDp() }).clipToBounds()
+            Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+                .nestedScroll(nested).testTag("public-profile-content-backdrop")) {
+                Box(Modifier.fillMaxWidth().height(viewportHeight).clipToBounds().zIndex(1f).testTag("public-profile-header-viewport")
                     .scrollable(rememberScrollableState { delta ->
                         val previous = collapse
                         collapse = (collapse - delta).coerceIn(0f, maximum)
@@ -127,15 +146,15 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                     }, Orientation.Vertical)) {
                     PublicProfileHeader(profile, state.summary, state.cardBackground, viewerId, state.followBusy,
                         { if (viewerId == null) login() else follow() }, { if (viewerId == null) login() else message() }, showFollows,
-                        Modifier.offset { IntOffset(0, -collapse.toInt()) }.wrapContentHeight(Alignment.Top, unbounded = true)
+                        Modifier.graphicsLayer { alpha = 1f - compactIdentityAlpha }
+                            .offset { IntOffset(0, -visibleCollapse.toInt()) }.wrapContentHeight(Alignment.Top, unbounded = true)
                             .height(expandedHeight), openLink,
-                        collapseFraction = if (maximum > 0f) (collapse / maximum).coerceIn(0f, 1f) else 1f,
+                        collapseFraction = fraction,
                         details = { detailsVisibility.targetState = true })
                 }
-                ProfileTabs(pager.currentPage) { index -> scope.launch { pager.animateScrollToPage(index) } }
-                HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("profile-pager"), key = { ProfileTab.entries[it].name }) { index ->
+                HorizontalPager(pager, Modifier.fillMaxSize().testTag("profile-pager"), key = { ProfileTab.entries[it].name }) { index ->
                     val tab = ProfileTab.entries[index]
-                    val scroll = rememberLazyListState()
+                    val scroll = scrolls[index]
                     val feed = state.feeds[tab] ?: ProfileFeedState()
                     val currentNext by rememberUpdatedState(feed.next)
                     val pull = rememberPullToRefreshState()
@@ -153,7 +172,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                     }
                     PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshPage() }, state = pull,
                         modifier = Modifier.fillMaxSize(), indicator = {
-                            PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                            PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = contentTop),
                                 containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
                         }) {
                     LazyColumn(Modifier.fillMaxSize().testTag("profile-list-${tab.name}")
@@ -161,7 +180,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                                 expandHeader = {
                                     androidx.compose.animation.core.animate(collapse, 0f) { value, _ -> collapse = value }
                                 }), state = scroll,
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            contentPadding = PaddingValues(top = contentTop + 8.dp, bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         if (tab == ProfileTab.SUMMARY) {
                             if (state.error != null) item { ErrorState(state.error, refresh, login, back) }
                             if (state.summaryLoading && state.summary == null) item { LoadingRow() }
@@ -186,10 +205,18 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                     }
                 }
             }
-            ProfileToolbar(profile.member, collapsed, viewerId, state.followBusy,
-                { if (viewerId == null) login() else follow() }, back, search,
-                { moreVisibility.targetState = true }, Modifier.align(Alignment.TopCenter),
-                collapseFraction = if (maximum > 0f) (collapse / maximum).coerceIn(0f, 1f) else 1f)
+            Box(Modifier.align(Alignment.TopCenter).offset { IntOffset(0, (headerHeight - visibleCollapse).toInt()) }
+                .onSizeChanged { tabsHeight = with(density) { it.height.toDp() } }
+                .screenMaterial(backdrop, fraction = { compactIdentityAlpha }).testTag("public-profile-tabs-material")) {
+                ProfileTabs(pager.currentPage, { index -> scope.launch { pager.animateScrollToPage(index) } })
+            }
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                .screenMaterial(backdrop, fraction = { compactIdentityAlpha }, expandedColor = Color.Transparent)
+                .testTag("public-profile-toolbar-material")) {
+                ProfileToolbar(profile.member, collapsed, viewerId, state.followBusy,
+                    { if (viewerId == null) login() else follow() }, back, search, { moreVisibility.targetState = true },
+                    collapseFraction = fraction, ink = lerp(Color.White, MaterialTheme.colorScheme.onSurface, compactIdentityAlpha))
+            }
         }
         CommunitySheet(detailsVisibility, "个人资料", { detailsVisibility.targetState = false }, showActions = false) {
             profile?.let { PublicProfileDetails(it, state.summary, openLink) }
@@ -238,7 +265,7 @@ private fun ProfileMenuRow(key: String, icon: ImageVector, title: String, action
 
 @Composable
 private fun ProfileTabs(selected: Int, select: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).horizontalScroll(rememberScrollState()).selectableGroup()
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup()
         .padding(horizontal = 5.dp).testTag("profile-tabs"), verticalAlignment = Alignment.CenterVertically) {
         ProfileTab.entries.forEachIndexed { index, tab -> key(tab) {
             val active = selected == index

@@ -111,8 +111,8 @@ private fun HeaderStat(value: Int?, label: String, modifier: Modifier = Modifier
 @Composable
 internal fun ProfileToolbar(member: Member, collapsed: Boolean, viewerId: Int?, busy: Boolean, follow: () -> Unit,
     back: () -> Unit, search: () -> Unit, more: () -> Unit, modifier: Modifier = Modifier,
-    collapseFraction: Float = if (collapsed) 1f else 0f) {
-    val color = Color.White
+    collapseFraction: Float = if (collapsed) 1f else 0f, ink: Color = Color.White) {
+    val color = ink
     val identityAlpha = profileToolbarIdentityAlpha(collapseFraction)
     Row(modifier.fillMaxWidth().testTag("profile-toolbar")
         .statusBarsPadding().height(48.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {

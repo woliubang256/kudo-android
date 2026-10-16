@@ -14,6 +14,8 @@ Status: implemented
 
 ## Related decisions
 
+吸顶后的背景绘制、工具栏与状态栏主题规则由[用户主页吸顶材质](2026-10-16-public-profile-pinned-material.md)部分取代：吸顶隐藏图片并跟随设置材质。本篇保留展开方形、图片来源与裁剪、资料密度及完整资料面板的规则。
+
 检索个人主页、折叠、背景及头像。[完整公开主页](../../implemented/feature/2026-10-10-public-user-profile.md)的顶部按实际资料高度及收起恢复主题规则被本篇替代，数据和权限继续适用；[连续滚动](../../implemented/bug-fix/2026-10-10-profile-header-scroll.md)保留滚动顺序。[用户装饰](../../implemented/feature/2026-10-10-user-decoration.md)继续负责背景来源，不混用资料标题图。均部分重叠，无需归档。
 
 ## Alternatives considered

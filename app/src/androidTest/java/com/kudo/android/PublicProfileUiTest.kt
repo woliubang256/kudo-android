@@ -4,9 +4,14 @@ import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -58,7 +63,7 @@ class PublicProfileUiTest {
                             val url = data.toString(); fetched.add(url)
                             if (url.endsWith("bad.png")) throw IOException("offline failed image")
                             val bitmap = Bitmap.createBitmap(80, 80, Bitmap.Config.ARGB_8888)
-                            bitmap.eraseColor(0xFFA66635.toInt())
+                            bitmap.eraseColor(if (url.endsWith("blue.png")) 0xFF0000FF.toInt() else 0xFFA66635.toInt())
                             if (url.endsWith("card.png")) for (y in 0 until 80) for (x in 0 until 80) {
                                 bitmap.setPixel(x, y, if (y < 60) 0xFF3874A0.toInt() else 0xFF4B9477.toInt())
                             }
@@ -143,13 +148,14 @@ class PublicProfileUiTest {
         assertTrue(categoryBounds.right < date.left)
         screenshot("summary-reply-narrow-one-row.png")
     }
-    @Test fun expandedHeaderIsSquareAndCollapsedToolbarKeepsImageAndActions() {
+    @Test fun expandedHeaderIsSquareAndPinnedToolbarUsesThemeMaterialAndActions() {
         var style: Boolean? = null
         show(status = { style = it })
         val header = compose.onNodeWithTag("public-profile-header").fetchSemanticsNode().boundsInRoot
         assertEquals("展开顶部为1:1", header.width, header.height, 2f)
         val expanded = compose.onRoot().captureToImage().toPixelMap()
         val expandedBottom = expanded[expanded.width - 5, header.bottom.toInt() - 8]
+        assertTrue("展开保留卡片背景", expandedBottom.green > expandedBottom.red * 1.2f)
         repeat(2) { compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp() } }
         compose.onNodeWithTag("profile-toolbar-avatar", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("profile-toolbar-follow").assertIsDisplayed()
@@ -158,10 +164,9 @@ class PublicProfileUiTest {
         val tabs = compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot
         val pixels = compose.onRoot().captureToImage().toPixelMap()
         val bottom = pixels[pixels.width - 5, tabs.top.toInt() - 8]
-        assertTrue("收起后仍是原图底部绿色区域", bottom.green > bottom.blue * 1.1f)
-        assertTrue("遮罩只稍微更不透明", bottom.green in (expandedBottom.green * .65f)..(expandedBottom.green * .99f))
-        compose.runOnIdle { assertEquals(false, style) }
-        compose.runOnIdle { assertFalse(androidx.core.view.WindowCompat.getInsetsController(compose.activity.window,
+        assertTrue("吸顶后不再保留绿色背景图", kotlin.math.abs(bottom.green - bottom.red) < .08f)
+        compose.runOnIdle { assertEquals(true, style) }
+        compose.runOnIdle { assertTrue(androidx.core.view.WindowCompat.getInsetsController(compose.activity.window,
             compose.activity.window.decorView).isAppearanceLightStatusBars) }
         screenshot("public-profile-square-collapsed.png")
     }
@@ -172,6 +177,104 @@ class PublicProfileUiTest {
         repeat(1) { compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp() } }
         compose.onNodeWithTag("profile-toolbar-avatar", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("profile-toolbar-follow", useUnmergedTree = true).assertExists()
+    }
+    @Test fun pinnedHeaderAndTabsFollowSelectedMaterialAndRestoreTheOriginalImage() {
+        var showing by mutableStateOf(false)
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
+        var style by mutableStateOf<Boolean?>(null)
+        var expectedInk = Color.Unspecified
+        var refreshes = 0
+        val entries = (0 until 30).map { ProfileEntry("sample-$it", it + 1, null, "材质采样话题 $it", image = "https://profile.test/blue.png") }
+        compose.setContent { KudoTheme(settings, darkStatusIcons = style) {
+            expectedInk = MaterialTheme.colorScheme.onSurface
+            if (showing) PublicProfilePage(PublicProfileState(profile, loading = false, cardLoading = false,
+                cardBackground = "https://profile.test/card.png", summary = summary, summaryLoading = false,
+                feeds = feeds + (ProfileTab.TOPICS to ProfileFeedState(entries, loaded = true))), 2,
+                {}, {}, {}, {}, {}, {}, statusBarStyle = { style = it }, refresh = { refreshes++ })
+        } }
+        fun blue(bounds: Rect): Float {
+            compose.waitForIdle()
+            android.os.SystemClock.sleep(250)
+            val pixels = compose.onRoot().captureToImage().toPixelMap()
+            var strongest = -1f
+            for (y in (bounds.top.toInt() + 4) until (bounds.bottom.toInt() - 4) step 3) {
+                for (x in (bounds.left.toInt() + 4) until (bounds.right.toInt() - 4) step 3) {
+                    val color = pixels[x, y]
+                    strongest = maxOf(strongest, color.blue - color.red)
+                }
+            }
+            return strongest
+        }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            compose.runOnIdle { settings = settings.copy(theme = theme); refreshes = 0; showing = true }
+            compose.waitUntil(5000) {
+                val expanded = compose.onNodeWithTag("public-profile-header").captureToImage().toPixelMap()
+                val bottom = expanded[expanded.width - 5, expanded.height - 8]
+                bottom.green > bottom.red * 1.2f
+            }
+            val expandedTop = compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot.top
+            val reads = fetched.count { it.endsWith("card.png") }
+            compose.runOnIdle { assertEquals(false, style) }
+            repeat(2) { compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp() } }
+            compose.onNodeWithTag("profile-tab-TOPICS").performClick()
+            val list = compose.onNodeWithTag("profile-list-TOPICS")
+            val pinnedTop = compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot.top
+            for (glass in GlassMode.entries) {
+                compose.runOnIdle { settings = settings.copy(glass = glass) }
+                list.performScrollToIndex(0)
+                val toolbar = compose.onNodeWithTag("public-profile-toolbar-material").assertIsDisplayed()
+                    .assert(!hasAnyAncestor(hasTestTag("public-profile-content-backdrop"))).fetchSemanticsNode().boundsInRoot
+                val tabs = compose.onNodeWithTag("public-profile-tabs-material").assertIsDisplayed()
+                    .assert(!hasAnyAncestor(hasTestTag("public-profile-content-backdrop"))).fetchSemanticsNode().boundsInRoot
+                compose.onNodeWithTag("public-profile-content-backdrop").assertExists()
+                val pixels = compose.onRoot().captureToImage().toPixelMap()
+                val bottom = pixels[pixels.width - 5, tabs.top.toInt() - 8]
+                assertTrue("$theme/$glass 吸顶不能保留绿色卡片图", kotlin.math.abs(bottom.green - bottom.red) < .08f)
+                val layouts = mutableListOf<TextLayoutResult>()
+                compose.onNode(hasText(member.displayName) and hasAnyAncestor(hasTestTag("profile-toolbar")), useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                assertEquals(expectedInk, layouts.single().layoutInput.style.color)
+                compose.runOnIdle {
+                    assertEquals(theme == ThemeMode.LIGHT, style)
+                    assertEquals(theme == ThemeMode.LIGHT, androidx.core.view.WindowCompat.getInsetsController(compose.activity.window,
+                        compose.activity.window.decorView).isAppearanceLightStatusBars)
+                }
+                assertEquals(pinnedTop, tabs.top, 2f)
+                val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+                assertEquals("列表延伸到顶部玻璃后方", root.top, list.fetchSemanticsNode().boundsInRoot.top, 1f)
+                for ((name, bounds) in listOf("toolbar" to toolbar, "tabs" to tabs)) {
+                    list.performScrollToIndex(0)
+                    val before = blue(bounds)
+                    list.performScrollToIndex(6)
+                    val sample = compose.onNodeWithTag("profile-entry-image-sample-6", useUnmergedTree = true)
+                    val distance = sample.fetchSemanticsNode().boundsInRoot.center.y - bounds.center.y
+                    list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, distance) }
+                    val after = blue(bounds)
+                    assertTrue("$theme/$glass/$name 必须采样滚过的蓝色封面 before=$before after=$after",
+                        after - before > if (glass == GlassMode.TRANSLUCENT) .015f else .08f)
+                    screenshot("public-profile-material-${theme.name.lowercase()}-${glass.name.lowercase()}-$name.png")
+                }
+                list.performScrollToIndex(0)
+            }
+            compose.onNodeWithTag("profile-tab-SUMMARY").performClick()
+            compose.onNodeWithTag("profile-list-SUMMARY").performScrollToIndex(0)
+            compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput {
+                swipe(center, center.copy(y = center.y + 90f), durationMillis = 1000)
+            }
+            val partialTop = compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot.top
+            assertTrue("在列表中下拉应先展开头部", partialTop > pinnedTop + 50f && partialTop < expandedTop)
+            compose.runOnIdle { assertEquals("头部未展开前不触发刷新", 0, refreshes) }
+            repeat(3) { compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput {
+                swipe(center, bottomCenter.copy(y = bottom - 10f), durationMillis = 600)
+            } }
+            assertEquals(expandedTop, compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot.top, 2f)
+            val restored = compose.onNodeWithTag("public-profile-header").captureToImage().toPixelMap()
+            val bottom = restored[restored.width - 5, restored.height - 8]
+            assertTrue("反向展开恢复原卡片图", bottom.green > bottom.red * 1.2f)
+            compose.onNodeWithTag("profile-follow").assertIsDisplayed()
+            compose.runOnIdle { assertEquals(false, style); assertEquals(reads, fetched.count { it.endsWith("card.png") }); showing = false }
+            compose.runOnIdle { assertNull(style) }
+        }
     }
     @Test fun failedCardFallsBackToAvatarPixels() {
         show("https://profile.test/bad.png")
@@ -209,13 +312,13 @@ class PublicProfileUiTest {
         compose.waitForIdle()
         compose.runOnIdle { assertTrue("刷新后当前回复标签必须重新读取，不能永远停在加载中", requested.contains(ProfileTab.REPLIES)) }
     }
-    @Test fun scrollingPinsTabsAndKeepsWhiteStatusBarForeground() {
+    @Test fun scrollingPinsTabsAndUsesTheThemeStatusBarForeground() {
         var style: Boolean? = null
         show(status = { style = it })
         compose.runOnIdle { assertEquals(false, style) }
         compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp() }
         compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp() }
-        compose.runOnIdle { assertEquals(false, style) }
+        compose.runOnIdle { assertEquals(true, style) }
         compose.onNodeWithTag("profile-tabs").assertIsDisplayed()
         val tabs = compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot
         assertTrue("吸顶标签应位于屏幕上方", tabs.top < 300f)
