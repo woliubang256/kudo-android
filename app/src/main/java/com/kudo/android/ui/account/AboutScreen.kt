@@ -29,6 +29,7 @@ import com.kudo.android.data.GitHubUpdates
 import com.kudo.android.data.GitHubRelease
 import com.kudo.android.data.KudoSourceUrl
 import com.kudo.android.ui.components.PageTopBar
+import com.kudo.android.ui.components.MaterialPageScaffold
 import com.kudo.android.ui.components.liquid.LiquidModal
 import com.kudo.android.ui.components.quickScrollTarget
 import com.kudo.android.ui.components.liquid.LiquidModalAction
@@ -51,11 +52,10 @@ fun AboutScreen(openLink: (String) -> Unit = {}, openExternal: (String) -> Unit 
     fun show(value: String) { dialog = value; visibility.targetState = true }
     fun dismiss() { visibility.targetState = false }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+        MaterialPageScaffold(header = { PageTopBar("关于酷DO", back) }, modifier = Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
             .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
-            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
-            PageTopBar("关于酷DO", back)
-            LazyColumn(Modifier.testTag("about-content").quickScrollTarget(scroll, enabled = !showing), state = scroll, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 32.dp),
+            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) { padding ->
+            LazyColumn(Modifier.fillMaxSize().testTag("about-content").quickScrollTarget(scroll, enabled = !showing), state = scroll, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 24.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalAlignment = Alignment.Top) {

@@ -75,12 +75,11 @@ internal fun DohSettingsScreen(network: DohNetwork, requests: RequestSettings, b
         }
     }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+        MaterialPageScaffold(header = { PageTopBar("网络管理", back) }, modifier = Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
             .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
-            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
-            PageTopBar("网络管理", back)
-            LazyColumn(state = scroll, modifier = Modifier.testTag("network-settings-list").quickScrollTarget(scroll, enabled = !showing),
-                contentPadding = PaddingValues(14.dp, 6.dp, 14.dp, 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) { padding ->
+            LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("network-settings-list").quickScrollTarget(scroll, enabled = !showing),
+                contentPadding = PaddingValues(14.dp, padding.calculateTopPadding() + 6.dp, 14.dp, 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(MaterialTheme.colorScheme.surface)
                         .padding(start = 18.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {

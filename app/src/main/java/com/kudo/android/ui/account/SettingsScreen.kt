@@ -54,11 +54,10 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
     fun dismiss() { visibility.targetState = false }
 
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
+        MaterialPageScaffold(header = { PageTopBar("设置", back) }, modifier = Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)
             .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
-            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
-            PageTopBar("设置", back)
-            LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll, enabled = !showing), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) { padding ->
+            LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = !showing), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = padding.calculateTopPadding() + 6.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { SectionLabel("界面显示") }
                 item {
                     Column(Modifier.clip(RoundedCornerShape(19.dp)).background(MaterialTheme.colorScheme.surface)) {
