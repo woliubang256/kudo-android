@@ -25,6 +25,7 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
     var loading by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var webViewGeneration by remember { mutableIntStateOf(0) }
     DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.destroy(); webView = null } }
     MaterialPageScaffold(header = {
         PageTopBar("登录与网页验证", back) {
@@ -41,6 +42,7 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
             Text("请在 Linux.do 官网完成验证和登录，然后点右上角。", Modifier.padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            key(webViewGeneration) {
             AndroidView(factory = { context ->
                 webViewFactory(context).apply {
                     // WRAP_CONTENT makes Chromium's CSS viewport units resolve to zero in AndroidView.
@@ -57,12 +59,20 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
                         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { loading = true }
                         override fun onPageFinished(view: WebView, url: String) { loading = false; CookieManager.getInstance().flush() }
                         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) { if (request.isForMainFrame) { loading = false; message = "网页加载失败，请检查网络后重新进入。" } }
+                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                            if (webView === view) webView = null
+                            loading = false
+                            message = "系统 WebView 渲染进程已退出，请更新 Android System WebView 或 Chrome 后重试。"
+                            webViewGeneration++
+                            return true
+                        }
                     }
                     webChromeClient = WebChromeClient()
                     webView = this
                     loadUrl("https://linux.do/login")
                 }
             }, modifier = Modifier.weight(1f).fillMaxWidth())
+            }
         }
     }
 }

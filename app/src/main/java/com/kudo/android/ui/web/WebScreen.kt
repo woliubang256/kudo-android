@@ -57,6 +57,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     var message by remember(url) { mutableStateOf<String?>(null) }
     var scrollY by remember(url) { mutableIntStateOf(0) }
     var viewportHeight by remember(url) { mutableIntStateOf(0) }
+    var webViewGeneration by remember(url) { mutableIntStateOf(0) }
     val scrolled = viewportHeight > 0 && scrollY >= viewportHeight
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
     val currentBack by rememberUpdatedState(back)
@@ -99,6 +100,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         androidx.compose.animation.core.animate(view.scrollY.toFloat(), 0f) { value, _ -> view.scrollTo(0, value.toInt()) }
                     }
                 }) {
+                key(webViewGeneration) {
                 AndroidView(factory = { context ->
                     webViewFactory(context).apply {
                         setBackgroundColor(surfaceColor)
@@ -157,9 +159,17 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 if (request.isForMainFrame) { progress = 100; awaitingContent = false; error = "网页加载失败，请检查网络后重试。" }
                             }
                             override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
-                                if (request.isForMainFrame && response.statusCode >= 400) { progress = 100; awaitingContent = false; error = "网页返回 ${response.statusCode}，请稍后重试。" }
+                                if (request.isForMainFrame && response.statusCode >= 400) { progress = 100; awaitingContent = false; error = "网页返回 ${response.statusCode}，请稍后重试。" }
                             }
-                        }
+                            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                                if (page.view === view) page.view = null
+                                progress = 100
+                                awaitingContent = false
+                                error = "系统 WebView 渲染进程已退出，请更新 Android System WebView 或 Chrome 后重试。"
+                                webViewGeneration++
+                                return true
+                            }
+                            }
                         webChromeClient = object : WebChromeClient() {
                             override fun onProgressChanged(view: WebView, value: Int) { progress = value }
                             override fun onReceivedTitle(view: WebView, value: String?) { title = value?.takeIf(String::isNotBlank) ?: "网页" }
@@ -178,6 +188,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                     view.stopLoading(); view.removeAllViews(); view.destroy()
                     CookieManager.getInstance().flush()
                 }, modifier = Modifier.fillMaxSize().clipToBounds().onSizeChanged { viewportHeight = it.height }.testTag("web-content"))
+                }
                 if (awaitingContent && error == null) Column(
                     Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).testTag("web-loading"),
                     verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
