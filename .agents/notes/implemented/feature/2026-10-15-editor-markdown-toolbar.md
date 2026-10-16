@@ -8,6 +8,8 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 
 ## Decision
 
+新建私信编辑器也直接复用 EditorToolbar、EditorPreviewDialog、TextFieldValue 的光标/选区处理、EditorImageInsertion 和 uploadEditorImage，不复制一套工具定义。保留私信收件人、标题、personalMessageRules 和来源草稿键，不借用普通话题的分类/标签表单或发布校验。正文区域纵向滚动，底部字数、状态和工具栏在键盘上方可达；格式化与预览不发送私信。上传图片期间允许继续编辑正文，插入锚点随编辑重定位，同时禁用发送和返回，避免未完成的上传脱离当前编辑器；上传失败保留原文并允许重新选择。
+
 正文保留 Markdown 原文及既有账号草稿键，光标、选区和输入法 composition 使用 TextFieldValue 单独管理；格式化作用于选区或插入点，多行块处理整行，空选区把光标放到占位内容中。相同正文回传保留 composition，外部正文变化重定位选区，工具操作明确提交 composition。
 
 底部单行工具栏可横向滚动，回复发布按钮独立固定。常用入口为粗体、斜体、文本大小（标题1～4、段落、小字）、链接、引用、图片、列表（项目符号、编号、任务）、文字方向及代码。更多提供行内代码、删除线、表格、分割线、折叠内容、模糊剧透、目录、脚注、日期时间、公式、Mermaid及Graphviz模板。链接表单沿用无描边输入，工具底部面板使用独立全窗口 Dialog 承载 CommunitySheet，避免被300dp回复容器裁切；发送或保存中禁用正文修改。
@@ -32,6 +34,8 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 
 ## Alternatives considered
 
+- 直接把私信替换成完整 EditorForm 可以复用整个页面，但会引入分类/标签目的地和普通帖发布条件，破坏私信独立规则；只共享正文工具、预览与上传链路，保留私信表单。
+
 - 给单个表情网格增加一次横滑手势，改动较少，但不能跟手展示相邻分组、每组网格位置也会共用；采用Pager并保留图标短按和长按提示，搜索仅临时替换当前页。
 
 - 沿用String输入并继续尾部拼接可减少改动，但工具无法服务真实光标和选区，插入长回复尤其容易打断写作。
@@ -40,6 +44,10 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 - 服务端生成预览最接近最终发布效果，但当前核对的普通用户路由未提供独立cook接口；不以创建草稿或帖子代替预览，采用本地基础格式与明确的插件边界。
 
 ## Testing
+
+私信接入前先通过缺少 editor-toolbar 的失败用例复现（artifacts/private-toolbar-repro.txt）。PrivateMessageToolbarUiTest 的 4 项真机用例通过（artifacts/private-toolbar-device.txt），覆盖选区格式化与草稿保存、预览不发送且保留选区、链接/任务列表/表情、深色 1.3 倍字号与实际键盘、图片上传期间编辑和插入点重定位、发送与返回锁定、上传失败恢复。请求由夹具拦截，不向真实站点发送私信或上传图片。artifacts/private-message-toolbar-dark-keyboard.png 已目视检查，工具栏在键盘上方且发送可达。
+
+2026-10-17 MarkdownEditingTest、MarkdownPreviewTest、PrivateMessageDraftTest、ReplyRulesTest 共 26 项单测通过；PostPrivateMessageUiTest、PrivateMessageReplyUiTest、EditorToolbarUiTest、TopicActionsUiTest 共 28 项真机回归通过（artifacts/message-menu-toolbar-regression-device.txt），包含来源预填与恢复、私信独立字数规则、原发帖/回复工具栏以及真正 280dp 的菜单分排。主包和测试包构建、lintDebug 与笔记门禁通过；设备 RMX2202 / Android 13 保持 0.2.10-dev / 2021，仅同签名覆盖安装，保留登录与草稿数据。
 
 MarkdownEditingTest的7个单元测试通过，覆盖空选区、反向选区、段落中插入、多行列表、Unicode、重复格式操作、composition及异步插入点随编辑移动。任务列表切换普通列表残留复选框先用失败测试复现，再修正普通列表的匹配规则。
 
@@ -54,6 +62,8 @@ AvatarModelTest补充分组与自定义组字段解析；EditorToolbarUiTest增�
 EditorToolbarUiTest新增预览首项与滚动容器归属回归，真机完整6项通过；预览弹窗、格式面板和发送锁定继续沿用原有验证。
 
 ## Consequences
+
+私信复用同一套工具和上传校验，支持 JPG、PNG、WebP、GIF，图片上限 10 MB。代价是上传期间暂不能发送或退出；正文仍可继续编辑，失败后保留原文并解除锁定。本地预览和图片访问沿用共享能力的站点插件与网络限制，最终效果仍以服务端为准。
 
 工具不再强制追加到文末，格式命令可复用且可独立测试。文字方向仅影响本地输入方向，不新增服务器帖子语言元数据。表格等模板保留可编辑源码，图表和投票构建器不在当前范围。输入法composition、外部草稿更新及工具弹窗涉及焦点，必须回归回复面板的键盘和草稿保留。
 

@@ -46,6 +46,8 @@ EditorViewModel 按用户 id、话题和回复楼层隔离持久草稿。上传�
 
 帖子来源私信沿用同一编辑器，首次预填作者用户名、`回复：原标题` 和 `https://linux.do/t/topic/{topicId}/{postNumber}`，不插入全文引用、不自动发送。草稿键使用 `{accountId}_message_{username}~{topicId}~{postNumber}`；波浪号不属于用户名段，避免与公开主页草稿键冲突。草稿索引接受这一后缀，恢复时继续使用原键，不将来源楼层误认为论坛回复目标。预填内容立即保存到本机；已存在的标题、正文和收件人整体优先，不在重新进入时重新拼接或覆盖。菜单的权限与上下文读取由[主题操作](2026-10-09-topic-actions.md)负责。
 
+私信正文消费[统一 Markdown 工具栏、预览与图片上传](2026-10-15-editor-markdown-toolbar.md)，保持原有私信长度规则、草稿隔离及仅确认接收后清理的契约。工具栏操作只修改本机正文，不能复用普通发帖流程触发论坛发布或分类规则查询。
+
 ## Alternatives considered
 
 - 在原生表单收集密码：交互可以统一，但需要自行处理 MFA、OAuth 和站点验证变化；采用官网流程。
@@ -63,3 +65,5 @@ EditorViewModel 按用户 id、话题和回复楼层隔离持久草稿。上传�
 单元测试验证 CSRF、失败不重发与响应解析；真机检查登录入口、设置持久化和未登录时的功能引导。测试不向真实社区发帖、点赞或发送私信。
 
 PrivateMessageDraftTest 先复现来源后缀草稿无法进入本机索引（artifacts/post-message-draft-repro.txt），再验证账号、作者、话题和楼层隔离、普通私信兼容、已有编辑优先以及索引恢复，共 6 项通过；UserProfileDataTest 的 11 项兼容回归通过。PostPrivateMessageUiTest 验证首次预填即保存、主帖与回复作者区分、重新进入与按原键恢复、普通私信不被覆盖；夹具拦截器只接受 GET，未点击真实发送。主帖与回复截图为 artifacts/post-private-message-main.png、artifacts/post-private-message-reply.png，中文和楼层链接已检查。
+
+PrivateMessageToolbarUiTest 的 4 项真机用例验证统一工具栏、选区与草稿保存、预览不发送、键盘可达、上传中重定位及失败恢复；PostPrivateMessageUiTest 的 5 项、PrivateMessageReplyUiTest 的 3 项同时回归通过，来源隔离和独立字数规则保持不变。上传请求使用本地拦截器夹具，没有真实发送私信或上传图片；完整证据与限制见[统一工具栏](2026-10-15-editor-markdown-toolbar.md)。
