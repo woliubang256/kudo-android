@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import com.kudo.android.ui.components.screenMaterial
+import com.kudo.android.ui.components.TopBarIconButton
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.ui.semantics.Role
@@ -66,18 +67,14 @@ internal fun TagFeedScreen(slug: String, state: FeedState, user: Member?, select
             }
             Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(backdrop)
                 .statusBarsPadding().testTag("tag-header")) {
-                Row(Modifier.fillMaxWidth().height(48.dp)
-                    .testTag("tag-toolbar"), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = back), contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回", Modifier.size(24.dp))
-                    }
+                Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp)
+                    .testTag("tag-toolbar"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = backdrop)
                     Icon(Icons.Rounded.Tag, "标签", Modifier.size(21.dp), tint = LogoYellow)
                     Text(title, Modifier.weight(1f).padding(horizontal = 8.dp).testTag("tag-toolbar-name"),
                         fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = search), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Search, "搜索", Modifier.size(24.dp))
-                    }
+                    TopBarIconButton(Icons.Rounded.Search, "搜索", search, backdrop = backdrop)
                 }
                 FeedTabBar(tabs, tabs.getOrNull(pager.currentPage)?.first ?: state.filter, containerColor = Color.Transparent) { value ->
                     val index = tabs.indexOfFirst { it.first == value }

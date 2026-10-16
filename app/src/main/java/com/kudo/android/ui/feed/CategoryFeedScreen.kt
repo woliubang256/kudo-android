@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.*
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.CategoryIcons
 import com.kudo.android.ui.components.screenMaterial
+import com.kudo.android.ui.components.TopBarIconButton
 import com.kudo.android.ui.components.liquid.LiquidButton
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
@@ -104,19 +105,15 @@ internal fun CategoryFeedScreen(category: Category, state: FeedState, user: Memb
                     collapse = (collapse - delta).coerceIn(0f, maximum)
                     previous - collapse
                 }, Orientation.Vertical)) {
-                Row(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal = 4.dp)
-                    .testTag("category-toolbar"), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = back), contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回", Modifier.size(24.dp))
-                    }
+                Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp)
+                    .testTag("category-toolbar"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = backdrop)
                     if (maximum > 0 && collapse >= maximum - 1f) {
                         Icon(CategoryIcons.get(category.icon), null, Modifier.size(24.dp).testTag("category-toolbar-icon"), tint = tint)
                         Text(category.name, Modifier.weight(1f).padding(horizontal = 9.dp).testTag("category-toolbar-name"),
                             fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     } else Spacer(Modifier.weight(1f))
-                    Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = search), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.Search, "搜索", Modifier.size(24.dp))
-                    }
+                    TopBarIconButton(Icons.Rounded.Search, "搜索", search, backdrop = backdrop)
                 }
                 Column(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
                     val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))

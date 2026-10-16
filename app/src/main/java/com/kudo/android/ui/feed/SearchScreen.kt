@@ -193,8 +193,8 @@ fun SearchScreen(
 
             Column(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(contentBackdrop).testTag("search-header")) {
-                    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
+                    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = contentBackdrop)
                         Row(Modifier.weight(1f).heightIn(min = 40.dp).clip(CircleShape).testTag("search-input").background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Search, null, Modifier.padding(start = 12.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                             CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp).testTag("search-query"),
@@ -219,12 +219,12 @@ fun SearchScreen(
                                     fontWeight = if (state.sort == sort) FontWeight.Bold else FontWeight.Normal)
                             }
                         }
-                        Box {
-                            CommunityIconButton(Icons.Rounded.Tune, "高级筛选", {
+                        Box(Modifier.padding(end = 8.dp, bottom = 4.dp)) {
+                            TopBarIconButton(Icons.Rounded.Tune, "高级筛选", {
                                 focus.clearFocus(); keyboard?.hide()
                                 if (!filtersOpen) { draft = parseSearchFilters(query); loadMetadata() }
                                 filtersOpen = !filtersOpen
-                            }, Modifier.testTag("search-filter-toggle"))
+                            }, Modifier.testTag("search-filter-toggle"), backdrop = contentBackdrop)
                             if (state.filters.count > 0) Text(state.filters.count.toString(), Modifier.align(Alignment.TopEnd).padding(4.dp), color = LogoYellow, style = MaterialTheme.typography.labelSmall)
                         }
                     }
