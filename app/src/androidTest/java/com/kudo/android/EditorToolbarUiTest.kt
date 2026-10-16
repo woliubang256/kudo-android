@@ -118,6 +118,7 @@ class EditorToolbarUiTest {
         compose.onNodeWithText("搜索结果").assertDoesNotExist()
         compose.onNodeWithContentDescription(":smile:").performClick()
         compose.waitUntil(5000) { draft.raw == ":smile:" }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("editor-emoji-search").fetchSemanticsNodes().isEmpty() }
         tool("表情")
         compose.onNodeWithText("最近使用").assertDoesNotExist()
         compose.onNodeWithContentDescription(":smile:").assertIsDisplayed()
@@ -145,6 +146,25 @@ class EditorToolbarUiTest {
             useUnmergedTree = true,
         ).assertDoesNotExist()
         compose.onNodeWithTag("editor-emoji-tab-0").assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+    }
+
+    @Test fun emojiGroupsSwipeWithTheirIconTabsAndLeaveSearchWithoutInserting() {
+        var draft by mutableStateOf(Draft(raw = ""))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
+        } }
+        tool("表情")
+        compose.onNodeWithTag("editor-emoji-tab-recent").performClick()
+        compose.onNodeWithTag("editor-emoji-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithTag("editor-emoji-tab-0").assertIsSelected()
+        compose.onNodeWithContentDescription(":smile:").assertIsDisplayed()
+        compose.onNodeWithTag("editor-emoji-pager").performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithTag("editor-emoji-tab-recent").assertIsSelected()
+        compose.onNodeWithTag("editor-emoji-search").performTextReplacement("smile")
+        compose.onNodeWithTag("editor-emoji-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithTag("editor-emoji-tab-0").assertIsSelected()
+        compose.onNodeWithTag("editor-emoji-search").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
+        compose.runOnIdle { assertEquals("", draft.raw) }
     }
 
     @Test fun sendingLocksAllFormattingAndPreviewAndImageControls() {

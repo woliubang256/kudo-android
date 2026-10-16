@@ -32,6 +32,8 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 
 ## Alternatives considered
 
+- 给单个表情网格增加一次横滑手势，改动较少，但不能跟手展示相邻分组、每组网格位置也会共用；采用Pager并保留图标短按和长按提示，搜索仅临时替换当前页。
+
 - 沿用String输入并继续尾部拼接可减少改动，但工具无法服务真实光标和选区，插入长回复尤其容易打断写作。
 - 嵌入网页编辑器可直接使用网站所有插件，但改变原生回复面板、键盘及草稿生命周期，且依赖在线网页状态；本轮扩展原生Markdown编辑。
 - 完整所见即所得编辑最接近网页模式切换，但需要双向文档模型及插件兼容，用户明确选择先完成Markdown工具栏和预览。
@@ -59,9 +61,13 @@ EditorToolbarUiTest新增预览首项与滚动容器归属回归，真机完整6
 
 ## Emoji group tabs
 
-The emoji picker keeps server-provided group order and content, while rendering the horizontal group tabs as icon-only controls like the website. Standard groups choose a representative emoji when that emoji exists in the group; otherwise they use the first item in the group. Custom groups also use their first item. The recent-use tab uses a star icon. Accessible labels, selected-state descriptions, and stable test tags remain on each tab container, while the selected group heading keeps its text label in the content area.
+表情内容使用HorizontalPager，最近使用和站点分组的点击与左右滑动共享页码，网格位置按页保存。分组图标自动滚入可见范围；长按仍仅提示分组名。搜索临时替换当前页内容，切组清空搜索并恢复对应分组，不为切组重新请求目录或图片；图片缓存身份保持。
 
-The new `EditorToolbarUiTest.emojiGroupTabsUseIconsInsteadOfTextLabels` regression test verifies the recent and first server group tabs are visible, icon-labelled, and contain no visible group title. The full editor toolbar suite is expected to contain seven device tests after this addition.
+The emoji picker keeps server-provided group order and content, while rendering the horizontal group tabs as icon-only controls like the website. Standard groups choose a representative emoji when that emoji exists in the group; otherwise they use the first item in the group. Custom groups also use their first item. The recent-use tab uses a star icon. Accessible labels, selected-state descriptions, and stable test tags remain on each tab container; group names appear only through the long-press toast and accessibility labels.
+
+`EditorToolbarUiTest.emojiGroupTabsUseIconsInsteadOfTextLabels` verifies the recent and first server group tabs are visible, icon-labelled, and contain no visible group title.
+
+2026-10-16 EditorToolbarUiTest的8项真机回归通过（artifacts/personal-emoji-pagers-tests.txt与content-tabs-final-tests.txt），包括最近/分组左右滑动、图标同步、切组退出搜索且不插入内容、搜索插入后最近回显、长按名称与原工具栏/预览行为。首次最近回显断言在旧表情面板退出动画期间就重开，明确等待关闭后通过；不改产品动画或插入逻辑。
 
 ## Group name visibility
 
