@@ -81,12 +81,14 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).testTag("web-page")) {
+    MaterialPageScaffold(modifier = Modifier.testTag("web-page"), header = {
         PageTopBar(title, ::navigateBack) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新网页", ::retry)
             CommunityIconButton(Icons.Rounded.Language, "在浏览器打开", { openBrowser(currentUrl) })
             CommunityIconButton(Icons.Rounded.Close, "关闭网页", { currentBack() })
         }
+    }) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
         Box(Modifier.fillMaxWidth().height(2.dp)) {
             if (progress < 100) Box(Modifier.fillMaxWidth((progress / 100f).coerceIn(0f, 1f)).fillMaxHeight().background(LogoYellow))
         }
@@ -192,4 +194,5 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             }
         }
     }
+}
 }

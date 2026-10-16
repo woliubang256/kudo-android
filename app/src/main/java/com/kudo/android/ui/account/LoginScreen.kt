@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kudo.android.ui.components.PageTopBar
+import com.kudo.android.ui.components.MaterialPageScaffold
+import com.kudo.android.ui.components.TopBarTextButton
 import kotlinx.coroutines.launch
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -24,16 +26,18 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
     var message by remember { mutableStateOf<String?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.destroy(); webView = null } }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+    MaterialPageScaffold(header = {
         PageTopBar("登录与网页验证", back) {
-            TextButton(onClick = {
+            TopBarTextButton(if (vm.checkingSession) "检查中…" else "完成登录", {
                 scope.launch {
                     CookieManager.getInstance().flush()
                     if (vm.checkSession()) verified()
                     else message = vm.sessionError?.message ?: "尚未检测到登录；若已完成验证，可以返回浏览话题。"
                 }
-            }, enabled = !vm.checkingSession) { Text(if (vm.checkingSession) "检查中…" else "完成登录") }
+            }, enabled = !vm.checkingSession)
         }
+    }) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
         Text("请在 Linux.do 官网完成验证和登录，然后点右上角。", Modifier.padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -60,4 +64,5 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
             }
         }, modifier = Modifier.weight(1f).fillMaxWidth())
     }
+}
 }

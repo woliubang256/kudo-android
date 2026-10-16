@@ -21,6 +21,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.CommunityIconButton
 import com.kudo.android.ui.components.PageTopBar
+import com.kudo.android.ui.components.MaterialPageScaffold
+import com.kudo.android.ui.components.TopBarTextButton
 import com.kudo.android.ui.topic.LocalReadingBlocked
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -63,14 +65,14 @@ internal fun VerificationScreen(userAgent: String, back: () -> Unit, check: susp
     var loading by remember { mutableStateOf(true) }
     var checking by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).testTag("verification-page")) {
+    MaterialPageScaffold(modifier = Modifier.testTag("verification-page"), header = {
         PageTopBar("网页验证", back) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新验证页", {
                 message = null
                 webView?.loadUrl(ChallengeUrl)
             }, modifier = Modifier.testTag("verification-refresh"), enabled = !checking)
-            TextButton(onClick = {
-                if (checking) return@TextButton
+            TopBarTextButton(if (checking) "检查中…" else "完成验证", {
+                if (checking) return@TopBarTextButton
                 checking = true
                 message = null
                 scope.launch {
@@ -82,10 +84,10 @@ internal fun VerificationScreen(userAgent: String, back: () -> Unit, check: susp
                     catch (e: Exception) { message = e.message ?: "暂时无法确认验证结果，请稍后重试" }
                     finally { checking = false }
                 }
-            }, enabled = !checking, modifier = Modifier.testTag("verification-complete")) {
-                Text(if (checking) "检查中…" else "完成验证")
-            }
+            }, enabled = !checking, modifier = Modifier.testTag("verification-complete"))
         }
+    }) { padding ->
+    Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
         Text("如果页面显示不存在，请多刷新几次，直到出现验证页面；完成过盾后，再点击「完成验证」。",
             Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -120,4 +122,5 @@ internal fun VerificationScreen(userAgent: String, back: () -> Unit, check: susp
             CookieManager.getInstance().flush()
         }, modifier = Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding())
     }
+}
 }
