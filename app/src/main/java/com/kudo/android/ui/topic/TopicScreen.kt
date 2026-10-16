@@ -218,12 +218,13 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
         Box(Modifier.fillMaxSize().layerBackdrop(modalBackdrop)
             .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
             .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup()) {
-            Column(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+            MaterialPageScaffold(modifier = Modifier.layerBackdrop(backdrop), header = {
                 TopicTopBar(state, !showing, back, user, follow) { detail?.let { actions.openDetail(it.id, it.originalPost, bookmark) } }
                 returnTopError?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                PostReadingViewport(110.dp) { viewport ->
-                LazyColumn(state = listState, modifier = Modifier.testTag("topic-posts").then(viewport)
+            }) { padding ->
+                PostReadingViewport(110.dp, topInset = padding.calculateTopPadding()) { viewport ->
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("topic-posts").then(viewport)
                     .quickScrollAccessory(tocEntries.isNotEmpty() && !showing && !state.loading && !state.jumping,
                         Icons.Rounded.FormatListBulleted, "目录") { tocVisibility.targetState = true }
                     .quickScrollTarget(scrolled = listMoved || hasPrevious, enabled = readingEnabled && !showing && !state.loading && !state.jumping,
@@ -232,7 +233,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                         returnTopError = null
                         if (hasPrevious) { returningToTop = true; jumpTo(1) }
                         else { listState.animateScrollToItem(0); currentFloor = 1 }
-                    }, contentPadding = PaddingValues(bottom = 110.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    }, contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = 110.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.loading && detail == null) item { LoadingRow() }
                     if (state.error != null) item { ErrorState(state.error, retry, login, back) }
                     if (detail != null) {

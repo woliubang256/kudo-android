@@ -1,5 +1,8 @@
 package com.kudo.android.ui.topic
 
+import com.kudo.android.ui.components.TopBarIconButton
+import com.kudo.android.ui.components.TopBarTextButton
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
@@ -61,11 +64,9 @@ internal fun TopicTopBar(
 ) {
     val author = state.detail?.author
     val profile = state.authorProfile
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).statusBarsPadding()
-        .heightIn(min = 52.dp).testTag("topic-top-bar"), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = back, enabled = enabled, modifier = Modifier.width(56.dp)) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回")
-        }
+    Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp)
+        .testTag("topic-top-bar"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, enabled = enabled)
         if (author == null) Text("话题详情", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
         else Row(Modifier.weight(1f).heightIn(min = 48.dp)
             .clickable(enabled = enabled, role = Role.Button) { user(author.username) }.testTag("topic-author"),
@@ -88,17 +89,10 @@ internal fun TopicTopBar(
         if (author != null && author.id != state.viewerId &&
             (state.viewerId == null || profile == null || profile.canFollow || profile.isFollowed)) {
             val canClick = enabled && !state.loading && !state.followBusy && (state.viewerId == null || !state.authorLoading)
-            Box(Modifier.heightIn(min = 48.dp).widthIn(min = 56.dp)
-                .clickable(enabled = canClick, role = Role.Button, onClick = follow)
-                .testTag("topic-follow"), contentAlignment = Alignment.Center) {
-                Text(if (state.authorError != null && state.viewerId != null) "重试" else if (profile?.isFollowed == true) "已关注" else "关注",
-                    Modifier.border(1.dp, if (canClick) LogoYellow else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
-                        .padding(horizontal = 14.dp, vertical = 5.dp),
-                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Normal,
-                    color = if (canClick) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            TopBarTextButton(if (state.authorError != null && state.viewerId != null) "重试" else if (profile?.isFollowed == true) "已关注" else "关注",
+                follow, Modifier.testTag("topic-follow"), enabled = canClick)
         }
-        IconButton(onClick = more, enabled = enabled && state.detail != null) { Icon(Icons.Rounded.MoreVert, "更多") }
+        TopBarIconButton(Icons.Rounded.MoreVert, "更多", more, enabled = enabled && state.detail != null)
     }
 }
 

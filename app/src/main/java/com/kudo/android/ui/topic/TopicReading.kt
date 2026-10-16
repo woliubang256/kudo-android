@@ -90,14 +90,16 @@ internal fun PostUnreadIndicator(post: Post, state: TopicState) {
 }
 
 @Composable
-internal fun PostReadingViewport(bottomInset: Dp = 0.dp, content: @Composable (Modifier) -> Unit) {
+internal fun PostReadingViewport(bottomInset: Dp = 0.dp, topInset: Dp = 0.dp, content: @Composable (Modifier) -> Unit) {
     var bounds by remember { mutableStateOf(Rect.Zero) }
     val inset = with(LocalDensity.current) { bottomInset.toPx() }
+    val top = with(LocalDensity.current) { topInset.toPx() }
     CompositionLocalProvider(LocalReadingViewport provides bounds) {
         content(Modifier.onLayoutRectChanged(throttleMillis = 0, debounceMillis = 0) {
             val rect = it.boundsInWindow
             val area = Rect(rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(), rect.bottom.toFloat())
-            bounds = Rect(area.left, area.top, area.right, (area.bottom - inset).coerceAtLeast(area.top))
+            val visibleTop = (area.top + top).coerceAtMost(area.bottom)
+            bounds = Rect(area.left, visibleTop, area.right, (area.bottom - inset).coerceAtLeast(visibleTop))
         })
     }
 }
