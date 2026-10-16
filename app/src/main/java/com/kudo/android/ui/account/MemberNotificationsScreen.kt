@@ -140,14 +140,15 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                 if (canBlur) { vibrancy(); blur(4.dp.toPx()) }
                 if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
             }).statusBarsPadding().testTag("notifications-toolbar-material")) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AccountTabs(NoticeGroup.entries.map { it.title }, pager.currentPage, Modifier.weight(1f), Color.Transparent) {
                     scope.launch { pager.animateScrollToPage(it) }
                 }
-                Row(Modifier.padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CommunityIconButton(Icons.Rounded.Refresh, "刷新通知", { vm.loadNotices() }, Modifier.testTag("refresh-notices"), !vm.noticesLoading)
-                    CommunityIconButton(Icons.Rounded.DoneAll, "全部标为已读", { vm.markRead() }, Modifier.testTag("mark-all-notices-read"),
-                        vm.unreadCount > 0 || vm.notices.any { !it.read })
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TopBarIconButton(Icons.Rounded.Refresh, "刷新通知", { vm.loadNotices() }, Modifier.testTag("refresh-notices"), !vm.noticesLoading, backdrop)
+                    TopBarIconButton(Icons.Rounded.DoneAll, "全部标为已读", { vm.markRead() }, Modifier.testTag("mark-all-notices-read"),
+                        vm.unreadCount > 0 || vm.notices.any { !it.read }, backdrop)
                 }
             }
         }

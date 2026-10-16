@@ -173,8 +173,9 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
             }).then(if (inHome) Modifier else Modifier.statusBarsPadding())
             .testTag("directory-toolbar-material")) {
             FeedTabBar(listOf("categories" to "类别", "tags" to "标签"), tab, containerColor = Color.Transparent) { value -> scope.launch { pager.animateScrollToPage(tabs.indexOf(value)) } }
-            if (expanded) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = ::collapse) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回侧栏目录") }
+            if (expanded) Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回侧栏目录", ::collapse, backdrop = backdrop)
                 Text(if (tab == "categories") "所有类别" else "所有标签", style = MaterialTheme.typography.titleMedium)
             }
         }
