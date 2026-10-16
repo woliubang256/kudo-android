@@ -269,7 +269,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             val vm = model("personal-${member.id}-$destination") { PersonalTopicsViewModel(app.repository, member.username, destination) }
                             PersonalTopicsScreen(vm, account.categories, display.topicListStyle, { nav.popBackStack() }, ::login, ::topic, ::user,
                                 { nav.navigate("new-message") }, drafts = { nav.navigate("drafts") })
-                        } else Column { AccountPageTopBar("个人内容", { nav.popBackStack() }); EmptyState("登录后查看", "登录后查看自己的社区内容。", actionLabel = "登录", action = ::login) }
+                        } else MaterialPagePlaceholder("个人内容", { nav.popBackStack() }) { EmptyState("登录后查看", "登录后查看自己的社区内容。", actionLabel = "登录", action = ::login) }
                     }
                     composable("liked-posts") {
                         val member = account.user
@@ -278,15 +278,14 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             val state by vm.state.collectAsStateWithLifecycle()
                             LikedPostsScreen(state, { nav.popBackStack() }, ::login, ::openLink,
                                 { vm.load() }, { vm.load(true) }, vm::retry)
-                        } else Column {
-                            AccountPageTopBar("我的点赞", { nav.popBackStack() })
+                        } else MaterialPagePlaceholder("我的点赞", { nav.popBackStack() }) {
                             EmptyState("登录后查看点赞", "你送出的赞会出现在这里。", actionLabel = "登录", action = ::login)
                         }
                     }
                     composable("trust") {
                         account.user?.let { member ->
                             TrustScreen(member, app.connect, { nav.popBackStack() }, { openWebPage("https://connect.linux.do/") })
-                        } ?: Column { AccountPageTopBar("等级要求", { nav.popBackStack() }); EmptyState("登录后查看等级", "查看当前账号的等级条件与进度。", actionLabel = "登录", action = ::login) }
+                        } ?: MaterialPagePlaceholder("等级要求", { nav.popBackStack() }) { EmptyState("登录后查看等级", "查看当前账号的等级条件与进度。", actionLabel = "登录", action = ::login) }
                     }
                     composable("account-records/{destination}") { entry ->
                         val member = account.user
@@ -298,7 +297,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                     .setPrimaryClip(android.content.ClipData.newPlainText("邀请链接", text))
                                 showMessage("已复制邀请链接")
                             }
-                        } else Column { AccountPageTopBar("个人功能", { nav.popBackStack() }); EmptyState("请先登录", "登录后查看个人内容。", actionLabel = "登录", action = ::login) }
+                        } else MaterialPagePlaceholder("个人功能", { nav.popBackStack() }) { EmptyState("请先登录", "登录后查看个人内容。", actionLabel = "登录", action = ::login) }
                     }
                     composable("drafts") {
                         val member = account.user
@@ -306,7 +305,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             if (draft.remote) nav.navigate("cloud-draft/${Uri.encode(draft.key)}")
                             else if (draft.privateMessage) nav.navigate("new-message?draft=${Uri.encode(draft.key)}")
                             else editor(draft.topicId, draft.replyTo, draft.categoryContext)
-                        } else Column { AccountPageTopBar("我的草稿", { nav.popBackStack() }); EmptyState("登录后查看草稿", "草稿按账号分别保存。", actionLabel = "登录", action = ::login) }
+                        } else MaterialPagePlaceholder("我的草稿", { nav.popBackStack() }) { EmptyState("登录后查看草稿", "草稿按账号分别保存。", actionLabel = "登录", action = ::login) }
                     }
                     composable("cloud-draft/{key}") { entry ->
                         account.user?.let { member ->
@@ -317,7 +316,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 if (!result.queued) result.topicId?.let { topic(it) }
                                 showMessage(if (result.queued) "已提交审核" else "发布成功")
                             }
-                        } ?: Column { AccountPageTopBar("云端草稿", { nav.popBackStack() }); EmptyState("请先登录", "登录后继续编辑。", actionLabel = "登录", action = ::login) }
+                        } ?: MaterialPagePlaceholder("云端草稿", { nav.popBackStack() }) { EmptyState("请先登录", "登录后继续编辑。", actionLabel = "登录", action = ::login) }
                     }
                     composable("new-message?recipient={recipient}&draft={draft}", arguments = listOf(navArgument("recipient") { defaultValue = "" },
                         navArgument("draft") { defaultValue = "" })) { entry ->
@@ -327,7 +326,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 if (!result.queued) result.topicId?.let { topic(it) }
                                 showMessage(if (result.queued) "私信已提交审核" else "私信已发送")
                             }, recipient = entry.arguments?.getString("recipient").orEmpty(), existingDraftKey = entry.arguments?.getString("draft").orEmpty())
-                        } } ?: Column { AccountPageTopBar("写私信", { nav.popBackStack() }); EmptyState("请先登录", "登录后发送私信。", actionLabel = "登录", action = ::login) }
+                        } } ?: MaterialPagePlaceholder("写私信", { nav.popBackStack() }) { EmptyState("请先登录", "登录后发送私信。", actionLabel = "登录", action = ::login) }
                     }
                     composable("chat/{id}?message={message}", arguments = listOf(navArgument("id") { type = NavType.IntType },
                         navArgument("message") { type = NavType.IntType; defaultValue = 0 })) { entry ->
@@ -338,7 +337,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             ChatScreen(vm, member, app.settings, { nav.popBackStack() }, ::login,
                                 { openWebPage("https://linux.do/chat/c/-/$id") }, ::openLink, ::user,
                                 read = { if (account.user?.id == member.id) account.chatRead(id, it) })
-                        } ?: Column { AccountPageTopBar("聊天", { nav.popBackStack() }); EmptyState("请先登录", "登录后查看聊天。", actionLabel = "登录", action = ::login) }
+                        } ?: MaterialPagePlaceholder("聊天", { nav.popBackStack() }) { EmptyState("请先登录", "登录后查看聊天。", actionLabel = "登录", action = ::login) }
                     }
                     composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) { entry ->
                         WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
@@ -445,8 +444,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     }
                     composable("bookmarks") { LaunchedEffect(account.user?.id) { account.loadSaved() }; BookmarksScreen(account, { nav.popBackStack() }, ::login, ::topic) }
                     composable("unavailable") {
-                        Column(Modifier.fillMaxSize()) {
-                            PageTopBar("内容不可访问", { nav.popBackStack() })
+                        MaterialPagePlaceholder("内容不可访问", { nav.popBackStack() }) {
                             ErrorState(ApiFailure(FailureKind.NOT_FOUND, "内容不存在或暂无权限"), {}, ::login, { nav.popBackStack() })
                         }
                     }
@@ -476,7 +474,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         val categoryId = entry.arguments!!.getInt("category").takeIf { it > 0 }
                         val currentUser = account.user
                         if (currentUser == null) {
-                            Column { PageTopBar("发布", { nav.popBackStack() }); EmptyState("登录后发布", "草稿会自动保存在本机。", actionLabel = "登录", action = ::login) }
+                            MaterialPagePlaceholder("发布", { nav.popBackStack() }) { EmptyState("登录后发布", "草稿会自动保存在本机。", actionLabel = "登录", action = ::login) }
                         } else {
                             val vm = model("editor-${currentUser.id}-$topicId-$replyTo-$categoryId") { EditorViewModel(app, currentUser.id, topicId, replyTo, categoryId = categoryId) }
                             LaunchedEffect(Unit) { if (account.categories.isEmpty()) account.loadCategories() }

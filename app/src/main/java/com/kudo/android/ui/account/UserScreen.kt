@@ -132,8 +132,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
             .any { it.currentState || it.targetState }
         val context = LocalContext.current
         val pageUrl = profile?.member?.username?.let { "https://linux.do/u/${android.net.Uri.encode(it)}" }.orEmpty()
-        if (profile == null) Column(Modifier.fillMaxSize()) {
-            PageTopBar("个人主页", back)
+        if (profile == null) MaterialPagePlaceholder("个人主页", back) {
             if (state.loading) LoadingRow() else state.error?.let { ErrorState(it, refresh, login) }
         } else {
             Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)

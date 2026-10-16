@@ -49,6 +49,13 @@ internal fun MaterialPageScaffold(
 }
 
 @Composable
+internal fun MaterialPagePlaceholder(title: String, back: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    MaterialPageScaffold(header = { PageTopBar(title, back) }) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding), content = content)
+    }
+}
+
+@Composable
 internal fun TopBarIconButton(
     icon: ImageVector, description: String, action: () -> Unit,
     modifier: Modifier = Modifier, enabled: Boolean = true,
