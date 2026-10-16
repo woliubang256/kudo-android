@@ -46,7 +46,7 @@ private class WebPageState(val saved: Bundle? = null) {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> Unit,
-    webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false },
+    webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false }, advancedMaterial: Boolean = false,
     externalLinkMode: ExternalLinkMode = ExternalLinkMode.SYSTEM) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
@@ -83,7 +83,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    MaterialPageScaffold(modifier = Modifier.testTag("web-page"), header = {
+    MaterialPageScaffold(modifier = Modifier.testTag("web-page"), advanced = advancedMaterial, header = {
         PageTopBar(title, ::navigateBack) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新网页", ::retry)
             CommunityIconButton(Icons.Rounded.Language, "在浏览器打开", { openBrowser(currentUrl) })

@@ -33,6 +33,7 @@ internal val LocalToolbarActions = staticCompositionLocalOf { false }
 internal fun MaterialPageScaffold(
     header: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    advanced: Boolean = true,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val backdrop = rememberLayerBackdrop()
@@ -42,9 +43,10 @@ internal fun MaterialPageScaffold(
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("material-page-content")) {
             content(PaddingValues(top = top))
         }
-        CompositionLocalProvider(LocalToolbarBackdrop provides backdrop, LocalToolbarActions provides true) {
+        CompositionLocalProvider(LocalToolbarBackdrop provides if (advanced) backdrop else null, LocalToolbarActions provides advanced) {
             Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }
-                .screenMaterial(backdrop).testTag("material-page-header")) { header() }
+                .then(if (advanced) Modifier.screenMaterial(backdrop) else Modifier.background(MaterialTheme.colorScheme.surface))
+                .testTag("material-page-header")) { header() }
         }
     }
 }

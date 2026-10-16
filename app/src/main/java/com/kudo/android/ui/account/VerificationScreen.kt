@@ -34,7 +34,7 @@ internal val LocalWebVerification = staticCompositionLocalOf<((() -> Unit) -> Un
 
 @Composable
 internal fun VerificationHost(client: DiscourseClient, userAgent: String,
-    webViewFactory: (Context) -> WebView = { WebView(it) }, content: @Composable () -> Unit) {
+    webViewFactory: (Context) -> WebView = { WebView(it) }, advancedMaterial: Boolean = false, content: @Composable () -> Unit) {
     var pendingRetry by remember { mutableStateOf<(() -> Unit)?>(null) }
     val blocked = LocalReadingBlocked.current || pendingRetry != null
     CompositionLocalProvider(LocalWebVerification provides { retry -> pendingRetry = retry }, LocalReadingBlocked provides blocked) {
@@ -59,13 +59,13 @@ internal fun VerificationHost(client: DiscourseClient, userAgent: String,
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun VerificationScreen(userAgent: String, back: () -> Unit, check: suspend () -> Unit, completed: () -> Unit,
-    webViewFactory: (Context) -> WebView = { WebView(it) }) {
+    webViewFactory: (Context) -> WebView = { WebView(it) }, advancedMaterial: Boolean = false) {
     val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<WebView?>(null) }
     var loading by remember { mutableStateOf(true) }
     var checking by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    MaterialPageScaffold(modifier = Modifier.testTag("verification-page"), header = {
+    MaterialPageScaffold(modifier = Modifier.testTag("verification-page"), advanced = advancedMaterial, header = {
         PageTopBar("网页验证", back) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新验证页", {
                 message = null
