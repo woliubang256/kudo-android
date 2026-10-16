@@ -40,6 +40,7 @@ class SearchUiTest {
     private val openedCategories = mutableListOf<Int>()
     private val openedTags = mutableListOf<TopicTag>()
     private var backCount = 0
+    private var manyResults = false
     private val recentTerms = CopyOnWriteArrayList(listOf("开发", "安卓"))
     private val failClear = AtomicBoolean(false)
     private val preload = JSONObject().put("siteSettings", JSONObject().put("tagging_enabled", true).put("solved_enabled", true)
@@ -58,7 +59,8 @@ class SearchUiTest {
             "/tags/filter/search" -> """{"results":[{"text":"开发","slug":"123-tag"}]}"""
             "/u/search/users.json" -> """{"users":[{"id":8,"username":"developer","name":"开发者","avatar_template":""}]}"""
             "/latest" -> "<html><div data-preloaded='$preload'></div></html>"
-            else -> """{"topics":[{"id":3,"title":"开发工具介绍","posts_count":10,"views":100}],"posts":[{"id":32,"topic_id":3,"post_number":9,"username":"author","user_id":8,"blurb":"命中第九楼的摘要"},{"id":31,"topic_id":3,"post_number":2,"username":"other","user_id":9,"blurb":"另一个命中摘要"}],"grouped_search_result":{"more_full_page_results":false}}"""
+            else -> if (manyResults) """{"topics":[${(1..40).joinToString(",") { """{"id":$it,"title":"搜索话题$it"}""" }}],"posts":[${(1..40).joinToString(",") { """{"id":$it,"topic_id":$it,"post_number":1}""" }}],"grouped_search_result":{"more_full_page_results":false}}"""
+                else """{"topics":[{"id":3,"title":"开发工具介绍","posts_count":10,"views":100}],"posts":[{"id":32,"topic_id":3,"post_number":9,"username":"author","user_id":8,"blurb":"命中第九楼的摘要"},{"id":31,"topic_id":3,"post_number":2,"username":"other","user_id":9,"blurb":"另一个命中摘要"}],"grouped_search_result":{"more_full_page_results":false}}"""
         }
         Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(code).message(if (code == 200) "OK" else "Unavailable")
             .body(body.toResponseBody((if (request.url.encodedPath == "/latest") "text/html" else "application/json").toMediaType())).build()
@@ -86,7 +88,8 @@ class SearchUiTest {
                 SearchScreen(state.forAccount(accountId), vm!!::search, { backCount++ }, { id, number -> openedTopics += id to number }, openedUsers::add, {},
                     listStyle = TopicListStyle.TITLE, openCategory = openedCategories::add, openTag = openedTags::add,
                     changeKind = vm!!::changeKind, changeSort = vm!!::changeSort, clear = vm!!::clear, refreshHistory = vm!!::refreshHistory,
-                    loadMetadata = vm!!::loadMetadata, suggestTags = vm!!::suggestTags, applyFilters = vm!!::applyFilters, clearHistory = vm!!::clearHistory)
+                    loadMetadata = vm!!::loadMetadata, suggestTags = vm!!::suggestTags, applyFilters = vm!!::applyFilters, clearHistory = vm!!::clearHistory,
+                    initialScrollIndex = vm!!.scrollIndex, initialScrollOffset = vm!!.scrollOffset, saveScrollPosition = vm!!::saveScrollPosition)
             }
         } }
         compose.waitUntil(5000) { !vm!!.state.value.historyLoading }
@@ -101,7 +104,7 @@ class SearchUiTest {
     @Test fun searchAndFilterUseSiblingMaterialsWithSearchActionInsideTheOval() {
         var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT, fontScale = 1.3f))
         compose.setContent { KudoTheme(settings) {
-            Box(Modifier.fillMaxSize().widthIn(max = 280.dp)) {
+            Box(Modifier.width(280.dp).fillMaxHeight()) {
                 SearchScreen(SearchState(), { _, _ -> }, {}, { _, _ -> }, {}, {})
             }
         } }
@@ -243,6 +246,34 @@ class SearchUiTest {
         compose.onNodeWithText("用户").assertIsSelected()
         compose.onNodeWithContentDescription("高级筛选").assertDoesNotExist()
         capture("search-user-results.png")
+    }
+
+    @Test fun swipingKindsLoadsOnlyTheSettledKindAndReusesSuccessfulResults() {
+        show(); search()
+        compose.onNodeWithTag("search-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.waitUntil(5000) { vm!!.state.value.kind == SearchKind.CATEGORIES_TAGS && !vm!!.state.value.loading }
+        compose.onNodeWithText("类别与标签").assertIsSelected()
+        compose.onNodeWithTag("search-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.waitUntil(5000) { vm!!.state.value.kind == SearchKind.USERS && !vm!!.state.value.loading }
+        compose.onNodeWithText("用户").assertIsSelected()
+        val count = requests.size
+        compose.onNodeWithText("帖子").performClick().assertIsSelected()
+        compose.onNodeWithText("命中第 9 楼").assertIsDisplayed()
+        compose.onNodeWithText("用户").performClick().assertIsSelected()
+        compose.onNodeWithText("@developer").assertIsDisplayed()
+        assertEquals("切回已成功的类型不重复搜索", count, requests.size)
+    }
+
+    @Test fun swipingAcrossOtherKindsRestoresThePostResultPosition() {
+        manyResults = true
+        show(); search()
+        compose.onNodeWithTag("search-results").performScrollToNode(hasTestTag("search-hit-20"))
+        compose.onNodeWithTag("search-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.waitUntil(5000) { vm!!.state.value.kind == SearchKind.CATEGORIES_TAGS && !vm!!.state.value.loading }
+        compose.onNodeWithTag("search-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.waitUntil(5000) { vm!!.state.value.kind == SearchKind.USERS && !vm!!.state.value.loading }
+        compose.onNodeWithText("帖子").performClick().assertIsSelected()
+        compose.onNodeWithTag("search-hit-20").assertIsDisplayed()
     }
 
     @Test fun sortingAndDropdownFiltersAreSubmittedToServer() {

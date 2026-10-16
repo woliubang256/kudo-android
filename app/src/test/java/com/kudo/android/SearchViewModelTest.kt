@@ -22,6 +22,57 @@ class SearchViewModelTest {
     private suspend fun SearchViewModel.historyFinished() = withContext(Dispatchers.IO) { withTimeout(5000) { state.first { !it.historyLoading } } }
     private suspend fun SearchViewModel.clearHistoryFinished() = withContext(Dispatchers.IO) { withTimeout(5000) { state.first { !it.historyClearing } } }
 
+    @Test fun switchingKindsKeepsResultsAndPositionsWithoutRepeatingSuccessfulRequests() = runTest {
+        fixture { repository, requests, models ->
+            val vm = SearchViewModel(repository).also(models::add)
+            vm.search("neo"); val posts = vm.finished().hits
+            vm.saveScrollPosition(12, 37)
+            vm.changeKind(SearchKind.USERS); vm.finished()
+            vm.saveScrollPosition(3, 21)
+            val count = requests.size
+            vm.changeKind(SearchKind.POSTS)
+            assertFalse(vm.state.value.loading)
+            assertEquals(posts, vm.state.value.hits)
+            assertEquals(12, vm.scrollIndex); assertEquals(37, vm.scrollOffset)
+            vm.changeKind(SearchKind.USERS)
+            assertEquals(3, vm.scrollIndex); assertEquals(21, vm.scrollOffset)
+            assertEquals(count, requests.size)
+            vm.search("new"); vm.finished()
+            vm.changeKind(SearchKind.POSTS); vm.finished()
+            assertEquals(0, vm.scrollIndex)
+            assertEquals("new order:relevance", requests.last().requestUrl!!.queryParameter("q"))
+        }
+    }
+
+    @Test fun leavingDuringLoadMoreKeepsAllPreviouslyCompletedPages() = runTest {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        fixture(response = { request ->
+            MockResponse().setBody(when {
+                request.requestUrl!!.encodedPath == "/u/search/users.json" -> """{"users":[{"id":7,"username":"neo"}]}"""
+                request.requestUrl!!.queryParameter("page") == "2" -> result.replace("31", "32")
+                request.requestUrl!!.queryParameter("page") == "3" -> {
+                    entered.countDown(); release.await(5, TimeUnit.SECONDS); result.replace("31", "33")
+                }
+                else -> result
+            })
+        }) { repository, _, models ->
+            val vm = SearchViewModel(repository).also(models::add)
+            vm.search("neo"); vm.finished()
+            vm.changeKind(SearchKind.USERS); vm.finished()
+            vm.changeKind(SearchKind.POSTS)
+            vm.search("neo", true); vm.finished()
+            try {
+                vm.search("neo", true)
+                assertTrue(entered.await(3, TimeUnit.SECONDS))
+                vm.changeKind(SearchKind.USERS); vm.changeKind(SearchKind.POSTS)
+                assertEquals(listOf(31, 32), vm.state.value.hits.posts.map { it.postId })
+                assertEquals(2, vm.state.value.page)
+                assertFalse(vm.state.value.loading)
+            } finally { release.countDown() }
+        }
+    }
+
     @Test fun clearingHistoryWaitsForServerAndBlocksDuplicateDeletesAndRefreshes() = runTest {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)

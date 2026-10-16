@@ -12,6 +12,8 @@ Status: implemented
 
 搜索框使用随字号增高的椭圆容器，内部右侧保留分隔线和可点击搜索按钮；清空、键盘提交、空白禁用和输入状态保持既有语义。
 
+三个搜索类型通过 HorizontalPager 跟手切换，只有 settled 页驱动 changeKind；预组合只展示缓存或等待态，不发请求。ViewModel按类型保存成功结果、分页游标、错误和滚动位置，返回已加载类型直接复用；新搜索、排序、筛选、清空与账号切换使旧类型缓存和位置失效。离开搜索仍保存当前页位置，详情返回延续原有恢复契约，切类型不再重置其他类型位置。
+
 最近搜索支持账号同步清空：`clearRecentSearches` 调用网页对应的 `DELETE /u/recent-searches.json`，沿用同源会话和 CSRF 写请求，访客不写。请求成功才清空当前状态；失败保留词条和独立错误，不自动重放删除。历史读取与删除共用互斥状态和独立代际令牌，删除期间不启动历史刷新，旧读取或旧账号的迟到响应不能复活历史。
 
 标题右侧提供垃圾桶图标，先打开居中的 LiquidModal 并使用统一的胶囊确认按钮；发送期间仅显示“正在清空…”，防止重复点击。弹窗显示时隔离底层焦点与可访问语义，禁用快速回顶；账号切换、开始搜索或清空成功都会关闭弹窗。成功后最近搜索标题与词条整块隐藏，初始空历史也不展示“暂无最近搜索”；读取中及读取失败仍提供加载和重试反馈。失败则在弹窗中显示独立错误，取消后保留历史。
@@ -48,6 +50,8 @@ SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏�
 
 ## Alternatives considered
 
+- 各类型共用列表并在切换时重新搜索，内存和状态最少，但横滑回来会丢位置且增加请求；使用按类型缓存和settled页请求，分页未完成离开也保留已成功页。
+
 - 只清空内存历史实现最简单且无需写接口，但重新进入或在网页打开仍会恢复；采用与网页相同的账号删除接口，成功后同步更新界面。
 - 先隐藏历史再异步删除能更快响应，但失败会误报成功并在下一次读取时突然恢复；保留历史直到服务器确认，弹窗展示处理中与错误。
 - /search/query.json 可以一次返回用户、分类和标签，实现最少；但顶部搜索每类只有五项，网页完整页面实际使用专用用户和标签接口，因此不用它充当完整结果页。
@@ -77,11 +81,13 @@ SearchUiTest 八项与搜索入口/主题样式/楼层定位五项回归共十�
 
 ## Follow-up: restore result position after topic navigation
 
-The search ViewModel now keeps the latest result-list index and pixel offset separately from search results. `SearchScreen` writes the position when its composition leaves and initializes the `LazyListState` from that pair when the route is recreated. A new search, kind change, account change, or clear resets the pair to the top, while loading more results keeps the current position. This preserves the exact search position when opening a topic and returning through the navigation back stack.
+The search ViewModel keeps one result-list index and pixel offset per kind, separately from search results. `SearchScreen` saves the current position before switching kind and when its composition leaves, then restores the target kind or recreated route from that pair. A new search, account change, or clear resets all pairs, while switching kind and loading more preserve positions. This preserves the exact search position when opening a topic and returning through the navigation back stack.
 
 `SearchUiTest.returningFromTopicRestoresTheSearchResultPosition` failed before this follow-up because the twentieth result disappeared after the simulated detail return; it passes with the ViewModel-backed position.
 
 ## Consequences
+
+横滑与缓存调整的12项SearchViewModelTest通过；先复现切回已加载类型会重搜，以及第三页在途切走会退回旧的一页缓存，随后修复至通过（artifacts/search-tabs-cache-repro.txt、search-tabs-pending-page-repro.txt、content-tabs-final-checks.txt）。SearchUiTest的15项独立用例通过，分布在content-pagers-tests.txt和content-tabs-final-tests.txt，覆盖点击/横滑同步、只请求settled类型、复用成功结果、跨两类型恢复第20项、详情返回及280dp/130%字号的三种材质筛选。缓存增加有限内存，主动搜索或筛选仍刷新所有类型，避免显示与新条件不符的结果。
 
 2026-10-16 搜索材质相关13项真机回归通过（artifacts/top-material-tests.txt，另含类别和标签2项）。覆盖椭圆内提交与空白禁用、浅深色三种材质、筛选覆盖不改变列表视口、短窗口动作可见、清空历史、详情返回位置、键盘与服务器筛选；已查看浅色大字截图。版本2011/0.2.6-dev且签名与已安装包一致，覆盖安装保留账号数据。
 

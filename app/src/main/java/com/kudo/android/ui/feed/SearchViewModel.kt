@@ -8,6 +8,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+data class SearchPageState(
+    val hits: SearchResults, val hasMore: Boolean, val page: Int,
+    val error: Throwable?, val moreError: Throwable?,
+)
+
 data class SearchState(
     val accountId: Int? = null, val query: String = "", val kind: SearchKind = SearchKind.POSTS,
     val sort: SearchSort = SearchSort.RELEVANCE, val filters: SearchFilters = SearchFilters(),
@@ -18,9 +23,16 @@ data class SearchState(
     val categories: List<Category> = emptyList(), val capabilities: SearchCapabilities = SearchCapabilities(),
     val metadataLoading: Boolean = false, val metadataLoaded: Boolean = false, val metadataError: Throwable? = null,
     val tagSuggestions: List<TopicTag> = emptyList(), val tagsLoading: Boolean = false, val tagsError: Throwable? = null,
+    val kindPages: Map<SearchKind, SearchPageState> = emptyMap(), val scrollRevision: Int = 0,
 ) {
     val results: List<Topic> get() = hits.posts.map { it.topic }
     fun forAccount(id: Int?) = if (id == accountId) this else SearchState(accountId = id)
+    fun forKind(value: SearchKind): SearchState {
+        if (value == kind) return this
+        val cached = kindPages[value]
+        return copy(kind = value, hits = cached?.hits ?: SearchResults(), loading = searched && cached == null,
+            hasMore = cached?.hasMore ?: false, page = cached?.page ?: 1, error = cached?.error, moreError = cached?.moreError)
+    }
 }
 
 class SearchViewModel(
@@ -36,19 +48,16 @@ class SearchViewModel(
     private var searchGeneration = 0
     private var historyGeneration = 0
     private var tagGeneration = 0
-    var scrollIndex: Int = 0
-        private set
-    var scrollOffset: Int = 0
-        private set
+    private val positions = mutableMapOf<SearchKind, Pair<Int, Int>>()
+    val scrollIndex: Int get() = positions[_state.value.kind]?.first ?: 0
+    val scrollOffset: Int get() = positions[_state.value.kind]?.second ?: 0
 
     fun saveScrollPosition(index: Int, offset: Int) {
-        scrollIndex = index.coerceAtLeast(0)
-        scrollOffset = offset.coerceAtLeast(0)
+        positions[_state.value.kind] = index.coerceAtLeast(0) to offset.coerceAtLeast(0)
     }
 
     private fun resetScrollPosition() {
-        scrollIndex = 0
-        scrollOffset = 0
+        positions.clear()
     }
 
     init { refreshHistory(); if (initialQuery.isNotBlank()) search(initialQuery) }
@@ -105,15 +114,21 @@ class SearchViewModel(
         searchGeneration++; searchJob?.cancel()
         resetScrollPosition()
         _state.update { it.copy(query = "", hits = SearchResults(), filters = SearchFilters(), loading = false,
-            searched = false, hasMore = false, page = 1, error = null, moreError = null) }
+            searched = false, hasMore = false, page = 1, error = null, moreError = null,
+            kindPages = emptyMap(), scrollRevision = it.scrollRevision + 1) }
         refreshHistory()
     }
 
     fun changeKind(kind: SearchKind) {
-        if (kind == _state.value.kind) return
+        val old = _state.value
+        if (kind == old.kind) return
         searchGeneration++; searchJob?.cancel()
-        _state.update { it.copy(kind = kind, hits = SearchResults(), loading = false, hasMore = false, page = 1, error = null, moreError = null) }
-        if (_state.value.searched) search(_state.value.query)
+        val pages = if (old.searched && (!old.loading || old.hits.posts.isNotEmpty())) old.kindPages +
+            (old.kind to SearchPageState(old.hits, old.hasMore, old.page, old.error, old.moreError)) else old.kindPages
+        val cached = pages[kind]
+        _state.value = old.copy(kind = kind, kindPages = pages, hits = cached?.hits ?: SearchResults(), loading = false,
+            hasMore = cached?.hasMore ?: false, page = cached?.page ?: 1, error = cached?.error, moreError = cached?.moreError)
+        if (old.searched && cached == null) runSearch(old.query, more = false, preserveKinds = true)
     }
 
     fun changeSort(sort: SearchSort) {
@@ -127,18 +142,22 @@ class SearchViewModel(
         search(withSearchFilters(query, filters, _state.value.sort))
     }
 
-    fun search(query: String, more: Boolean = false) {
+    fun search(query: String, more: Boolean = false) = runSearch(query, more, preserveKinds = false)
+
+    private fun runSearch(query: String, more: Boolean, preserveKinds: Boolean) {
         val old = _state.value
         val trimmed = if (more) old.query else query.trim()
         if (trimmed.isEmpty() || (more && (old.loading || !old.hasMore || old.kind != SearchKind.POSTS))) return
-        if (!more) resetScrollPosition()
+        if (!more && !preserveKinds) resetScrollPosition()
         searchJob?.cancel()
         val token = ++searchGeneration
         val page = if (more) old.page + 1 else 1
         val sort = searchSort(trimmed) ?: old.sort
         _state.update { it.copy(query = trimmed, sort = sort, filters = parseSearchFilters(trimmed),
             hits = if (more) it.hits else SearchResults(), loading = true, searched = true,
-            hasMore = if (more) it.hasMore else false, page = if (more) it.page else 1, error = null, moreError = null) }
+            hasMore = if (more) it.hasMore else false, page = if (more) it.page else 1, error = null, moreError = null,
+            kindPages = if (more || preserveKinds) it.kindPages else emptyMap(),
+            scrollRevision = it.scrollRevision + if (more || preserveKinds) 0 else 1) }
         val requestQuery = if (old.kind == SearchKind.POSTS) withSearchSort(trimmed, sort) else entitySearchTerm(trimmed)
         searchJob = viewModelScope.launch {
             try {
