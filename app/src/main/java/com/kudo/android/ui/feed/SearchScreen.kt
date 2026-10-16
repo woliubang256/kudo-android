@@ -232,7 +232,7 @@ fun SearchScreen(
                 }
                 if (filtersOpen) SearchFiltersPanel(state, draft, { draft = it }, suggestTags, loadMetadata,
                     apply = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; applyFilters(query, draft) }, dismiss = { filtersOpen = false },
-                    modifier = Modifier.heightIn(max = panelHeight).screenMaterial(contentBackdrop))
+                    modifier = Modifier.heightIn(max = panelHeight).screenMaterial(contentBackdrop), backdrop = contentBackdrop)
             }
         }
         LiquidModal(clearVisibility, "清空最近搜索？", false, backdrop, LocalDisplaySettings.current.glass, ::dismissClear,

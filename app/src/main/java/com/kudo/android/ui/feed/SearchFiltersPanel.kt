@@ -18,20 +18,22 @@ import androidx.compose.ui.unit.dp
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
+import com.kyant.backdrop.Backdrop
 
 @Composable
 internal fun SearchFiltersPanel(
     state: SearchState, draft: SearchFilters, change: (SearchFilters) -> Unit,
     suggestTags: (String) -> Unit, retryMetadata: () -> Unit,
     apply: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier,
+    backdrop: Backdrop? = LocalToolbarBackdrop.current,
 ) {
     var tagQuery by remember { mutableStateOf("") }
     var categoryQuery by remember { mutableStateOf("") }
     var validation by remember { mutableStateOf<String?>(null) }
     Column(modifier.fillMaxWidth().testTag("search-filters-panel")) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("高级筛选", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-            CommunityIconButton(Icons.Rounded.Close, "收起高级筛选", dismiss)
+            TopBarIconButton(Icons.Rounded.Close, "收起高级筛选", dismiss, backdrop = backdrop)
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (state.metadataLoading) Text("正在读取筛选选项…", style = MaterialTheme.typography.bodySmall)
