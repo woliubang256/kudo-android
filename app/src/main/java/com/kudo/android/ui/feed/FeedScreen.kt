@@ -222,13 +222,14 @@ internal fun FeedPage(state: FeedState, active: Boolean, scrollToTop: () -> Unit
 @Composable
 internal fun FeedTabBar(tabs: List<Pair<String, String>>, selected: String, containerColor: Color = MaterialTheme.colorScheme.surface,
     modifier: Modifier = Modifier, select: (String) -> Unit) {
-    Row(modifier.fillMaxWidth().background(containerColor).horizontalScroll(rememberScrollState()).selectableGroup().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        tabs.forEach { (value, label) ->
+    BalancedTabRow(tabs.map { it.second }, MaterialTheme.typography.bodyMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold),
+        modifier.background(containerColor)) { index, slot ->
+        val (value, label) = tabs[index]
             key(value) {
                 val active = selected == value
                 val bringIntoView = remember { BringIntoViewRequester() }
                 LaunchedEffect(active) { if (active) bringIntoView.bringIntoView() }
-                Box(Modifier.bringIntoViewRequester(bringIntoView).selectable(active, role = Role.Tab, onClick = { select(value) }).heightIn(min = 34.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+                Box(slot.bringIntoViewRequester(bringIntoView).selectable(active, role = Role.Tab, onClick = { select(value) }).heightIn(min = 34.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
                     Text(label, Modifier.padding(vertical = 5.dp).drawBehind {
                         if (active) drawRoundRect(
                             brush = Brush.horizontalGradient(listOf(LogoYellow.copy(alpha = 0.25f), LogoYellow.copy(alpha = 0.95f), LogoYellow.copy(alpha = 0.4f))),
@@ -238,6 +239,5 @@ internal fun FeedTabBar(tabs: List<Pair<String, String>>, selected: String, cont
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Normal, color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
             }
-        }
     }
 }

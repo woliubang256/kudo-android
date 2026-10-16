@@ -11,6 +11,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -119,21 +120,18 @@ internal class PersonalTopicsViewModel(private val repository: CommunityReposito
 
 @Composable
 internal fun AccountPageTopBar(title: String, back: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).statusBarsPadding().heightIn(min = 48.dp)
-        .padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
-        Text(title, Modifier.weight(1f), fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
-        actions()
-    }
+    PageTopBar(title, back, actions)
 }
 
 @Composable
 internal fun AccountTabs(labels: List<String>, selection: Int, modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surface, select: (Int) -> Unit) {
-    Row(modifier.fillMaxWidth().background(containerColor).horizontalScroll(rememberScrollState())
-        .padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        labels.forEachIndexed { index, label ->
-            Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Tab) { select(index) }
+    BalancedTabRow(labels, MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+        modifier.background(containerColor)) { index, slot ->
+            val label = labels[index]
+            val bring = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+            LaunchedEffect(selection == index) { if (selection == index) bring.bringIntoView() }
+            Box(slot.then(Modifier.bringIntoViewRequester(bring)).clip(RoundedCornerShape(8.dp)).clickable(role = Role.Tab) { select(index) }
                 .semantics { selected = selection == index }.padding(horizontal = 12.dp, vertical = 13.dp), contentAlignment = Alignment.Center) {
                 if (selection == index) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 1.dp).width(28.dp).height(7.dp)
                     .background(Brush.horizontalGradient(listOf(LogoYellow.copy(alpha = .25f), LogoYellow)), RoundedCornerShape(4.dp)))
@@ -141,7 +139,6 @@ internal fun AccountTabs(labels: List<String>, selection: Int, modifier: Modifie
                     fontWeight = if (selection == index) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (selection == index) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        }
     }
 }
 
@@ -171,19 +168,20 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
         val index = keys.indexOf(vm.pageKey)
         if (index >= 0 && !pager.isScrollInProgress && pager.currentPage != index) pager.scrollToPage(index)
     }
-    Column(Modifier.fillMaxSize()) {
+    MaterialPageScaffold(header = {
         AccountPageTopBar(vm.destination.title, back) {
             if (vm.destination == AccountDestination.TOPICS) CommunityIconButton(Icons.Rounded.EditNote, "我的草稿", drafts)
             if (vm.destination == AccountDestination.MESSAGES) CommunityIconButton(Icons.Rounded.Edit, "写私信", composeMessage)
             CommunityIconButton(Icons.Rounded.Refresh, "刷新", { vm.load() })
         }
         if (vm.destination == AccountDestination.MESSAGES) {
-            AccountTabs(listOf("收件箱", "已发送", "归档"), pager.currentPage) { scope.launch { pager.animateScrollToPage(it) } }
+            AccountTabs(listOf("收件箱", "已发送", "归档"), pager.currentPage, containerColor = Color.Transparent) { scope.launch { pager.animateScrollToPage(it) } }
         }
         if (vm.destination == AccountDestination.TOPICS) {
-            AccountTabs(PersonalTopicsTab.entries.map(PersonalTopicsTab::title), pager.currentPage) { scope.launch { pager.animateScrollToPage(it) } }
+            AccountTabs(PersonalTopicsTab.entries.map(PersonalTopicsTab::title), pager.currentPage, containerColor = Color.Transparent) { scope.launch { pager.animateScrollToPage(it) } }
         }
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("personal-pager"), key = { keys[it] }, userScrollEnabled = keys.size > 1) { index ->
+    }) { padding ->
+        HorizontalPager(pager, Modifier.fillMaxSize().testTag("personal-pager"), key = { keys[it] }, userScrollEnabled = keys.size > 1) { index ->
             val pageKey = keys[index]
             val page = vm.page(pageKey)
             val active = pager.settledPage == index && vm.pageKey == pageKey
@@ -199,11 +197,11 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
                     }
             }
             PullToRefreshBox(isRefreshing = refreshing, onRefresh = { if (active) vm.load() }, state = pull,
-                modifier = Modifier.fillMaxSize(), indicator = {
-                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                    modifier = Modifier.fillMaxSize(), indicator = {
+                        PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
                         containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
                 }) {
-                LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = active).testTag("personal-list-$pageKey"), state = scroll, contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = active).testTag("personal-list-$pageKey"), state = scroll, contentPadding = PaddingValues(top = padding.calculateTopPadding() + 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     if (showingReplies) {
                         items(page.replies, key = ProfileEntry::key) { entry -> ProfileEntryRow(entry) { open(entry.topicId, entry.number) } }
                     } else {

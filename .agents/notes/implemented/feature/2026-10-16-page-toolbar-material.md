@@ -28,4 +28,6 @@ MaterialPageScaffold 将全屏内容与顶部玻璃置于兄弟节点，实测�
 
 共用 PageTopBar 的按钮通过顶部专用作用域采用独立容器；MaterialPageScaffold 提供真实内容采样与顶部高度。未接入 Scaffold 的空态使用主题色兼容容器。组件不依赖全局窗口采样，页面可以在现有弹窗采样源内部使用独立的内容源。
 
+FeedTabBar 和 AccountTabs 复用 BalancedTabRow，主页、目录、搜索、分类筛选及个人内容标签在可用空间内等分。话题/回复、私信和阅读历史使用独立内容采样，刷新指示器避开顶部。
+
 新增内容留白可能影响滚动定位、阅读曝光和刷新指示器；WebView 的独立绘制需检查实际采样表现。采样源错误会形成 RenderNode 环。旧系统兼容材质及其他 GPU 的效果不能由当前 Android13 真机测试代替。针对性 UI 回归在页面接入后集中进行。

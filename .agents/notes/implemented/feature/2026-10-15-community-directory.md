@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+两项标签的固定靠左布局由[顶部操作与居中标签](2026-10-16-page-toolbar-material.md)部分取代，空间足够时等分居中；目录顺序、分页状态和材质采样边界保持。
+
 类别/标签内容使用 HorizontalPager，点击与横滑共享页码；顶部材质采样仍为独立兄弟层。侧栏/完整目录四份列表位置和两个展开模式分别保存，切页不重置。只有 settled 页允许下拉刷新、注册回顶目标和触发全部标签请求，预组合不请求。首页内嵌目录保留子Pager的边界手势，子页内部横滑优先，目录边界可交还首页Pager。
 
 目录独立读取 /latest 的 data-preloaded 快照（兼容属性和 application/json 脚本），从同一次响应解析 site、siteSettings、currentUser。核对当前账号，拒绝把另一账号或匿名快照发布到当前目录。网页类别先遵循 fixed_category_positions 和父子层级排序完整目录，再按 sidebar_category_ids 筛选成员；个人 ID 数组不是显示顺序。匿名使用 default_navigation_menu_categories。无个人选择时按网页回退顶层类别前五项。个人 sidebar_tags 使用网页的名称比较规则；默认/热门标签保留服务器集合顺序。display_sidebar_tags 和 tagging_enabled 继续控制可见内容，不用热门标签冒充隐藏的个人列表。
