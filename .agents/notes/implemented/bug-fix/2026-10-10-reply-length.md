@@ -43,3 +43,7 @@ QuickScrollToTopUiTest.replyCountIsCompactAndTheMinimumStillControlsPublishing�
 
 ReplyRulesTest 的新增私信夹具先复现无分类时误查普通分类的错误，同时暴露传入零分类时未重新读取主题元数据。夹具分别覆盖未提供分类与零分类的私信、未知普通分类、缺失类型以及缺失私信规则，核对私信只发出详情和预载配置两个 GET 请求，不依赖 /site.json 或固定字数兜底。
 
+本轮 ReplyRulesTest 共 8 项通过。RMX2202 / Android13 上新增 PrivateMessageReplyUiTest 的 3 项通过：使用与生产相同的 repository.replyRules 读取夹具，回复面板按私信最小字数显示计数、达标前禁止发布且只在明确点击后触发模拟提交，规则缺失后的重试保留草稿且不发送，新建私信仍只读取预载配置。另有 EditorLifecycleUiTest 和 EditorVerificationUiTest 共 13 项通过，覆盖普通回复、分类草稿与过盾重试；合计 16 项真机用例，没有向真实社区发送内容。
+
+开发版保持已安装的 0.2.10-dev / 2021；核对已安装 APK、构建 APK 和测试 APK 的证书一致后，使用 adb install -r 与 adb install -r -t 覆盖安装，未卸载或清除数据。真实私信页面的账号验收由用户完成，确认前不推送代码或 Tag；先前生成的 0.2.9 草稿已撤下，正式发布时需按最终 App 提交重新生成。
+
