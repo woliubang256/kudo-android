@@ -56,7 +56,7 @@ internal fun SearchFiltersPanel(
                         SearchChip(tag.name, false) { change(draft.copy(tags = draft.tags + tag.name)) }
                     }
                 }
-                FilterCheck("匹配所有选中的标签", draft.allTags) { change(draft.copy(allTags = it)) }
+                FilterSwitch("匹配所有选中的标签", draft.allTags) { change(draft.copy(allTags = it)) }
             }
             FilterLabel("仅返回话题 / 帖子…")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -125,6 +125,14 @@ private fun FilterCheck(label: String, checked: Boolean, change: (Boolean) -> Un
     Row(verticalAlignment = Alignment.CenterVertically) {
         CommunityCheckbox(checked, change)
         Text(label, Modifier.weight(1f).clickable { change(!checked) }.padding(vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun FilterSwitch(label: String, checked: Boolean, change: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f).clickable { change(!checked) }.padding(vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
+        CommunitySwitch(checked, change, modifier = Modifier.testTag("search-match-all-tags"))
     }
 }
 
