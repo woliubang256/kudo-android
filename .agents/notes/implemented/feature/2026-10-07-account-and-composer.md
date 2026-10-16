@@ -6,6 +6,8 @@ Status: implemented
 
 社区的读写权限和登录状态需要一致，且网页验证、会话过期、网络超时不应导致假登录、假成功或草稿丢失。
 
+从帖子发私信需要保留来源标题与具体楼层，同时不能覆盖发给同一作者的其他未发送私信。
+
 ## Decision
 
 [访问历史修复](../bug-fix/2026-10-14-topic-visit-history.md)补全 track_visit 与返回历史刷新；本篇 /read.json 读取、其他列表和账号边界继续有效。
@@ -42,15 +44,22 @@ EditorViewModel 按用户 id、话题和回复楼层隔离持久草稿。上传�
 
 公开主页私信入口预填目标用户名，并使用 {accountId}_message_{username} 独立本机草稿，普通写私信仍保留 message_0，不能覆盖另一收件人的未发送内容。本机草稿索引支持用户名段，主题回复仍要求数值楼层；私信草稿不声明回复楼层。从草稿列表恢复时传入原始key并核对账户前缀，不重新推导收件人key。UserProfileDataTest 先复现新草稿在旧数值索引中消失（artifacts/profile-message-draft-repro.txt）。
 
+帖子来源私信沿用同一编辑器，首次预填作者用户名、`回复：原标题` 和 `https://linux.do/t/topic/{topicId}/{postNumber}`，不插入全文引用、不自动发送。草稿键使用 `{accountId}_message_{username}~{topicId}~{postNumber}`；波浪号不属于用户名段，避免与公开主页草稿键冲突。草稿索引接受这一后缀，恢复时继续使用原键，不将来源楼层误认为论坛回复目标。预填内容立即保存到本机；已存在的标题、正文和收件人整体优先，不在重新进入时重新拼接或覆盖。菜单的权限与上下文读取由[主题操作](2026-10-09-topic-actions.md)负责。
+
 ## Alternatives considered
 
 - 在原生表单收集密码：交互可以统一，但需要自行处理 MFA、OAuth 和站点验证变化；采用官网流程。
 - 仅凭本地 Cookie 判定登录：速度快，但不能区分服务器已撤销的会话；以 current_user 响应为准。
+- 所有发给同一作者的私信共用既有草稿键，可以少一个来源维度，但预填帖子会覆盖或混入未发送的普通私信；帖子来源使用独立键，同一来源重开则恢复已有草稿。
 
 ## Consequences
 
 密码输入由官网承载。网络验证仍依赖站点当前规则。网页登录成功后的接口可用性需要真实账号和网络环境验收。
 
+帖子来源草稿比按收件人共用草稿增加本机条目和索引后缀，但可以独立恢复各次讨论的未发送内容；用户仍可从草稿列表删除。只预填链接，发送时的网站权限和长度限制仍以服务端为准。
+
 ## Verification
 
 单元测试验证 CSRF、失败不重发与响应解析；真机检查登录入口、设置持久化和未登录时的功能引导。测试不向真实社区发帖、点赞或发送私信。
+
+PrivateMessageDraftTest 先复现来源后缀草稿无法进入本机索引（artifacts/post-message-draft-repro.txt），再验证账号、作者、话题和楼层隔离、普通私信兼容、已有编辑优先以及索引恢复，共 6 项通过；UserProfileDataTest 的 11 项兼容回归通过。PostPrivateMessageUiTest 验证首次预填即保存、主帖与回复作者区分、重新进入与按原键恢复、普通私信不被覆盖；夹具拦截器只接受 GET，未点击真实发送。主帖与回复截图为 artifacts/post-private-message-main.png、artifacts/post-private-message-reply.png，中文和楼层链接已检查。

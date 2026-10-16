@@ -171,7 +171,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                 ignored = { id, username -> account.recordIgnore(id, username, true); refreshEpoch++ },
                 message = { showMessage(it) }, editPost = { id, post ->
                     authenticated { nav.navigate("edit-post/${post.id}?topic=$id") }
-                }, openHistory = { _, post -> nav.navigate("post-history/${post.id}") }, changed = {
+                }, openHistory = { _, post -> nav.navigate("post-history/${post.id}") }, composeMessage = { recipient, source ->
+                    authenticated { nav.navigate("new-message?recipient=${Uri.encode(recipient)}&topic=${source.topicId}&post=${source.postNumber}&title=${Uri.encode(source.topicTitle)}") }
+                }, changed = {
                     refreshEpoch++
                     nav.currentBackStackEntry?.savedStateHandle?.set("refresh", System.nanoTime())
                 }) {
@@ -318,14 +320,19 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             }
                         } ?: MaterialPagePlaceholder("云端草稿", { nav.popBackStack() }) { EmptyState("请先登录", "登录后继续编辑。", actionLabel = "登录", action = ::login) }
                     }
-                    composable("new-message?recipient={recipient}&draft={draft}", arguments = listOf(navArgument("recipient") { defaultValue = "" },
-                        navArgument("draft") { defaultValue = "" })) { entry ->
+                    composable("new-message?recipient={recipient}&draft={draft}&topic={topic}&post={post}&title={title}", arguments = listOf(navArgument("recipient") { defaultValue = "" },
+                        navArgument("draft") { defaultValue = "" }, navArgument("topic") { type = NavType.IntType; defaultValue = 0 },
+                        navArgument("post") { type = NavType.IntType; defaultValue = 0 }, navArgument("title") { defaultValue = "" })) { entry ->
                         account.user?.let { member -> key(member.id) {
+                            val sourceTopic = entry.arguments?.getInt("topic") ?: 0
+                            val sourcePost = entry.arguments?.getInt("post") ?: 0
+                            val sourceTitle = entry.arguments?.getString("title").orEmpty()
                             PrivateMessageScreen(member, app.repository, app.settings, { nav.popBackStack() }, published = { result ->
                                 nav.popBackStack()
                                 if (!result.queued) result.topicId?.let { topic(it) }
                                 showMessage(if (result.queued) "私信已提交审核" else "私信已发送")
-                            }, recipient = entry.arguments?.getString("recipient").orEmpty(), existingDraftKey = entry.arguments?.getString("draft").orEmpty())
+                            }, recipient = entry.arguments?.getString("recipient").orEmpty(), existingDraftKey = entry.arguments?.getString("draft").orEmpty(),
+                                source = if (sourceTopic > 0 && sourcePost > 0 && sourceTitle.isNotBlank()) PostMessageSource(sourceTopic, sourcePost, sourceTitle) else null)
                         } } ?: MaterialPagePlaceholder("写私信", { nav.popBackStack() }) { EmptyState("请先登录", "登录后发送私信。", actionLabel = "登录", action = ::login) }
                     }
                     composable("chat/{id}?message={message}", arguments = listOf(navArgument("id") { type = NavType.IntType },

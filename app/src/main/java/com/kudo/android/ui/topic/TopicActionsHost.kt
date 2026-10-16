@@ -52,7 +52,8 @@ val LocalIgnoredUsers = staticCompositionLocalOf<Set<String>> { emptySet() }
 @Composable
 fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: GlassMode, login: () -> Unit,
     ignored: (Int, String) -> Unit, message: suspend (String) -> Unit, changed: () -> Unit = {},
-    editPost: (Int, Post) -> Unit = { _, _ -> }, openHistory: ((Int, Post) -> Unit)? = null, content: @Composable () -> Unit) {
+    editPost: (Int, Post) -> Unit = { _, _ -> }, openHistory: ((Int, Post) -> Unit)? = null,
+    composeMessage: (String, PostMessageSource) -> Unit = { _, _ -> }, content: @Composable () -> Unit) {
     val vm: TopicActionsViewModel = viewModel(key = "topic-actions-${viewer?.id}", factory = viewModelFactory { initializer { TopicActionsViewModel(repository, viewer) } })
     val current = vm.state
     var retained by remember(vm) { mutableStateOf(current) }
@@ -64,8 +65,11 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
     var detailBookmark by remember(vm) { mutableStateOf<((Post) -> Unit)?>(null) }
     val currentEdit by rememberUpdatedState(editPost)
     val currentHistory by rememberUpdatedState(openHistory)
+    val currentMessage by rememberUpdatedState(composeMessage)
+    DisposableEffect(vm) { onDispose { vm.dismiss() } }
     LaunchedEffect(current.topicId) { visibility.targetState = current.topicId != null }
     LaunchedEffect(vm) { vm.events.collect { event -> when (event) {
+        is TopicActionEvent.ComposePrivateMessage -> currentMessage(event.recipient, event.source)
         is TopicActionEvent.Message -> launch { message(event.text) }
         is TopicActionEvent.Ignored -> ignored(event.viewerId, event.username)
         TopicActionEvent.Refresh -> changed()
@@ -111,7 +115,7 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
             }) {
             when (state.panel) {
                 TopicActionPanel.MENU -> {
-                    TopicActionMenu(state.post, state.fromDetail, visibility.targetState && !state.busy && !state.writeLocked,
+                    TopicActionMenu(state.post, state.fromDetail, visibility.targetState && !state.loading && !state.busy && !state.writeLocked,
                         copy = { state.post?.let { post ->
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("正文", plainText(post.cooked)))
                             vm.dismiss()
@@ -129,7 +133,9 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
                         } }, edit = if (state.post?.editableBy(viewer?.id) == true) ({
                             val post = state.post!!; val topicId = state.topicId!!
                             vm.dismiss(); currentEdit(topicId, post)
-                        }) else null)
+                        }) else null, privateMessage = state.post?.takeIf { it.author.username.isNotBlank() && it.author.id != viewer?.id }?.let {
+                            { authenticate { vm.privateMessage() } }
+                        })
                     if (state.loading) LoadingRow()
                 }
                 TopicActionPanel.HISTORY -> TopicHistoryContent(state, vm::history)
@@ -139,7 +145,7 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
             state.error?.let { error ->
                 Text(error.message ?: "操作失败，请稍后重试", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 if (!state.busy && !state.writeLocked && (state.panel == TopicActionPanel.HISTORY || state.panel == TopicActionPanel.MENU || (state.panel == TopicActionPanel.REPORT && state.flags == null))) {
-                    TextButton(onClick = { when (state.panel) { TopicActionPanel.HISTORY -> vm.history(state.revision?.current); TopicActionPanel.REPORT -> vm.report(); else -> vm.loadPost() } }) { Text("重试") }
+                    TextButton(onClick = { when (state.panel) { TopicActionPanel.HISTORY -> vm.history(state.revision?.current); TopicActionPanel.REPORT -> vm.report(); else -> if (state.composingMessage) vm.privateMessage() else vm.loadPost() } }) { Text("重试") }
                 }
             }
             if (state.writeLocked) Text("上次提交结果尚未确认，请在网站核对后再操作。", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -149,7 +155,8 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
 
 @Composable
 fun TopicActionMenu(post: Post?, fromDetail: Boolean, enabled: Boolean, copy: () -> Unit, bookmark: () -> Unit,
-    history: () -> Unit, ignore: () -> Unit, report: () -> Unit, copyLink: () -> Unit = {}, edit: (() -> Unit)? = null) {
+    history: () -> Unit, ignore: () -> Unit, report: () -> Unit, copyLink: () -> Unit = {}, edit: (() -> Unit)? = null,
+    privateMessage: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 10.dp).testTag("topic-action-row"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (fromDetail) TopicCircleAction("复制", Icons.Rounded.ContentCopy, enabled && post != null, copy)
         if (fromDetail) TopicCircleAction("复制链接", Icons.Rounded.Link, enabled && post != null, copyLink)
@@ -157,6 +164,7 @@ fun TopicActionMenu(post: Post?, fromDetail: Boolean, enabled: Boolean, copy: ()
         edit?.let { TopicCircleAction("编辑", Icons.Rounded.Edit, enabled, it) }
         if (post?.hasEditHistory == true) TopicCircleAction("编辑历史", Icons.Rounded.History, enabled, history)
         if (!fromDetail) TopicCircleAction("屏蔽", Icons.Rounded.VisibilityOff, enabled && post != null, ignore)
+        privateMessage?.let { TopicCircleAction("私信", Icons.Rounded.MailOutline, enabled && post != null, it) }
         TopicCircleAction("举报", Icons.Rounded.Flag, enabled && post != null, report)
     }
 }

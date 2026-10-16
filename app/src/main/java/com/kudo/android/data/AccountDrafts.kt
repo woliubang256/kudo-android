@@ -11,7 +11,7 @@ data class SavedDraft(val key: String, val draft: Draft, val topicId: Int?, val 
 }
 
 internal fun localAccountDrafts(values: Map<String, *>, userId: Int): List<SavedDraft> {
-    val pattern = Regex("^draft_${userId}_(new|message|[0-9]+)_([\\p{L}\\p{N}_.-]+)_(?:raw|title)$")
+    val pattern = Regex("^draft_${userId}_(new|message|[0-9]+)_([\\p{L}\\p{N}_.-]+(?:~[1-9][0-9]*~[1-9][0-9]*)?)_(?:raw|title)$")
     val drafts = values.keys.mapNotNull { pattern.matchEntire(it) }.map { it.groupValues[1] to it.groupValues[2] }
         .filter { (topic, reply) -> topic == "message" || reply.toIntOrNull() != null }.distinct()
         .mapNotNull { (topic, reply) ->

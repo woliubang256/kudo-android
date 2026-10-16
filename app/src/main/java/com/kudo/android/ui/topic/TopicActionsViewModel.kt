@@ -7,6 +7,7 @@ import com.kudo.android.data.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.filter
 
 enum class TopicActionPanel { MENU, HISTORY, REPORT, IGNORE }
 data class TopicActionState(
@@ -17,6 +18,7 @@ data class TopicActionState(
     val message: String = "", val confirmed: Boolean = false, val duration: IgnoreDuration? = null,
     val writeLocked: Boolean = false,
     val isReply: Boolean = false,
+    val topicTitle: String = "", val composingMessage: Boolean = false,
 ) {
     val link: String? get() = topicId?.let { id ->
         if (isReply) post?.let { "https://linux.do/t/topic/$id/${it.number}" }
@@ -24,6 +26,7 @@ data class TopicActionState(
     }
 }
 sealed interface TopicActionEvent {
+    data class ComposePrivateMessage(val recipient: String, val source: PostMessageSource, val contextVersion: Long) : TopicActionEvent
     data class Message(val text: String) : TopicActionEvent
     data class Ignored(val viewerId: Int, val username: String) : TopicActionEvent
     data object Refresh : TopicActionEvent
@@ -33,7 +36,8 @@ class TopicActionsViewModel(private val repository: CommunityRepository, val vie
     var state by mutableStateOf(TopicActionState()); private set
     private var read: Job? = null
     private val messages = Channel<TopicActionEvent>(Channel.BUFFERED)
-    val events = messages.receiveAsFlow()
+    private var contextVersion = 0L
+    val events = messages.receiveAsFlow().filter { event -> event !is TopicActionEvent.ComposePrivateMessage || event.contextVersion == contextVersion }
     private val uncertainReports = mutableSetOf<Pair<Int, Int>>()
     private val successfulReports = mutableSetOf<Pair<Int, Int>>()
     private val uncertainIgnores = mutableSetOf<String>()
@@ -42,22 +46,45 @@ class TopicActionsViewModel(private val repository: CommunityRepository, val vie
         if (state.busy) return
         if (isReply && initial == null) return
         read?.cancel()
+        contextVersion++
         state = TopicActionState(topicId = id, fromDetail = fromDetail, post = initial?.takeIf { isReply || it.number == 1 }, isReply = isReply)
         if (state.post == null) loadPost()
     }
     fun dismiss() {
         if (state.busy) return
+        contextVersion++
         read?.cancel(); state = TopicActionState()
     }
     fun loadPost() {
         if (state.isReply) return
         val id = state.topicId ?: return
         load {
-            val post = withContext(Dispatchers.IO) {
+            val (post, title) = withContext(Dispatchers.IO) {
                 val detail = repository.detail(id, 1)
-                detail.originalPost ?: detail.stream.firstOrNull()?.let { repository.posts(id, listOf(it)).firstOrNull { post -> post.number == 1 } }
+                val original = detail.originalPost ?: detail.stream.firstOrNull()?.let { repository.posts(id, listOf(it)).firstOrNull { post -> post.number == 1 } }
+                original to detail.title
             }
-            state = state.copy(post = post ?: error("暂时无法读取主帖"))
+            state = state.copy(post = post ?: error("暂时无法读取主帖"), topicTitle = title)
+        }
+    }
+    fun privateMessage() {
+        val snapshot = state
+        val user = viewer ?: return
+        val post = snapshot.post ?: return
+        val id = snapshot.topicId ?: return
+        if (snapshot.busy || snapshot.loading || user.id == post.author.id || post.author.username.isBlank()) return
+        val menuVersion = contextVersion
+        state = state.copy(composingMessage = true)
+        load {
+            val source = withContext(Dispatchers.IO) {
+                val profile = repository.publicProfile(post.author.username)
+                check(profile.canMessage) { "暂时无法向该用户发送私信" }
+                val title = snapshot.topicTitle.ifBlank { repository.detail(id, 1).title }
+                check(title.isNotBlank()) { "暂时无法读取话题标题" }
+                PostMessageSource(id, post.number, title)
+            }
+            messages.send(TopicActionEvent.ComposePrivateMessage(post.author.username, source, menuVersion))
+            state = TopicActionState()
         }
     }
     fun history(number: Int? = null) {

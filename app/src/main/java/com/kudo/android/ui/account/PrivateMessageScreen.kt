@@ -13,12 +13,12 @@ import kotlinx.coroutines.*
 
 @Composable
 internal fun PrivateMessageScreen(member: Member, repository: CommunityRepository, settings: AppSettings,
-    back: () -> Unit, published: (PublishResult) -> Unit, recipient: String = "", existingDraftKey: String = "") {
+    back: () -> Unit, published: (PublishResult) -> Unit, recipient: String = "", existingDraftKey: String = "",
+    source: PostMessageSource? = null) {
     val draftKey = existingDraftKey.takeIf { it.startsWith("${member.id}_message_") }
-        ?: "${member.id}_message_${recipient.lowercase(java.util.Locale.ROOT).ifBlank { "0" }}"
-    var draft by remember(member.id, draftKey) { mutableStateOf(settings.draft(draftKey).let {
-        if (it.recipients.isBlank() && recipient.isNotBlank()) it.copy(recipients = recipient) else it
-    }) }
+        ?: privateMessageDraftKey(member.id, recipient, source)
+    var draft by remember(member.id, draftKey) { mutableStateOf(initialPrivateMessageDraft(settings.draft(draftKey), recipient, source)) }
+    LaunchedEffect(draftKey) { if (source != null) settings.saveDraft(draftKey, draft) }
     var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var rules by remember(member.id) { mutableStateOf<PersonalMessageRules?>(null) }
