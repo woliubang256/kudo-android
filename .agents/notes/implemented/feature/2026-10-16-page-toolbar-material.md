@@ -24,6 +24,8 @@ MaterialPageScaffold 将全屏内容与顶部玻璃置于兄弟节点，实测�
 - 只给原 Column 顶部改透明，布局变化最少，但滚动内容不会经过玻璃下方；采用全屏内容和测量后的内容留白。
 - 所有 Tab 强制等分，布局最一致，但公开主页多标签和窄屏大字号会溢出；按可用空间选择等分或横向滚动。
 
+Final device verification on RMX2202 / Android13: 183 instrumented test results passed across the page-material, profile/reading, list, account, web/editor, and topic navigation groups. The two intermediate assertion mismatches were corrected in the test fixtures; the final two-test rerun is recorded in artifacts/page-material-last-two-device.txt.
+
 ## Consequences
 
 共用 PageTopBar 的按钮通过顶部专用作用域采用独立容器；MaterialPageScaffold 提供真实内容采样与顶部高度。未接入 Scaffold 的空态使用主题色兼容容器。组件不依赖全局窗口采样，页面可以在现有弹窗采样源内部使用独立的内容源。
