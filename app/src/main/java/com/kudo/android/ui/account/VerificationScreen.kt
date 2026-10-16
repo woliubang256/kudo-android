@@ -52,7 +52,7 @@ internal fun VerificationHost(client: DiscourseClient, userAgent: String,
             val retry = pendingRetry
             pendingRetry = null
             retry?.invoke()
-        }, webViewFactory)
+        }, webViewFactory, advancedMaterial = advancedMaterial)
     }
 }
 

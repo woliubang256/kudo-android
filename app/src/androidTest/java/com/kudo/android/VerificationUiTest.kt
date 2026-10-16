@@ -3,7 +3,7 @@ package com.kudo.android
 import android.content.Context
 import android.webkit.WebView
 import android.webkit.WebSettings
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.kudo.android.data.*
@@ -106,6 +106,29 @@ class VerificationUiTest {
         compose.waitUntil { retries == 1 }
         compose.onNodeWithTag("verification-page").assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, nativeChecks); assertEquals(0, logins); assertEquals(1, retries) }
+    }
+
+    @Test fun verificationHostForwardsMaterialPreferenceOnEveryOpen() {
+        var advanced by mutableStateOf(false)
+        val client = DiscourseClient(object : SessionCookies {
+            override fun get(url: String) = ""
+            override fun set(url: String, cookie: String) = Unit
+        })
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            VerificationHost(client, "fixture-agent", ::factory, advancedMaterial = advanced) {
+                ErrorState(ApiFailure(FailureKind.VERIFICATION, CloudflareVerificationMessage), {}, {})
+            }
+        } }
+        listOf(false, true, false).forEach { enabled ->
+            compose.runOnIdle { advanced = enabled }
+            compose.onNodeWithText("完成网页验证").performClick()
+            compose.onNodeWithTag("verification-page").assertIsDisplayed()
+            if (enabled) compose.onNodeWithTag("material-page-content").assertExists()
+            else compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+            compose.onNodeWithContentDescription("返回").performClick()
+            compose.onNodeWithTag("verification-page").assertDoesNotExist()
+        }
+        compose.runOnIdle { assertEquals(List(3) { "https://linux.do/challenge" }, loads) }
     }
 
     @Test fun manualSettingsVerificationReturnsWithoutChangingPreferencesOrOpeningLogin() {
