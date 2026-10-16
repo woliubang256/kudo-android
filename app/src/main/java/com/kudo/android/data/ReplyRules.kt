@@ -12,6 +12,16 @@ data class ReplyRules(val minimum: Int, val maximum: Int) {
     }
 }
 
+
+data class PersonalMessageRules(val minimum: Int, val maximum: Int) {
+    init { require(minimum > 0 && maximum >= minimum) }
+    fun problem(raw: String): String? = when {
+        raw.length > maximum -> "Private message body is limited to $maximum characters"
+        replyLength(raw) < minimum -> "Private message body requires at least $minimum characters"
+        else -> null
+    }
+}
+
 /** Discourse composer counts UTF-16 units, collapses its whitespace set, and excludes BBCode quotes/comments. */
 fun replyLength(raw: String): Int {
     if (raw.length > 10_000) return raw.length
@@ -54,8 +64,18 @@ internal fun parseReplyRules(html: String, site: JSONObject, categoryId: Int): R
     return ReplyRules((override ?: minimum).coerceAtMost(maximum), maximum)
 }
 
+internal fun parsePersonalMessageRules(html: String): PersonalMessageRules {
+    val settings = siteSettings(html)
+    val minimum = settings.positiveInt("min_personal_message_post_length") ?: throw ApiFailure(FailureKind.SERVER, "Missing private message minimum")
+    val maximum = settings.positiveInt("max_post_length") ?: throw ApiFailure(FailureKind.SERVER, "Missing private message maximum")
+    return PersonalMessageRules(minimum.coerceAtMost(maximum), maximum)
+}
+
 suspend fun CommunityRepository.replyRules(topicId: Int, categoryId: Int? = null): ReplyRules {
     require(topicId > 0)
     val category = categoryId ?: detail(topicId).categoryId
     return parseReplyRules(client.siteSettingsHtml(), client.get("/site.json"), category)
 }
+
+
+suspend fun CommunityRepository.personalMessageRules(): PersonalMessageRules = parsePersonalMessageRules(client.siteSettingsHtml())

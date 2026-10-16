@@ -31,6 +31,14 @@ class ReplyRulesTest {
         assertNotNull(ReplyRules(16, 20).problem("a".repeat(21)))
     }
 
+    @Test fun personalMessageRulesUsePersonalMinimumAndSiteMaximum() {
+        val messageHtml = """<script id="data-preloaded" type="application/json">{"siteSettings":{"min_personal_message_post_length":3,"max_post_length":500}}</script>"""
+        assertEquals(PersonalMessageRules(3, 500), parsePersonalMessageRules(messageHtml))
+        assertTrue(runCatching { parsePersonalMessageRules("<html/>") }.isFailure)
+        assertNotNull(PersonalMessageRules(3, 5).problem("123456"))
+        assertNull(PersonalMessageRules(3, 5).problem("123"))
+    }
+
     @Test fun knownCategoryUsesOnlyReadonlySiteConfigurationRequests() = runBlocking {
         MockWebServer().use { server ->
             server.start()
