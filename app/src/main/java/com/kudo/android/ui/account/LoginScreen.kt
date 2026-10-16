@@ -13,8 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kudo.android.ui.components.PageTopBar
-import com.kudo.android.ui.components.MaterialPageScaffold
-import com.kudo.android.ui.components.TopBarTextButton
 import com.kudo.android.ui.web.webViewProviderLabel
 import kotlinx.coroutines.launch
 
@@ -26,54 +24,47 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
     var loading by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var webViewGeneration by remember { mutableIntStateOf(0) }
     DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.destroy(); webView = null } }
-    MaterialPageScaffold(header = {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         PageTopBar("登录与网页验证", back) {
-            TopBarTextButton(if (vm.checkingSession) "检查中…" else "完成登录", {
+            TextButton(onClick = {
                 scope.launch {
                     CookieManager.getInstance().flush()
                     if (vm.checkSession()) verified()
                     else message = vm.sessionError?.message ?: "尚未检测到登录；若已完成验证，可以返回浏览话题。"
                 }
-            }, enabled = !vm.checkingSession)
+            }, enabled = !vm.checkingSession) { Text(if (vm.checkingSession) "检查中…" else "完成登录") }
         }
-    }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
-            Text("请在 Linux.do 官网完成验证和登录，然后点右上角。", Modifier.padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            key(webViewGeneration) {
-            AndroidView(factory = { context ->
-                webViewFactory(context).apply {
-                    // WRAP_CONTENT makes Chromium's CSS viewport units resolve to zero in AndroidView.
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                    CookieManager.getInstance().setAcceptCookie(true)
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.scheme != "https"
-                        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { loading = true }
-                        override fun onPageFinished(view: WebView, url: String) { loading = false; CookieManager.getInstance().flush() }
-                        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) { if (request.isForMainFrame) { loading = false; message = "网页加载失败，请检查网络后重新进入。" } }
+        Text("请在 Linux.do 官网完成验证和登录，然后点右上角。", Modifier.padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        AndroidView(factory = { context ->
+            webViewFactory(context).apply {
+                // WRAP_CONTENT makes Chromium's CSS viewport units resolve to zero in AndroidView.
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                CookieManager.getInstance().setAcceptCookie(true)
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.url.scheme != "https"
+                    override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { loading = true }
+                    override fun onPageFinished(view: WebView, url: String) { loading = false; CookieManager.getInstance().flush() }
                         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                             if (webView === view) webView = null
                             loading = false
-                            message = "系统 WebView 渲染进程已退出（${webViewProviderLabel(view.context)}），请更新 Android System WebView 或 Chrome 后重试。"
-                            webViewGeneration++
+                            message = "WebView renderer exited (" + webViewProviderLabel(view.context) + "), please update Android System WebView or Chrome and retry."
                             return true
                         }
-                    }
-                    webChromeClient = WebChromeClient()
-                    webView = this
-                    loadUrl("https://linux.do/login")
+                    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) { if (request.isForMainFrame) { loading = false; message = "网页加载失败，请检查网络后重新进入。" } }
                 }
-            }, modifier = Modifier.weight(1f).fillMaxWidth())
+                webChromeClient = WebChromeClient()
+                webView = this
+                loadUrl("https://linux.do/login")
             }
-        }
+        }, modifier = Modifier.weight(1f).fillMaxWidth())
     }
 }

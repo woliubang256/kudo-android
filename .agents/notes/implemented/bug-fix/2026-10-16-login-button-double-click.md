@@ -18,3 +18,8 @@ Status: implemented
 ## Consequences
 
 玻璃顶部文字按钮不再由外层容器重复响应点击；非玻璃回退按钮行为保持不变。`n
+
+## WebView crash fallback (2026-10-17)
+
+Version comparison showed that 0.2.7 changed the login WebView page from the 0.2.6 plain Column and PageTopBar structure to MaterialPageScaffold with TopBarTextButton. Because reports describe an immediate crash when tapping login, the login WebView page now uses the 0.2.6 non-liquid structure while retaining renderer-exit handling. Other native pages keep their current material until this regression is verified.
+
