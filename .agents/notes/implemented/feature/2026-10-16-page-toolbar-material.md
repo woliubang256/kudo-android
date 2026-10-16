@@ -12,6 +12,8 @@ Status: implemented
 
 MaterialPageScaffold 将全屏内容与顶部玻璃置于兄弟节点，实测顶部高度通过 PaddingValues 交给列表或滚动内容；禁止将自身玻璃放进自己的采样源。已有弹窗的整页采样源可包含工具栏，但工具栏另取内部的内容源。保留滚动位置、刷新、分页、键盘及导航逻辑。
 
+网页调用显式传入 `advanced`。关闭时使用普通 Column 顺序放置顶部和内容，向内容传递零顶部留白，不创建 LayerBackdrop、采样图层或玻璃效果，并清空继承的工具栏采样源；开启时才创建现有兄弟采样层。普通模式必须退出整条采样路径，不能只取消前景模糊。开关默认值与持久化见[网页材质偏好](../bug-fix/2026-10-16-login-button-double-click.md)。
+
 文字 Tab 按最宽标签和当前字号计算是否容得下等分布局，容得下时铺满可用宽度并逐项居中；超出时使用原有横向滚动和选中项可见机制，不截断文字或压缩触控。现有黄色渐变指示器保留，图标式表情分组不属于文字导航 Tab。
 
 ## Related decisions
@@ -41,6 +43,8 @@ FeedTabBar 和 AccountTabs 复用 BalancedTabRow，主页、目录、搜索、�
 PersonalTopicsScreen 的整个组合以 ViewModel 为 key，分页状态、条目键、内容和副作用一起切换。仅给 rememberPagerState 加 key 会让旧 Pager 条目提供者短暂读取新页面的 keys；两项话题切换到单项历史时可越界。旧草稿返回回归在切换目标时复现，设备的 Espresso 空闲等待又被系统归为主线程超时；缩短临时诊断等待后得到 IndexOutOfBoundsException。只为 keys 索引添加兜底值改动最少，但会保留旧页面的列表和分页状态，不能保证页面身份一致，因此不用。修复后草稿导航与返回位置、历史和私信切换通过；LikedPostsUiTest 与 PersonalHistoryUiTest 共9项复查通过（artifacts/page-material-final-regressions-device.txt）。点赞夹具使用30个独立记录、跨页重复记录与真实上拉手势，覆盖加载失败、重试、去重和刷新。
 
 ## Testing
+
+WebViewMaterialLayoutUiTest 先在真机复现关闭高级材质后仍存在采样层，再验证普通与高级分支切换时采样层和工具栏背景源同时退出或启用。
 
 RMX2202 / Android13 首轮 PageMaterialUiTest 四项通过，覆盖两/三项等分且文字居中、拥挤标签选中可见、窄屏操作间距及禁用态、浅深色三种材质的真实红蓝列表采样。PublicProfileUiTest 的新增吸顶用例先失败，按实测高度修复后与 TopicReadingUiTest 合计29项通过（artifacts/page-material-profile-reading-device.txt），其中新增玻璃遮挡区不计阅读曝光，窄屏三个导航目标仍为48dp。已人工查看共用浅色液态、窄屏深色及公开主页截图。
 

@@ -36,6 +36,15 @@ internal fun MaterialPageScaffold(
     advanced: Boolean = true,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    if (!advanced) {
+        CompositionLocalProvider(LocalToolbarBackdrop provides null, LocalToolbarActions provides false) {
+            Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().testTag("material-page-header")) { header() }
+                Box(Modifier.weight(1f).fillMaxWidth()) { content(PaddingValues()) }
+            }
+        }
+        return
+    }
     val backdrop = rememberLayerBackdrop()
     var headerHeight by remember { mutableIntStateOf(0) }
     val top = with(LocalDensity.current) { headerHeight.toDp() }
@@ -43,9 +52,9 @@ internal fun MaterialPageScaffold(
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("material-page-content")) {
             content(PaddingValues(top = top))
         }
-        CompositionLocalProvider(LocalToolbarBackdrop provides if (advanced) backdrop else null, LocalToolbarActions provides advanced) {
+        CompositionLocalProvider(LocalToolbarBackdrop provides backdrop, LocalToolbarActions provides true) {
             Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }
-                .then(if (advanced) Modifier.screenMaterial(backdrop) else Modifier.background(MaterialTheme.colorScheme.surface))
+                .screenMaterial(backdrop)
                 .testTag("material-page-header")) { header() }
         }
     }
