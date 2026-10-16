@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kudo.android.data.GlassMode
@@ -61,6 +62,7 @@ internal fun LiquidButton(
     surfaceColor: Color = Color.Unspecified,
     progress: Float? = null,
     progressColor: Color = Color.Unspecified,
+    minimumHeight: Dp = 48.dp,
     content: @Composable RowScope.() -> Unit
 ) {
     val animationScope = rememberCoroutineScope()
@@ -140,7 +142,7 @@ internal fun LiquidButton(
                     Modifier
                 }
             )
-            .heightIn(min = 48.dp)
+            .heightIn(min = minimumHeight)
             .padding(contentPadding),
         horizontalArrangement = horizontalArrangement,
         verticalAlignment = Alignment.CenterVertically,

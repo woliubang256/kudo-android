@@ -63,16 +63,20 @@ internal fun TopBarIconButton(
     tint: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     if (backdrop != null) {
-        LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, modifier.size(48.dp),
-            enabled = enabled, contentColor = tint, contentPadding = PaddingValues(0.dp),
-            surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = .3f)) {
-            Icon(icon, description, Modifier.size(23.dp))
+        Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action),
+            contentAlignment = Alignment.Center) {
+            LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, Modifier.size(40.dp),
+                enabled = enabled, contentColor = tint, contentPadding = PaddingValues(0.dp),
+                surfaceColor = MaterialTheme.colorScheme.surface.copy(alpha = .3f), minimumHeight = 40.dp) {
+                Icon(icon, description, Modifier.size(23.dp))
+            }
         }
     } else {
-        Box(modifier.size(48.dp).clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .85f))
-            .clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
-            Icon(icon, description, Modifier.size(23.dp), tint = tint.copy(alpha = if (enabled) 1f else .38f))
+        Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(40.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .85f)), contentAlignment = Alignment.Center) {
+                Icon(icon, description, Modifier.size(23.dp), tint = tint.copy(alpha = if (enabled) 1f else .38f))
+            }
         }
     }
 }
