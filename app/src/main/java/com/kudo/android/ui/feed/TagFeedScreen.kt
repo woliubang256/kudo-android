@@ -16,6 +16,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.Color
+import com.kudo.android.ui.components.screenMaterial
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,20 +39,10 @@ internal fun TagFeedScreen(slug: String, state: FeedState, user: Member?, select
     search: () -> Unit, login: () -> Unit, back: () -> Unit, listStyle: TopicListStyle,
     pages: Map<String, FeedState>, modifier: Modifier = Modifier, name: String = "") {
     val title = state.tag?.name ?: name.ifBlank { if (slug.matches(Regex("[0-9]+-tag"))) "标签" else slug }
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(48.dp).background(LogoYellow.copy(alpha = .10f))
-            .testTag("tag-toolbar"), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = back), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回", Modifier.size(24.dp))
-            }
-            Icon(Icons.Rounded.Tag, "标签", Modifier.size(21.dp), tint = LogoYellow)
-            Text(title, Modifier.weight(1f).padding(horizontal = 8.dp).testTag("tag-toolbar-name"),
-                fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = search), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Search, "搜索", Modifier.size(24.dp))
-            }
-        }
+    val backdrop = rememberLayerBackdrop()
+    var headerHeight by remember { mutableIntStateOf(0) }
+    val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val tabs = FeedFilter.available(user != null).map { it.value to it.label }
         key(slug, user?.id, user?.unifiedNew) {
             val pager = rememberPagerState(initialPage = tabs.indexOfFirst { it.first == state.filter }.coerceAtLeast(0), pageCount = { tabs.size })
@@ -61,16 +57,32 @@ internal fun TagFeedScreen(slug: String, state: FeedState, user: Member?, select
                 val index = tabs.indexOfFirst { it.first == state.filter }
                 if (index >= 0 && pager.currentPage != index && !pager.isScrollInProgress) pager.scrollToPage(index)
             }
-            FeedTabBar(tabs, tabs.getOrNull(pager.currentPage)?.first ?: state.filter) { value ->
-                val index = tabs.indexOfFirst { it.first == value }
-                if (index >= 0) scope.launch { pager.animateScrollToPage(index) }
-            }
-            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("tag-pager"), key = { tabs[it].first }) { index ->
+            HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("tag-pager"), key = { tabs[it].first }) { index ->
                 val value = tabs[index].first
                 val page = if (value == state.filter) state else pages[value]?.takeIf { it.accountId == user?.id }
                     ?: FeedState(filter = value, accountId = user?.id, categories = state.categories)
                 FeedPage(page, pager.settledPage == index && value == state.filter, {},
-                    refresh, more, openTopic, openUser, login, listStyle)
+                    refresh, more, openTopic, openUser, login, listStyle, contentTopPadding = contentTopPadding)
+            }
+            Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(backdrop)
+                .statusBarsPadding().testTag("tag-header")) {
+                Row(Modifier.fillMaxWidth().height(48.dp)
+                    .testTag("tag-toolbar"), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = back), contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回", Modifier.size(24.dp))
+                    }
+                    Icon(Icons.Rounded.Tag, "标签", Modifier.size(21.dp), tint = LogoYellow)
+                    Text(title, Modifier.weight(1f).padding(horizontal = 8.dp).testTag("tag-toolbar-name"),
+                        fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = search), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Search, "搜索", Modifier.size(24.dp))
+                    }
+                }
+                FeedTabBar(tabs, tabs.getOrNull(pager.currentPage)?.first ?: state.filter, containerColor = Color.Transparent) { value ->
+                    val index = tabs.indexOfFirst { it.first == value }
+                    if (index >= 0) scope.launch { pager.animateScrollToPage(index) }
+                }
             }
         }
     }

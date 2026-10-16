@@ -116,7 +116,7 @@ class CategoryFeedUiTest {
         compose.onNodeWithText("bookmarks 话题 1").assertDoesNotExist()
     }
 
-    @Test fun listCollapsesFirstThenReturnsToTopBeforeExpandingAndKeepsHeaderColor() {
+    @Test fun listCollapsesFirstThenReturnsToTopBeforeExpandingAndUsesHeaderMaterial() {
         compose.setContent { KudoTheme(DisplaySettings()) {
             FeedScreen(page(), null, {}, {}, {}, {}, {}, {}, {}, {}, category = category)
         } }
@@ -133,7 +133,8 @@ class CategoryFeedUiTest {
         compose.onNodeWithTag("category-toolbar-name").assertTextEquals(category.name)
         compose.onNodeWithText(category.description).assertIsNotDisplayed()
         val collapsed = compose.onNodeWithTag("category-toolbar").captureToImage().toPixelMap()
-        assertEquals(background, collapsed[collapsed.width - 3, collapsed.height / 2])
+        assertNotEquals("吸顶后从分类色切换为设置材质", background, collapsed[collapsed.width - 3, collapsed.height / 2])
+        compose.onNodeWithTag("category-header").assert(!hasAnyAncestor(hasTestTag("category-pager")))
         capture("category-collapsed.png")
         list.performTouchInput { swipe(center, center.copy(y = center.y + 90f), durationMillis = 1000) }
         assertEquals(pinned, compose.onNodeWithText("最新").fetchSemanticsNode().boundsInRoot.top, 2f)
@@ -150,9 +151,9 @@ class CategoryFeedUiTest {
         val initial = compose.onNodeWithText("最新").fetchSemanticsNode().boundsInRoot.top
         list.performTouchInput { swipe(center.copy(y = height * .8f), center.copy(y = height * .65f), durationMillis = 80) }
         compose.onNodeWithTag("category-toolbar-icon", useUnmergedTree = true).assertIsDisplayed()
-        list.performTouchInput { swipeDown(durationMillis = 800) }
+        list.performTouchInput { swipe(center, center.copy(y = height - 10f), durationMillis = 800) }
         assertEquals(initial, compose.onNodeWithText("最新").fetchSemanticsNode().boundsInRoot.top, 2f)
-        list.performTouchInput { swipeDown(durationMillis = 800) }
+        list.performTouchInput { swipe(center, center.copy(y = height - 10f), durationMillis = 800) }
         compose.runOnIdle { assertTrue("顶部展开后可以继续下拉刷新", refreshes > 0) }
     }
 

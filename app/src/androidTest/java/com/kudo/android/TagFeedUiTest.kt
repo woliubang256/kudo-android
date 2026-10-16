@@ -27,7 +27,7 @@ class TagFeedUiTest {
             }
         }
         compose.onNodeWithTag("tag-toolbar").assertIsDisplayed()
-        compose.onNodeWithTag("tag-toolbar-name").assertTextEquals("193-tag")
+        compose.onNodeWithTag("tag-toolbar-name").assertTextEquals("标签")
         compose.onNodeWithContentDescription("标签").assertIsDisplayed()
         compose.onNodeWithTag("feed-list-latest").assertIsDisplayed()
         compose.onNodeWithText("标签中的话题").assertIsDisplayed()
