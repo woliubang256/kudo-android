@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+类别/标签内容使用 HorizontalPager，点击与横滑共享页码；顶部材质采样仍为独立兄弟层。侧栏/完整目录四份列表位置和两个展开模式分别保存，切页不重置。只有 settled 页允许下拉刷新、注册回顶目标和触发全部标签请求，预组合不请求。首页内嵌目录保留子Pager的边界手势，子页内部横滑优先，目录边界可交还首页Pager。
+
 目录独立读取 /latest 的 data-preloaded 快照（兼容属性和 application/json 脚本），从同一次响应解析 site、siteSettings、currentUser。核对当前账号，拒绝把另一账号或匿名快照发布到当前目录。网页类别先遵循 fixed_category_positions 和父子层级排序完整目录，再按 sidebar_category_ids 筛选成员；个人 ID 数组不是显示顺序。匿名使用 default_navigation_menu_categories。无个人选择时按网页回退顶层类别前五项。个人 sidebar_tags 使用网页的名称比较规则；默认/热门标签保留服务器集合顺序。display_sidebar_tags 和 tagging_enabled 继续控制可见内容，不用热门标签冒充隐藏的个人列表。
 
 数据协议保留完整类别目录与侧栏筛选结果。全部标签按需读取 /tags.json，保留服务器分组和数组顺序；私信标签保留 pm_only，不混同公开标签。完整元数据目录继续由 CommunityRepository.categories() 服务其他功能，独立目录接口不发布筛选结果到 categoryCatalog。
@@ -22,11 +24,15 @@ CommunityDirectoryViewModel 按账号代次取消并隔离目录与全部标签�
 
 ## Alternatives considered
 
+- 在原内容区只识别一次横滑后修改Tab，可保留最少布局代码，但内容不能跟手移动、嵌套首页也没有Pager边界协作；使用独立子Pager，四份滚动状态继续由目录持有。
+
 - 直接读取 /site.json 的类别与 top_tags：请求和解析最少，但前者是完整权限目录，后者是热门标签，不能代表网页侧栏的个人选择。
 - 把侧栏选择写入 Member 并复用 AccountViewModel.categories：账号刷新时可顺手获得配置，但会把筛选目录与其他功能所需的完整分类元数据混为一体；目录使用独立快照和状态。
 - 标签逐行展示可完整容纳长名称，但用户明确要求宫格；宫格单元允许两行名称，随宽度与字号调整列数。
 
 ## Testing
+
+2026-10-16目录9项真机回归全部通过（artifacts/content-pagers-tests.txt，另含搜索14项）。新增左右滑动恢复完整类别第16项、侧栏切页不预取全部标签，以及嵌套首页的子页切换与边界交回手势。目录数据与排序不变，没有重复测试无关解析逻辑。
 
 CommunityDirectoryTest 的6项用例验证个人显示项与站点顺序、两种预载格式、匿名默认、隐藏标签、账号快照拒绝、标签分组和缺失数据错误。与3项 CategoryMetadataTest 一起通过，日志 artifacts/community-directory-data-tests.txt。
 

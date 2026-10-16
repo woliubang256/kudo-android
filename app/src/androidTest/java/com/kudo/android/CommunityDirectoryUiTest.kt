@@ -27,6 +27,38 @@ class CommunityDirectoryUiTest {
     private fun state() = CommunityDirectoryState(accountId = 7,
         directory = CommunityDirectory(7, "fixture", categories.take(2), categories, tags, true))
 
+    @Test fun swipingDirectoryPreservesExpandedCategoryPositionAndDoesNotPreloadAllTags() {
+        var loads = 0
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            CommunityDirectoryScreen(state(), {}, {}, { loads++ }, {}, {}, {})
+        } }
+        compose.onNodeWithText("所有类别").performClick()
+        compose.onNodeWithTag("category-directory-list").performScrollToIndex(15)
+        compose.onNodeWithTag("directory-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithText("标签").assertIsSelected()
+        compose.onNodeWithTag("directory-tag-公告").assertIsDisplayed()
+        compose.onNodeWithTag("directory-pager").performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithText("类别").assertIsSelected()
+        compose.onNodeWithText("类别15").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, loads) }
+    }
+
+    @Test fun embeddedDirectoryConsumesInnerSwipesAndReturnsEdgeSwipesToHome() {
+        var feed by mutableStateOf(com.kudo.android.ui.feed.FeedState(filter = "latest", loading = false))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            com.kudo.android.ui.feed.FeedScreen(feed, null, { feed = feed.copy(filter = it) }, {}, {}, {}, {}, {}, {}, {},
+                categoryContent = { CommunityDirectoryScreen(state(), {}, {}, {}, {}, {}, {}, inHome = true) })
+        } }
+        compose.onNodeWithText("类别").performClick()
+        compose.onNodeWithTag("directory-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithText("标签").assertIsSelected()
+        compose.onNodeWithTag("directory-tag-公告").assertIsDisplayed()
+        compose.onNodeWithTag("directory-pager").performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithTag("category-directory-list").assertIsDisplayed()
+        compose.onNodeWithTag("directory-pager").performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithText("排行榜").assertIsSelected()
+    }
+
     @Test fun directoryTabsUseTheSelectedMaterialBar() {
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK, glass = GlassMode.LIQUID)) {
             CommunityDirectoryScreen(state(), {}, {}, {}, {}, {}, {})

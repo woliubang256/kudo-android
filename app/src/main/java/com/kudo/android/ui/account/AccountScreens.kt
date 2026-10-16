@@ -53,10 +53,10 @@ fun RootHeading(title: String, action: @Composable RowScope.() -> Unit = {}) {
 @Composable
 fun CategoriesScreen(categories: List<Category>, loading: Boolean, error: Throwable?, refresh: () -> Unit, login: () -> Unit,
     inHome: Boolean = false, scroll: LazyListState = rememberLazyListState(), footer: (@Composable () -> Unit)? = null,
-    contentTopPadding: Dp = 0.dp,
+    contentTopPadding: Dp = 0.dp, active: Boolean = true,
     select: (Category) -> Unit) {
     Column(Modifier.fillMaxSize().then(if (inHome) Modifier else Modifier.statusBarsPadding())) {
-        LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll).testTag("category-directory-list"), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = contentTopPadding + 14.dp, bottom = 112.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = active).testTag("category-directory-list"), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = contentTopPadding + 14.dp, bottom = 112.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (loading && categories.isEmpty()) item { LoadingRow() }
             if (error != null) item { ErrorState(error, refresh, login) }
             if (!loading && error == null && categories.isEmpty()) item { Text("暂无类别", Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
