@@ -34,4 +34,10 @@ FeedTabBar 和 AccountTabs 复用 BalancedTabRow，主页、目录、搜索、�
 
 登录、验证和应用内网页保留 WebView 在工具栏下方的有界视口，避免改变网页的 CSS 高度、首行可见性和触点映射；独立玻璃操作采样该区域的主题背景，不注入网页留白脚本。网页本身不被放到系统状态栏后方。
 
+公开主页按 ProfileToolbar 实测高度计算折叠终点，不能继续假设48dp。首轮真机用例复现新60dp操作栏与旧折叠终点重叠36px，修复用例与窄屏导航用例分别保留。
+
+## Testing
+
+RMX2202 / Android13 首轮 PageMaterialUiTest 四项通过，覆盖两/三项等分且文字居中、拥挤标签选中可见、窄屏操作间距及禁用态、浅深色三种材质的真实红蓝列表采样。PublicProfileUiTest 的新增吸顶用例先失败，按实测高度修复后与 TopicReadingUiTest 合计29项通过（artifacts/page-material-profile-reading-device.txt），其中新增玻璃遮挡区不计阅读曝光，窄屏三个导航目标仍为48dp。已人工查看共用浅色液态、窄屏深色及公开主页截图。
+
 新增内容留白可能影响滚动定位、阅读曝光和刷新指示器；WebView 的独立绘制需检查实际采样表现。采样源错误会形成 RenderNode 环。旧系统兼容材质及其他 GPU 的效果不能由当前 Android13 真机测试代替。针对性 UI 回归在页面接入后集中进行。

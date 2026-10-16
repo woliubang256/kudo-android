@@ -85,7 +85,9 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
         val density = LocalDensity.current
         val backdrop = rememberLayerBackdrop()
         val surface = MaterialTheme.colorScheme.surface
-        val minimum = WindowInsets.statusBars.getTop(density) + with(density) { 48.dp.toPx() }
+        var toolbarHeight by remember { mutableIntStateOf(0) }
+        val minimum = if (toolbarHeight > 0) toolbarHeight.toFloat()
+            else WindowInsets.statusBars.getTop(density) + with(density) { 60.dp.toPx() }
         val expandedHeight = maxWidth.coerceAtMost((maxHeight - 120.dp).coerceAtLeast(with(density) { minimum.toDp() }))
         val headerHeight = with(density) { expandedHeight.toPx() }
         var collapse by remember(profile?.member?.id) { mutableFloatStateOf(0f) }
@@ -214,7 +216,8 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                 .testTag("public-profile-toolbar-material")) {
                 ProfileToolbar(profile.member, collapsed, viewerId, state.followBusy,
                     { if (viewerId == null) login() else follow() }, back, search, { moreVisibility.targetState = true },
-                    collapseFraction = fraction, ink = lerp(Color.White, MaterialTheme.colorScheme.onSurface, compactIdentityAlpha), backdrop = backdrop)
+                    modifier = Modifier.onSizeChanged { toolbarHeight = it.height }, collapseFraction = fraction,
+                    ink = lerp(Color.White, MaterialTheme.colorScheme.onSurface, compactIdentityAlpha), backdrop = backdrop)
             }
         }
         CommunitySheet(detailsVisibility, "个人资料", { detailsVisibility.targetState = false }, showActions = false) {

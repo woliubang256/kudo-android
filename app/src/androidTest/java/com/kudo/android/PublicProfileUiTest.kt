@@ -170,6 +170,34 @@ class PublicProfileUiTest {
             compose.activity.window.decorView).isAppearanceLightStatusBars) }
         screenshot("public-profile-square-collapsed.png")
     }
+    @Test fun collapsedToolbarButtonsNeverOverlapTheTabs() {
+        show()
+        repeat(2) { compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp() } }
+        val toolbar = compose.onNodeWithTag("profile-toolbar").fetchSemanticsNode().boundsInRoot
+        val tabs = compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot
+        assertTrue("吸顶工具栏必须完整位于Tab上方: toolbar=$toolbar, tabs=$tabs", toolbar.bottom <= tabs.top + 1f)
+        listOf("返回", "搜索该用户的帖子", "个人主页更多操作").forEach { description ->
+            assertTrue(compose.onNodeWithContentDescription(description).fetchSemanticsNode().boundsInRoot.bottom <= tabs.top + 1f)
+        }
+    }
+
+    @Test fun narrowToolbarRetainsAllThreeNavigationTouchTargets() {
+        compose.setContent { KudoTheme(DisplaySettings(fontScale = 1.3f)) {
+            Box(Modifier.width(280.dp).fillMaxHeight()) {
+                PublicProfilePage(PublicProfileState(profile, loading = false, cardLoading = false,
+                    summary = summary, summaryLoading = false, feeds = feeds), 2, {}, {}, {}, {}, {}, {})
+            }
+        } }
+        repeat(2) { compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp() } }
+        listOf("返回", "搜索该用户的帖子", "个人主页更多操作").forEach { description ->
+            compose.onNodeWithContentDescription(description).assertIsDisplayed().assertWidthIsEqualTo(48.dp).assertHeightIsEqualTo(48.dp)
+        }
+        val toolbar = compose.onNodeWithTag("profile-toolbar").fetchSemanticsNode().boundsInRoot
+        val tabs = compose.onNodeWithTag("profile-tabs").fetchSemanticsNode().boundsInRoot
+        assertTrue(toolbar.bottom <= tabs.top + 1f)
+        screenshot("public-profile-narrow-glass-toolbar.png")
+    }
+
     @Test fun toolbarIdentitySlotsExistBeforeFullyCollapsedForGradualReveal() {
         show()
         compose.onNodeWithTag("profile-toolbar-avatar", useUnmergedTree = true).assertExists()
