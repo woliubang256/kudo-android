@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import com.kudo.android.data.*
@@ -30,6 +32,7 @@ class LoginWebViewUiTest {
     private lateinit var view: FixtureWebView
     private lateinit var vm: AccountViewModel
     private var loads = 0
+    private var sessionResets = 0
 
     @Before fun account() {
         val http = OkHttpClient.Builder().addInterceptor { chain ->
@@ -39,7 +42,7 @@ class LoginWebViewUiTest {
         vm = AccountViewModel(CommunityRepository(DiscourseClient(object : SessionCookies {
             override fun get(url: String) = ""
             override fun set(url: String, cookie: String) = Unit
-        }, http = http)), {}, {})
+        }, http = http)), { sessionResets++ }, {})
     }
 
     @After fun release() { vm.viewModelScope.cancel() }
@@ -69,6 +72,17 @@ class LoginWebViewUiTest {
         assertEquals(resized.getDouble(0), resized.getDouble(1), 2.0)
         assertEquals(76.0, resized.getDouble(2), 1.0)
         compose.runOnIdle { assertEquals("Resizing must preserve the form", 1, loads) }
+    }
+
+    @Test fun completeLoginButtonRunsSessionCheckOnlyOncePerTap() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            LoginScreen(vm, {}, {}, { FixtureWebView(it).also { web -> view = web } })
+        } }
+        compose.waitUntil(10_000) { sessionResets == 1 }
+        compose.onNodeWithText("完成登录").performClick()
+        compose.waitUntil(10_000) { sessionResets == 2 }
+        Thread.sleep(100)
+        assertEquals("A single tap must not reset the session twice", 2, sessionResets)
     }
 
     private inner class FixtureWebView(context: Context) : WebView(context) {

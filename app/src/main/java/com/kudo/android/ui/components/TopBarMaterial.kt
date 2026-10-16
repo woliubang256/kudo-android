@@ -89,8 +89,7 @@ internal fun TopBarIconButton(
 internal fun TopBarTextButton(text: String, action: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val backdrop = LocalToolbarBackdrop.current
     if (backdrop != null) {
-        Box(modifier.height(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action),
-            contentAlignment = Alignment.Center) {
+        Box(modifier.height(48.dp), contentAlignment = Alignment.Center) {
             LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, Modifier.height(40.dp),
                 enabled = enabled, minimumHeight = 40.dp, tint = LogoYellow, contentColor = Ink) {
                 Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
