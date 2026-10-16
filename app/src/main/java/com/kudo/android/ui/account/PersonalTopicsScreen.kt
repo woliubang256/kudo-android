@@ -146,7 +146,7 @@ internal fun AccountTabs(labels: List<String>, selection: Int, modifier: Modifie
 @Composable
 internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<Category>, style: TopicListStyle,
     back: () -> Unit, login: () -> Unit, open: (Int, Int?) -> Unit, user: (String) -> Unit,
-    composeMessage: () -> Unit, drafts: () -> Unit = {}) {
+    composeMessage: () -> Unit, drafts: () -> Unit = {}) = key(vm) {
     if (vm.destination == AccountDestination.HISTORY) LifecycleResumeEffect(vm) {
         vm.resumeHistory()
         onPauseOrDispose {}
@@ -156,7 +156,7 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
         AccountDestination.MESSAGES -> listOf("inbox", "sent", "archive")
         else -> listOf("inbox")
     }
-    val pager = key(vm) { rememberPagerState(initialPage = keys.indexOf(vm.pageKey).coerceAtLeast(0), pageCount = { keys.size }) }
+    val pager = rememberPagerState(initialPage = keys.indexOf(vm.pageKey).coerceAtLeast(0), pageCount = { keys.size })
     val scope = rememberCoroutineScope()
     LaunchedEffect(pager, vm) {
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { index ->

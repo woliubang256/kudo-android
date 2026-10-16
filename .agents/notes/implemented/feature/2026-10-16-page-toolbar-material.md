@@ -36,6 +36,8 @@ FeedTabBar 和 AccountTabs 复用 BalancedTabRow，主页、目录、搜索、�
 
 公开主页按 ProfileToolbar 实测高度计算折叠终点，不能继续假设48dp。首轮真机用例复现新60dp操作栏与旧折叠终点重叠36px，修复用例与窄屏导航用例分别保留。
 
+PersonalTopicsScreen 的整个组合以 ViewModel 为 key，分页状态、条目键、内容和副作用一起切换。仅给 rememberPagerState 加 key 会让旧 Pager 条目提供者短暂读取新页面的 keys；两项话题切换到单项历史时可越界。旧草稿返回回归在切换目标时复现，设备的 Espresso 空闲等待又被系统归为主线程超时；缩短临时诊断等待后得到 IndexOutOfBoundsException。只为 keys 索引添加兜底值改动最少，但会保留旧页面的列表和分页状态，不能保证页面身份一致，因此不用。修复后草稿导航与返回位置、历史和私信切换通过；LikedPostsUiTest 与 PersonalHistoryUiTest 共9项复查通过（artifacts/page-material-final-regressions-device.txt）。点赞夹具使用30个独立记录、跨页重复记录与真实上拉手势，覆盖加载失败、重试、去重和刷新。
+
 ## Testing
 
 RMX2202 / Android13 首轮 PageMaterialUiTest 四项通过，覆盖两/三项等分且文字居中、拥挤标签选中可见、窄屏操作间距及禁用态、浅深色三种材质的真实红蓝列表采样。PublicProfileUiTest 的新增吸顶用例先失败，按实测高度修复后与 TopicReadingUiTest 合计29项通过（artifacts/page-material-profile-reading-device.txt），其中新增玻璃遮挡区不计阅读曝光，窄屏三个导航目标仍为48dp。已人工查看共用浅色液态、窄屏深色及公开主页截图。

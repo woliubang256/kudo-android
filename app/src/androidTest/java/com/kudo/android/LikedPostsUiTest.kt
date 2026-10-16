@@ -49,9 +49,9 @@ class LikedPostsUiTest {
             val body = when (request.url.encodedPath) {
                 "/user_actions.json" -> if (request.url.queryParameter("offset") == "30") {
                     if (morePages.incrementAndGet() == 1) { status = 500; "{}" }
-                    else """{"user_actions":[${action(2, 9, "后页原楼层")}]}"""
+                    else """{"user_actions":[${action(31, 9, "后页原楼层")},${action(1, 8, "点赞原楼层")}]}"""
                 } else if (firstPages.incrementAndGet() == 1) {
-                    """{"user_actions":[${List(30) { action(1, 8, "点赞原楼层") }.joinToString(",")}]}"""
+                    """{"user_actions":[${List(30) { index -> action(index + 1, index + 8, if (index == 0) "点赞原楼层" else "点赞条目$index") }.joinToString(",")}]}"""
                 } else """{"user_actions":[${action(3, 10, "刷新后的点赞")}]}"""
                 "/topics/created-by/current-member.json", "/read.json", "/topics/private-messages/current-member.json" ->
                     """{"topic_list":{"topics":[${(1..30).joinToString(",") { """{"id":$it,"title":"自己的话题$it","posts_count":1,"category_id":0}""" }}]}}"""
@@ -84,11 +84,12 @@ class LikedPostsUiTest {
         capture("liked-posts-first-page.png", "liked-posts")
         compose.onNodeWithText("点赞原楼层").performClick()
         compose.runOnIdle { assertEquals("https://linux.do/t/topic/99/8", opened) }
-        compose.onNodeWithTag("liked-posts-list").performScrollToIndex(29)
+        compose.onNodeWithTag("liked-posts-list").performScrollToIndex(24)
+        compose.onNodeWithTag("liked-posts-list").performTouchInput { swipeUp() }
         compose.waitUntil(5000) { vm.state.value.error != null }
         compose.onNodeWithTag("liked-posts-list").performScrollToNode(hasText("重新加载"))
         compose.onNodeWithText("重新加载").performClick()
-        compose.waitUntil(5000) { vm.state.value.entries.size == 2 }
+        compose.waitUntil(5000) { vm.state.value.entries.size == 31 }
         compose.onNodeWithText("后页原楼层").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("https://linux.do/t/topic/99/9", opened) }
         compose.onNodeWithContentDescription("刷新").performClick()
@@ -166,7 +167,7 @@ class LikedPostsUiTest {
                 }
             } }
             compose.waitUntil(5000) { !topicVm.loading && topicVm.topics.isNotEmpty() }
-            compose.onNode(hasScrollToIndexAction()).performScrollToIndex(20)
+            compose.onNodeWithTag("personal-list-TOPICS").performScrollToIndex(20)
             compose.onNodeWithTag("topic-title-21").assertIsDisplayed()
             val draftBounds = compose.onNodeWithContentDescription("我的草稿").fetchSemanticsNode().boundsInRoot
             val refreshBounds = compose.onNodeWithContentDescription("刷新").fetchSemanticsNode().boundsInRoot
