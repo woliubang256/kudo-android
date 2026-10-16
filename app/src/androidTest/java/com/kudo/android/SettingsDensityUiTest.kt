@@ -22,6 +22,17 @@ import org.junit.Test
 class SettingsDensityUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun webViewMaterialSettingHasReadableChineseLabelAndToggles() {
+        var settings by mutableStateOf(DisplaySettings())
+        compose.setContent { KudoTheme(settings) {
+            SettingsScreen(settings, { settings = it }, null, {}, {}, {})
+        } }
+        compose.onNodeWithText("网页高级材质").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("??????").assertDoesNotExist()
+        compose.onNodeWithTag("advanced-webview-material").assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithTag("advanced-webview-material").performClick().assertIsOff()
+    }
+
     @Test fun singleLineSettingUsesCompactHeight() {
         var density = 1f
         compose.setContent { KudoTheme(DisplaySettings()) {
