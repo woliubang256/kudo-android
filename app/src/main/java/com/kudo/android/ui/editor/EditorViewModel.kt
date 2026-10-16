@@ -25,7 +25,7 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
     var error by mutableStateOf<String?>(null); private set
     var replyRules by mutableStateOf<ReplyRules?>(null); private set
     var rulesLoading by mutableStateOf(false); private set
-    var rulesError by mutableStateOf<String?>(null); private set
+    var rulesError by mutableStateOf<Throwable?>(null); private set
     init { if (topicId != null) reloadReplyRules() }
     fun reloadReplyRules() {
         if (topicId == null || rulesLoading || sending) return
@@ -33,7 +33,7 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
         viewModelScope.launch {
             try { replyRules = withContext(Dispatchers.IO) { rulesRequest() } }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { rulesError = e.message ?: "读取回帖字数规则失败" }
+            catch (e: Exception) { rulesError = e }
             finally { rulesLoading = false }
         }
     }
@@ -50,7 +50,10 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
         if (draft.raw.isBlank()) { error = "先写点内容吧"; return }
         if (topicId != null) {
             val rules = replyRules
-            if (rules == null) { error = rulesError ?: "正在读取回帖字数规则，请稍候"; return }
+            if (rules == null) {
+                error = rulesError?.let { it.message ?: "读取回帖字数规则失败" } ?: "正在读取回帖字数规则，请稍候"
+                return
+            }
             rules.problem(draft.raw)?.let { error = it; return }
         }
         if (topicId == null && (draft.title.isBlank() || draft.categoryId == 0)) { error = "请填写标题并选择类别"; return }

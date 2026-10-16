@@ -8,7 +8,7 @@ Status: implemented
 
 ## Decision
 
-回复编辑器从预载siteSettings读取min_post_length和max_post_length，从/site.json读取当前分类custom_fields.warden_min_post_length。正数分类覆盖优先且不超过最大长度。读取失败阻止发送并提供重试，草稿始终保留。已知分类时只请求两份只读配置，不重复读取主题。
+回复编辑器从预载siteSettings读取min_post_length和max_post_length，从/site.json读取当前分类custom_fields.warden_min_post_length。正数分类覆盖优先且不超过最大长度。读取失败阻止发送，普通错误提供重试，Cloudflare 验证错误使用[统一过盾入口](2026-10-11-cloudflare-verification-flow.md)并在验证成功后只重新读取规则，草稿始终保留。已知分类时只请求两份只读配置，不重复读取主题。
 
 最小长度沿用网页UTF-16算法：排除单行HTML注释和BBCode引用，折叠网站定义的空白并忽略首尾空白；超过10000码元时与网站一样直接计原始长度。最大长度检查原始文本。UI禁用与ViewModel发送前复核同时存在，发送成功后的清理仍遵循[账号与草稿](../feature/2026-10-07-account-and-composer.md)。
 

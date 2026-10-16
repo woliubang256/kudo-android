@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.kudo.android.data.*
+import com.kudo.android.ui.account.LocalWebVerification
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.components.liquid.LiquidModalAction
 import com.kudo.android.ui.theme.LogoYellow
@@ -54,7 +55,7 @@ internal fun ReplyEditorSheet(visibility: MutableTransitionState<Boolean>, sendi
 internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) -> Unit, publish: () -> Unit,
     pickImage: () -> Unit, back: () -> Unit, reply: Boolean = false, categoryError: Throwable? = null,
     reloadCategories: () -> Unit = {}, sending: Boolean = false, uploading: Boolean = false, error: String? = null,
-    replyRules: ReplyRules? = null, rulesError: String? = null, reloadRules: () -> Unit = {}, replyAuthor: Member? = null,
+    replyRules: ReplyRules? = null, rulesError: Throwable? = null, reloadRules: () -> Unit = {}, replyAuthor: Member? = null,
     editing: Boolean = false, editingReply: Boolean = false, canSave: Boolean = false,
     editReason: String = "", reasonChange: (String) -> Unit = {}, imageSelection: (TextRange) -> Unit = {},
     tagSearch: suspend (String, Int, List<TopicTag>) -> List<TopicTag> = { _, _, _ -> emptyList() },
@@ -65,6 +66,8 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
     val bodyFocus = remember { FocusRequester() }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val verification = LocalWebVerification.current
+    val rulesNeedVerification = (rulesError as? ApiFailure)?.kind == FailureKind.VERIFICATION
     var body by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(draft.raw, TextRange(draft.raw.length))) }
     var rtl by rememberSaveable { mutableStateOf(false) }
     var preview by remember { mutableStateOf(false) }
@@ -127,11 +130,18 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             error?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             extra()
             if (reply && rulesError != null) Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(rulesError, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                CommunityButton("重试", reloadRules, enabled = enabled, compact = true)
+                Text(rulesError.message ?: "读取回帖字数规则失败", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                CommunityButton(if (rulesNeedVerification) "完成网页验证" else "重试", {
+                    if (rulesNeedVerification) { keyboard?.hide(); verification?.invoke(reloadRules) }
+                    else reloadRules()
+                }, enabled = enabled && (!rulesNeedVerification || verification != null), compact = true)
             }
             Text(if (uploading) "正在上传图片…" else if (sending) { if (editing) "正在保存…" else "正在发布…" } else if (reply) {
-                if (replyRules == null) "正在读取回帖字数规则…"
+                if (replyRules == null) when {
+                    rulesNeedVerification -> "等待网页验证"
+                    rulesError != null -> "回帖字数规则读取失败"
+                    else -> "正在读取回帖字数规则…"
+                }
                 else replyLength(draft.raw).let { length ->
                     if (length < replyRules.minimum) "$length / ${replyRules.minimum} 字" else "$length 字"
                 }
