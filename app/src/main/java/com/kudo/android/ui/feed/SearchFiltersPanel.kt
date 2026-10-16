@@ -56,7 +56,7 @@ internal fun SearchFiltersPanel(
                         SearchChip(tag.name, false) { change(draft.copy(tags = draft.tags + tag.name)) }
                     }
                 }
-                FilterSwitch("匹配所有选中的标签", draft.allTags) { change(draft.copy(allTags = it)) }
+                FilterSwitch("匹配所有选中的标签", draft.allTags, "search-match-all-tags") { change(draft.copy(allTags = it)) }
             }
             FilterLabel("仅返回话题 / 帖子…")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -86,7 +86,7 @@ internal fun SearchFiltersPanel(
             }
             if (state.capabilities.expertResponse) {
                 FilterLabel("类别专家")
-                FilterCheck("有专家回应", draft.expertResponse) { change(draft.copy(expertResponse = it)) }
+                FilterSwitch("有专家回应", draft.expertResponse, "search-expert-response") { change(draft.copy(expertResponse = it)) }
             }
             validation?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Spacer(Modifier.height(4.dp))
@@ -129,10 +129,10 @@ private fun FilterCheck(label: String, checked: Boolean, change: (Boolean) -> Un
 }
 
 @Composable
-private fun FilterSwitch(label: String, checked: Boolean, change: (Boolean) -> Unit) {
+private fun FilterSwitch(label: String, checked: Boolean, tag: String, change: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).clickable { change(!checked) }.padding(vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
-        CommunitySwitch(checked, change, modifier = Modifier.testTag("search-match-all-tags"))
+        CommunitySwitch(checked, change, modifier = Modifier.testTag(tag))
     }
 }
 
