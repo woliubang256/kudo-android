@@ -32,3 +32,9 @@ Status: implemented
 EditorLifecycleUiTest先复现不足字数仍发送（expected 0 but was 1），修复后5项真机测试通过，覆盖边界、失败保留、配置重试、草稿隔离和确认清理。ReplyRulesTest三项通过，覆盖空白、嵌套引用、UTF-16、分类覆盖和只读请求。CommunityFormsUiTest的键盘/拖动用例适配真实规则后通过，短文本禁用与合法草稿重开均验证。测试不向社区发布内容。
 
 QuickScrollToTopUiTest.replyCountIsCompactAndTheMinimumStillControlsPublishing真机通过（artifacts/quick-top-final-ui.txt），验证0/5字显示最低6字比例、6/10字仅显示当前字数，且发布按钮仍在达标后才可用；完整回顶集成与验证见[快速回顶](../feature/2026-10-11-quick-scroll-to-top.md)。
+
+
+## Private message follow-up (2026-10-17)
+
+Private messages now read min_personal_message_post_length and max_post_length from the preloaded site settings contract. The editor keeps the draft while loading or on failure, shows the counted length, and disables sending until the rule is available and the body passes validation.
+
