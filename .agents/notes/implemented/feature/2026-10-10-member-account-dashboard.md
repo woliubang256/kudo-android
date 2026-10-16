@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+话题/回复与私信收件箱/已发送/归档均使用 HorizontalPager，点击和横滑共享当前页；每页单独保存列表位置。PersonalTopicsViewModel按页键保存内容、游标、加载和错误，离开时取消在途请求并保留已成功数据，回到未完成首载的页才重新读取；预组合不请求，只有 settled 当前页允许刷新和上拉分页。账号仍由ViewModel身份隔离，历史前台刷新规则保持。
+
 [访问历史修复](../bug-fix/2026-10-14-topic-visit-history.md)补全原生看帖的服务端访问参数，并让历史列表返回前台时刷新；首屏不重复请求，其他个人列表与分页规则保持。
 
 功能以 FluxDO e1bd839 的个人中心为参照，独立实现 Kotlin 界面与接口，不复制 GPL Flutter 源码。用户确认本期不包含 AI、LDC/CDK、导出管理；“我的”标题及其右侧设置按钮均移除。保留已完成的访客界面。
@@ -32,12 +34,16 @@ Status: implemented
 
 ## Alternatives considered
 
+- 复用单列表并在每次切换话题类型或信箱时清空重读，状态最少且读取最新，但横滑会反复请求并失去阅读位置；以页键缓存已成功内容与游标，只取消在途读取，刷新仍由当前页显式触发。
+
 - 整个个人中心使用网站 WebView：能最快覆盖全部功能，但用户明确要求酷安式原生密度，核心资料和个人内容使用原生展示，网页仅承载需要网站认证或独立复杂流程的入口。
 - 点赞入口直接打开完整公开主页的“赞”标签：能复用整页交互，但还会读取资料、卡片和统计；专用列表只复用活动协议和条目，减少无关请求。
 - 按通知类型向普通分页接口传 filter_by_types：看似能让服务器分页，但上游控制器仅在 recent 分支使用类型筛选；recent 会更改 last_seen 且不是完整分页。使用完整分页和明确类型分组。
 - 用当前一页做分组：实现简单、切换快，但回复或赞可能在后续页，必须保留继续加载能力。
 
 ## Testing
+
+- 2026-10-16 PersonalHistoryUiTest的5项真机回归通过（artifacts/personal-emoji-pagers-tests.txt与content-tabs-final-tests.txt）：话题/回复横滑、跨页恢复第16项、私信三信箱与缓存、历史前台刷新不重复首载及原有分页。首次新增定位匹配到回复卡片中的“回复”文字，改为限定Role.Tab后通过，运行时代码未为断言调整。夹具只读，无真实私信写入。
 
 - LikedPostsViewModelTest 4项通过（artifacts/liked-posts-unit.txt）：当前账号 filter=1、原始 offset、同主题不同楼层、刷新替换、分页/刷新失败重试、延迟请求取消、换账号隔离、空页结束。与 UserProfileDataTest、AccountDataTest 合计21项通过（artifacts/liked-posts-build.txt）。
 - LikedPostsUiTest 与 MemberAccountUiTest 共8项在 RMX2202 / Android 13 通过（artifacts/liked-posts-device.txt）：送出赞分页重试和原楼层跳转、空态和会话过期、280dp深色130%字号、个人中心快捷入口替换、话题顶栏按钮对齐、进入现有草稿页和返回保留列表位置、历史/私信不显示草稿按钮；读取流程无写请求。草稿测试使用独立偏好文件，不改真实账号草稿。

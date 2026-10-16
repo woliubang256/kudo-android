@@ -25,8 +25,11 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class PersonalHistoryUiTest {
     @get:Rule val compose = createComposeRule()
+    private fun tab(label: String) = compose.onNode(hasText(label) and SemanticsMatcher.expectValue(
+        androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Tab))
     private val requests = AtomicInteger()
     private val visited = AtomicBoolean(false)
+    private var manyTopics = false
     private var vm: PersonalTopicsViewModel? = null
     private lateinit var owner: FixtureOwner
     private val http = OkHttpClient.Builder().addInterceptor { chain ->
@@ -37,12 +40,13 @@ class PersonalHistoryUiTest {
             return@addInterceptor Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
                 .body(body.toResponseBody("application/json".toMediaType())).build()
         }
-        val topics = if (request.url.queryParameter("page") == "1")
+        val topics = if (manyTopics) (1..40).joinToString(",", "[", "]") { """{"id":$it,"title":"话题$it"}""" }
+        else if (request.url.queryParameter("page") == "1")
             """[{"id":3,"title":"更早的历史"}]"""
         else if (visited.get()) """[{"id":2,"title":"刚浏览的新帖子"},{"id":1,"title":"旧历史"}]"""
         else """[{"id":1,"title":"旧历史"}]"""
         Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
-            .body("""{"topic_list":{"topics":$topics,"more_topics_url":"/read.json?page=1"}}""".toResponseBody("application/json".toMediaType())).build()
+            .body("""{"topic_list":{"topics":$topics,"more_topics_url":${if (manyTopics) "null" else "\"/read.json?page=1\""}}}""".toResponseBody("application/json".toMediaType())).build()
     }.build()
 
     @After fun dispose() {
@@ -65,7 +69,7 @@ class PersonalHistoryUiTest {
                 PersonalTopicsScreen(vm!!, emptyList(), TopicListStyle.TITLE, {}, {}, { _, _ -> }, {}, {})
             }
         } }
-        compose.waitUntil(5000) { vm!!.topics.size == 1 && !vm!!.loading }
+        compose.waitUntil(5000) { vm!!.topics.isNotEmpty() && !vm!!.loading }
     }
 
     @Test fun historyResumeRefreshesServerResultsWithoutDuplicatingInitialRequest() {
@@ -101,6 +105,34 @@ class PersonalHistoryUiTest {
             assertEquals(7, vm!!.replies.single().topicId)
             assertEquals(4, vm!!.replies.single().number)
         }
+    }
+
+    @Test fun swipingTopicsKeepsPositionsAndReusesBothLoadedPages() {
+        manyTopics = true
+        show(AccountDestination.TOPICS)
+        compose.onNodeWithTag("personal-list-TOPICS").performScrollToIndex(15)
+        compose.onNodeWithTag("personal-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.waitUntil(5000) { vm!!.replies.size == 1 && !vm!!.loading }
+        tab("回复").assertIsSelected()
+        compose.onNodeWithTag("personal-pager").performTouchInput { swipeRight(durationMillis = 600) }
+        tab("话题").assertIsSelected()
+        compose.onNodeWithText("话题16").assertIsDisplayed()
+        tab("回复").performClick()
+        compose.onNodeWithText("回复所在的主题").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(2, requests.get()) }
+    }
+
+    @Test fun mailboxesSwipeAndClickWithoutReloadingVisitedMailboxes() {
+        show(AccountDestination.MESSAGES)
+        for (mailbox in listOf("sent", "archive")) {
+            compose.onNodeWithTag("personal-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+            compose.waitUntil(5000) { vm!!.mailbox == mailbox && !vm!!.loading }
+        }
+        compose.onNodeWithText("归档").assertIsSelected()
+        compose.onNodeWithTag("personal-pager").performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithText("已发送").assertIsSelected()
+        compose.onNodeWithText("收件箱").performClick().assertIsSelected()
+        compose.runOnIdle { assertEquals(3, requests.get()) }
     }
 
     private class FixtureOwner : LifecycleOwner {

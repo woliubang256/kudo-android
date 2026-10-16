@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,14 +42,24 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 internal enum class PersonalTopicsTab(val title: String) { TOPICS("话题"), REPLIES("回复") }
 
+internal data class PersonalTopicsPage(
+    val topics: List<Topic> = emptyList(), val replies: List<ProfileEntry> = emptyList(),
+    val loading: Boolean = false, val loaded: Boolean = false, val error: Throwable? = null, val next: String? = null,
+)
+
 internal class PersonalTopicsViewModel(private val repository: CommunityRepository, private val username: String,
     val destination: AccountDestination) : ViewModel() {
-    var topics by mutableStateOf<List<Topic>>(emptyList()); private set
-    var loading by mutableStateOf(false); private set
-    var error by mutableStateOf<Throwable?>(null); private set
-    var next by mutableStateOf<String?>(null); private set
     var mailbox by mutableStateOf("inbox"); private set
     var topicTab by mutableStateOf(PersonalTopicsTab.TOPICS); private set
+    private var pages by mutableStateOf<Map<String, PersonalTopicsPage>>(emptyMap())
+    val pageKey: String get() = if (destination == AccountDestination.TOPICS) topicTab.name else mailbox
+    fun page(key: String) = pages[key] ?: PersonalTopicsPage()
+    private val current get() = page(pageKey)
+    val topics get() = current.topics
+    val replies get() = current.replies
+    val loading get() = current.loading
+    val error get() = current.error
+    val next get() = current.next
     private var request: Job? = null
     private var generation = 0
     private var historyWasShown = false
@@ -56,46 +69,50 @@ internal class PersonalTopicsViewModel(private val repository: CommunityReposito
         if (historyWasShown) load()
         historyWasShown = true
     }
+    private fun switchPage(select: () -> Unit) {
+        request?.cancel(); generation++
+        update(pageKey) { it.copy(loading = false) }
+        select()
+        if (!current.loaded && current.error == null) load()
+    }
     fun selectMailbox(value: String) {
-        if (value == mailbox) return
-        mailbox = value; topics = emptyList(); next = null; load()
+        if (destination != AccountDestination.MESSAGES || value == mailbox || value !in listOf("inbox", "sent", "archive")) return
+        switchPage { mailbox = value }
     }
     fun selectTopicTab(value: PersonalTopicsTab) {
         if (destination != AccountDestination.TOPICS || value == topicTab) return
-        request?.cancel(); generation++
-        topicTab = value; topics = emptyList(); replies = emptyList(); next = null; error = null
-        load()
+        switchPage { topicTab = value }
     }
-    var replies by mutableStateOf<List<ProfileEntry>>(emptyList()); private set
+    private fun update(key: String, change: (PersonalTopicsPage) -> PersonalTopicsPage) { pages = pages + (key to change(page(key))) }
     private fun itemCount() = if (destination == AccountDestination.TOPICS && topicTab == PersonalTopicsTab.REPLIES) replies.size else topics.size
     fun retry() = load(more = itemCount() > 0 && next != null)
     fun load(more: Boolean = false) {
         if (more && (loading || next == null)) return
         request?.cancel()
         val epoch = ++generation
-        val cursor = if (more) next else null
-        loading = true; error = null
+        val key = pageKey
+        val old = current
+        val cursor = if (more) old.next else null
+        val showingReplies = destination == AccountDestination.TOPICS && topicTab == PersonalTopicsTab.REPLIES
+        val selectedMailbox = mailbox
+        update(key) { it.copy(loading = true, error = null) }
         request = viewModelScope.launch {
             try {
-                val page = withContext(Dispatchers.IO) {
-                    if (destination == AccountDestination.TOPICS && topicTab == PersonalTopicsTab.REPLIES)
-                        repository.profilePage(username, ProfileTab.REPLIES, cursor)
-                    else repository.personalTopics(username, destination, cursor, mailbox)
+                val result = withContext(Dispatchers.IO) {
+                    if (showingReplies) repository.profilePage(username, ProfileTab.REPLIES, cursor)
+                    else repository.personalTopics(username, destination, cursor, selectedMailbox)
                 }
-                if (epoch == generation) {
-                    when (page) {
-                        is ProfilePage -> {
-                            replies = (if (more) replies + page.entries else page.entries).distinctBy(ProfileEntry::key)
-                            next = page.next?.takeUnless { it == cursor }
-                        }
-                        is TopicPage -> {
-                            topics = (if (more) topics + page.topics else page.topics).distinctBy { it.id }
-                            next = page.next?.takeUnless { it == cursor }
-                        }
+                if (epoch == generation) update(key) {
+                    when (result) {
+                        is ProfilePage -> it.copy(replies = (if (more) old.replies + result.entries else result.entries).distinctBy(ProfileEntry::key),
+                            next = result.next?.takeUnless { it == cursor }, loaded = true)
+                        is TopicPage -> it.copy(topics = (if (more) old.topics + result.topics else result.topics).distinctBy { topic -> topic.id },
+                            next = result.next?.takeUnless { it == cursor }, loaded = true)
+                        else -> it
                     }
                 }
-            } catch (e: CancellationException) { throw e } catch (e: Exception) { if (epoch == generation) error = e }
-            finally { if (epoch == generation) loading = false }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { if (epoch == generation) update(key) { it.copy(error = e) } }
+            finally { if (epoch == generation) update(key) { it.copy(loading = false) } }
         }
     }
 }
@@ -137,7 +154,23 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
         vm.resumeHistory()
         onPauseOrDispose {}
     }
-    val scroll = rememberLazyListState()
+    val keys = when (vm.destination) {
+        AccountDestination.TOPICS -> PersonalTopicsTab.entries.map { it.name }
+        AccountDestination.MESSAGES -> listOf("inbox", "sent", "archive")
+        else -> listOf("inbox")
+    }
+    val pager = key(vm) { rememberPagerState(initialPage = keys.indexOf(vm.pageKey).coerceAtLeast(0), pageCount = { keys.size }) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(pager, vm) {
+        snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { index ->
+            if (vm.destination == AccountDestination.TOPICS) vm.selectTopicTab(PersonalTopicsTab.entries[index])
+            else if (vm.destination == AccountDestination.MESSAGES) vm.selectMailbox(keys[index])
+        }
+    }
+    LaunchedEffect(vm.pageKey) {
+        val index = keys.indexOf(vm.pageKey)
+        if (index >= 0 && !pager.isScrollInProgress && pager.currentPage != index) pager.scrollToPage(index)
+    }
     Column(Modifier.fillMaxSize()) {
         AccountPageTopBar(vm.destination.title, back) {
             if (vm.destination == AccountDestination.TOPICS) CommunityIconButton(Icons.Rounded.EditNote, "我的草稿", drafts)
@@ -145,51 +178,56 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
             CommunityIconButton(Icons.Rounded.Refresh, "刷新", { vm.load() })
         }
         if (vm.destination == AccountDestination.MESSAGES) {
-            val mailboxes = listOf("inbox", "sent", "archive")
-            AccountTabs(listOf("收件箱", "已发送", "归档"), mailboxes.indexOf(vm.mailbox)) { vm.selectMailbox(mailboxes[it]) }
+            AccountTabs(listOf("收件箱", "已发送", "归档"), pager.currentPage) { scope.launch { pager.animateScrollToPage(it) } }
         }
         if (vm.destination == AccountDestination.TOPICS) {
-            AccountTabs(PersonalTopicsTab.entries.map(PersonalTopicsTab::title), vm.topicTab.ordinal) { vm.selectTopicTab(PersonalTopicsTab.entries[it]) }
+            AccountTabs(PersonalTopicsTab.entries.map(PersonalTopicsTab::title), pager.currentPage) { scope.launch { pager.animateScrollToPage(it) } }
         }
-        val showingReplies = vm.destination == AccountDestination.TOPICS && vm.topicTab == PersonalTopicsTab.REPLIES
-        val count = if (showingReplies) vm.replies.size else vm.topics.size
-        val pull = rememberPullToRefreshState()
-        val refreshing = vm.loading && count > 0
-        LaunchedEffect(vm.topicTab, vm.next, vm.loading, vm.error) {
-            snapshotFlow { scroll.isScrollInProgress to (scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) }
-                .distinctUntilChanged().collect { (scrolling, last) ->
-                    if (scrolling && vm.next != null && !vm.loading && vm.error == null && last >= scroll.layoutInfo.totalItemsCount - 3) vm.load(true)
-                }
-        }
-        PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.load() }, state = pull,
-            modifier = Modifier.weight(1f).fillMaxWidth(), indicator = {
-                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
-                    containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
-            }) {
-            LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scroll), state = scroll, contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                if (showingReplies) {
-                    items(vm.replies, key = ProfileEntry::key) { entry -> ProfileEntryRow(entry) { open(entry.topicId, entry.number) } }
-                } else {
-                    items(vm.topics, key = { it.id }) { topic ->
-                        val category = categories.firstOrNull { it.id == topic.categoryId }
-                        if (style == TopicListStyle.TITLE) TopicTitleRow(topic, category, { open(topic.id, null) }, user)
-                        else TopicCard(topic, category, { open(topic.id, null) }, user)
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("personal-pager"), key = { keys[it] }, userScrollEnabled = keys.size > 1) { index ->
+            val pageKey = keys[index]
+            val page = vm.page(pageKey)
+            val active = pager.settledPage == index && vm.pageKey == pageKey
+            val scroll = rememberLazyListState()
+            val showingReplies = vm.destination == AccountDestination.TOPICS && pageKey == PersonalTopicsTab.REPLIES.name
+            val count = if (showingReplies) page.replies.size else page.topics.size
+            val pull = rememberPullToRefreshState()
+            val refreshing = page.loading && count > 0
+            LaunchedEffect(active, page.next, page.loading, page.error) {
+                snapshotFlow { scroll.isScrollInProgress to (scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) }
+                    .distinctUntilChanged().collect { (scrolling, last) ->
+                        if (active && scrolling && page.next != null && !page.loading && page.error == null && last >= scroll.layoutInfo.totalItemsCount - 3) vm.load(true)
                     }
+            }
+            PullToRefreshBox(isRefreshing = refreshing, onRefresh = { if (active) vm.load() }, state = pull,
+                modifier = Modifier.fillMaxSize(), indicator = {
+                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                        containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
+                }) {
+                LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = active).testTag("personal-list-$pageKey"), state = scroll, contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    if (showingReplies) {
+                        items(page.replies, key = ProfileEntry::key) { entry -> ProfileEntryRow(entry) { open(entry.topicId, entry.number) } }
+                    } else {
+                        items(page.topics, key = { it.id }) { topic ->
+                            val category = categories.firstOrNull { it.id == topic.categoryId }
+                            if (style == TopicListStyle.TITLE) TopicTitleRow(topic, category, { open(topic.id, null) }, user)
+                            else TopicCard(topic, category, { open(topic.id, null) }, user)
+                        }
+                    }
+                    if (page.loading || (!page.loaded && page.error == null)) item { LoadingRow() }
+                    page.error?.let { item { ErrorState(it, { if (active) vm.retry() }, login) } }
+                    if (page.loaded && !page.loading && page.error == null && count == 0) item {
+                        EmptyState("这里还没有内容", when {
+                            showingReplies -> "你回复过的话题会出现在这里。"
+                            vm.destination == AccountDestination.TOPICS -> "你创建的话题会出现在这里。"
+                            vm.destination == AccountDestination.HISTORY -> "阅读过的话题会出现在这里。"
+                            else -> "此信箱暂时没有私信。"
+                        }, Icons.Rounded.Inbox)
+                    }
+                    if (page.next == null && !page.loading && page.error == null && count > 0) item {
+                        Text("已显示全部", Modifier.padding(18.dp), color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
+                    }
+                    item { Spacer(Modifier.navigationBarsPadding().height(16.dp)) }
                 }
-                if (vm.loading) item { LoadingRow() }
-                vm.error?.let { item { ErrorState(it, vm::retry, login) } }
-                if (!vm.loading && vm.error == null && count == 0) item {
-                    EmptyState("这里还没有内容", when {
-                        showingReplies -> "你回复过的话题会出现在这里。"
-                        vm.destination == AccountDestination.TOPICS -> "你创建的话题会出现在这里。"
-                        vm.destination == AccountDestination.HISTORY -> "阅读过的话题会出现在这里。"
-                        else -> "此信箱暂时没有私信。"
-                    }, Icons.Rounded.Inbox)
-                }
-                if (vm.next == null && !vm.loading && vm.error == null && count > 0) item {
-                    Text("已显示全部", Modifier.padding(18.dp), color = MaterialTheme.colorScheme.outline, fontSize = 11.sp)
-                }
-                item { Spacer(Modifier.navigationBarsPadding().height(16.dp)) }
             }
         }
     }
