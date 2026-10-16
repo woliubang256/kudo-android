@@ -77,17 +77,18 @@ internal fun LikedPostsScreen(state: ProfileFeedState, back: () -> Unit, login: 
                     state.entries.isNotEmpty() && last >= scroll.layoutInfo.totalItemsCount - 3) more()
             }
     }
-    Column(Modifier.fillMaxSize().testTag("liked-posts")) {
+    MaterialPageScaffold(modifier = Modifier.testTag("liked-posts"), header = {
         AccountPageTopBar("我的点赞", back) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新", refresh)
         }
+    }) { padding ->
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = refresh, state = pull,
-            modifier = Modifier.weight(1f).fillMaxWidth(), indicator = {
-                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier.fillMaxSize(), indicator = {
+                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
                     containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
             }) {
             LazyColumn(Modifier.fillMaxSize().testTag("liked-posts-list").quickScrollTarget(scroll), state = scroll,
-                contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                contentPadding = PaddingValues(top = padding.calculateTopPadding() + 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(state.entries, key = ProfileEntry::key) { ProfileEntryRow(it, open) }
                 if (state.loading) item { LoadingRow() }
                 state.error?.let { item { ErrorState(it, retry, login) } }

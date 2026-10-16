@@ -33,6 +33,7 @@ import com.kudo.android.ui.components.CommunityIconButton
 import com.kudo.android.ui.components.CommunityButton
 import com.kudo.android.ui.components.EmptyState
 import com.kudo.android.ui.components.showKudoToast
+import com.kudo.android.ui.components.MaterialPageScaffold
 import kotlin.math.roundToInt
 
 @Composable
@@ -40,7 +41,7 @@ internal fun DownloadsScreen(manager: NativeDownloadManager, back: () -> Unit) {
     val tasks by manager.tasks.collectAsState()
     val context = LocalContext.current
     val list = tasks.sortedByDescending { it.createdAt }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("downloads-screen")) {
+    MaterialPageScaffold(modifier = Modifier.testTag("downloads-screen"), header = {
         AccountPageTopBar("下载管理", back) {
             if (list.any { it.status != DownloadStatus.DOWNLOADING }) {
                 CommunityIconButton(Icons.Rounded.DeleteSweep, "清理已完成任务", {
@@ -48,11 +49,12 @@ internal fun DownloadsScreen(manager: NativeDownloadManager, back: () -> Unit) {
                 })
             }
         }
+    }) { padding ->
         if (list.isEmpty()) {
-            EmptyState("暂无下载任务", "帖子里的压缩包和文件会显示在这里。")
+            Box(Modifier.padding(padding)) { EmptyState("暂无下载任务", "帖子里的压缩包和文件会显示在这里。") }
         } else LazyColumn(
             state = rememberLazyListState(), modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(list, key = { it.id }) { task -> DownloadTaskRow(task, manager, context) }
         }

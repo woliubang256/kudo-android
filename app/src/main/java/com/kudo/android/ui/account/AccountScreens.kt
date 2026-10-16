@@ -188,14 +188,15 @@ fun BookmarksScreen(vm: AccountViewModel, back: () -> Unit, login: () -> Unit, o
                     vm.saved.isNotEmpty() && last >= scroll.layoutInfo.totalItemsCount - 3) vm.loadSaved(true)
             }
     }
-    Column {
+    MaterialPageScaffold(header = {
         AccountPageTopBar("我的收藏", back) { CommunityIconButton(Icons.Rounded.Refresh, "刷新收藏", { vm.loadSaved() }) }
+    }) { padding ->
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.loadSaved() }, state = pull,
             modifier = Modifier.fillMaxSize(), indicator = {
-                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
                     containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
             }) {
-            LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll), contentPadding = PaddingValues(top = padding.calculateTopPadding() + 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 if (vm.user == null) item { EmptyState("把好内容留在这里", "登录后查看你的社区收藏。", Icons.Rounded.BookmarkBorder, "登录", login) }
                 if (vm.savedLoading) item { LoadingRow() }
                 items(vm.saved, key = { it.id }) { topic ->
