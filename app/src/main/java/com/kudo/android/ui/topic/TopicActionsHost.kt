@@ -15,9 +15,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -157,21 +155,34 @@ fun TopicActionsHost(repository: CommunityRepository, viewer: Member?, glass: Gl
 fun TopicActionMenu(post: Post?, fromDetail: Boolean, enabled: Boolean, copy: () -> Unit, bookmark: () -> Unit,
     history: () -> Unit, ignore: () -> Unit, report: () -> Unit, copyLink: () -> Unit = {}, edit: (() -> Unit)? = null,
     privateMessage: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 10.dp).testTag("topic-action-row"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (fromDetail) TopicCircleAction("复制", Icons.Rounded.ContentCopy, enabled && post != null, copy)
-        if (fromDetail) TopicCircleAction("复制链接", Icons.Rounded.Link, enabled && post != null, copyLink)
-        TopicCircleAction(if (post?.bookmarkId != null) "取消收藏" else "收藏", if (post?.bookmarkId != null) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, enabled && post != null, bookmark)
-        edit?.let { TopicCircleAction("编辑", Icons.Rounded.Edit, enabled, it) }
-        if (post?.hasEditHistory == true) TopicCircleAction("编辑历史", Icons.Rounded.History, enabled, history)
-        if (!fromDetail) TopicCircleAction("屏蔽", Icons.Rounded.VisibilityOff, enabled && post != null, ignore)
-        privateMessage?.let { TopicCircleAction("私信", Icons.Rounded.MailOutline, enabled && post != null, it) }
-        TopicCircleAction("举报", Icons.Rounded.Flag, enabled && post != null, report)
+    val actions = buildList {
+        if (fromDetail) add(TopicMenuAction("复制", Icons.Rounded.ContentCopy, enabled && post != null, copy))
+        if (fromDetail) add(TopicMenuAction("复制链接", Icons.Rounded.Link, enabled && post != null, copyLink))
+        add(TopicMenuAction(if (post?.bookmarkId != null) "取消收藏" else "收藏", if (post?.bookmarkId != null) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, enabled && post != null, bookmark))
+        edit?.let { add(TopicMenuAction("编辑", Icons.Rounded.Edit, enabled, it)) }
+        if (post?.hasEditHistory == true) add(TopicMenuAction("编辑历史", Icons.Rounded.History, enabled, history))
+        if (!fromDetail) add(TopicMenuAction("屏蔽", Icons.Rounded.VisibilityOff, enabled && post != null, ignore))
+        privateMessage?.let { add(TopicMenuAction("私信", Icons.Rounded.MailOutline, enabled && post != null, it)) }
+        add(TopicMenuAction("举报", Icons.Rounded.Flag, enabled && post != null, report))
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 10.dp).testTag("topic-action-row")) {
+        val columns = (maxWidth / 80.dp).toInt().coerceIn(1, 4)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            actions.chunked(columns).forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { item -> TopicCircleAction(item.label, item.icon, item.enabled, item.action, Modifier.weight(1f)) }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
     }
 }
 
+private data class TopicMenuAction(val label: String, val icon: ImageVector, val enabled: Boolean, val action: () -> Unit)
+
 @Composable
-private fun TopicCircleAction(label: String, icon: ImageVector, enabled: Boolean, action: () -> Unit) {
-    Column(Modifier.widthIn(min = 72.dp).clip(MaterialTheme.shapes.medium).clickable(enabled = enabled, role = Role.Button, onClick = action)
+private fun TopicCircleAction(label: String, icon: ImageVector, enabled: Boolean, action: () -> Unit, modifier: Modifier) {
+    Column(modifier.clip(MaterialTheme.shapes.medium).clickable(enabled = enabled, role = Role.Button, onClick = action)
         .padding(horizontal = 6.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.size(52.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.85f else 0.3f))

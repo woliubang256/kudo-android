@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,42 @@ class TopicActionsUiTest {
         version = 3, canViewEditHistory = true)
     private val topic = Topic(5, "置顶测试话题", "摘要内容", author, 1, emptyList(), 8, 10, 1, "", "", pinned = true)
     private val repository = CommunityRepository(DiscourseClient(object : SessionCookies { override fun get(url: String) = ""; override fun set(url: String, cookie: String) {} }))
+
+    @Test fun manyActionsUseTwoRowsWithoutHorizontalScrolling() {
+        var messages = 0
+        var reports = 0
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
+            Box(Modifier.width(360.dp)) {
+                TopicActionMenu(post, true, true, {}, {}, {}, {}, { reports++ }, edit = {}, privateMessage = { messages++ })
+            }
+        } }
+        val labels = listOf("复制", "复制链接", "收藏", "编辑", "编辑历史", "私信", "举报")
+        assertMenuRows(labels)
+        compose.onNodeWithText("私信").performClick()
+        compose.onNodeWithText("举报").performClick()
+        compose.runOnIdle { assertEquals(1, messages); assertEquals(1, reports) }
+        capture("topic-actions-two-rows.png")
+    }
+
+    @Test fun narrowLargeTextActionsStayVisibleWithoutHorizontalScrolling() {
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f)) {
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.width(280.dp)) { TopicActionMenu(post, true, true, {}, {}, {}, {}, {}, privateMessage = {}) }
+            }
+        } }
+        compose.onNodeWithTag("topic-action-row").assertWidthIsEqualTo(280.dp)
+        assertMenuRows(listOf("复制", "复制链接", "收藏", "编辑历史", "私信", "举报"))
+        capture("topic-actions-two-rows-dark-large.png")
+    }
+
+    private fun assertMenuRows(labels: List<String>) {
+        val menu = compose.onNodeWithTag("topic-action-row")
+        menu.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.HorizontalScrollAxisRange))
+        val bounds = labels.map { label -> compose.onNodeWithText(label).assertIsDisplayed().fetchSemanticsNode().boundsInRoot }
+        assertEquals(2, bounds.map { it.top }.distinct().size)
+        val container = menu.fetchSemanticsNode().boundsInRoot
+        assertTrue(bounds.all { it.left >= container.left && it.right <= container.right })
+    }
 
     @Test fun topicAndReplyLinksUseTheCorrectScopeAndReplyBookmarkUpdatesItsFloor() {
         var current by mutableStateOf(post.copy(id = 81, number = 8, version = 1))
@@ -187,8 +224,8 @@ class TopicActionsUiTest {
         compose.runOnIdle { current = post.copy(canViewEditHistory = false) }
         compose.onNodeWithText("编辑历史").assertDoesNotExist()
         compose.runOnIdle { current = post }
-        compose.onNodeWithText("编辑历史").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("举报").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("编辑历史").assertIsDisplayed()
+        compose.onNodeWithText("举报").assertIsDisplayed()
         capture("topic-actions-detail-dark-large.png")
     }
 
