@@ -24,7 +24,7 @@ internal fun PrivateMessageScreen(member: Member, repository: CommunityRepositor
     val scope = rememberCoroutineScope()
     BackHandler(sending) { }
     fun change(value: Draft) { draft = value; settings.saveDraft(draftKey, value); error = null }
-    Column(Modifier.fillMaxSize().imePadding()) {
+    MaterialPageScaffold(modifier = Modifier.imePadding(), header = {
         AccountPageTopBar("写私信", { if (!sending) back() }) {
             CommunityButton(if (sending) "发送中…" else "发送", {
                 val snapshot = draft
@@ -38,7 +38,8 @@ internal fun PrivateMessageScreen(member: Member, repository: CommunityRepositor
                 }
             }, enabled = !sending && draft.raw.isNotBlank() && draft.title.isNotBlank() && messageRecipients(draft.recipients).isNotEmpty(), compact = true)
         }
-        Column(Modifier.weight(1f).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    }) { padding ->
+        Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CommunityTextField(draft.recipients, { change(draft.copy(recipients = it)) }, Modifier.fillMaxWidth().padding(top = 20.dp), placeholder = "收件人用户名，多个用逗号分隔", enabled = !sending)
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             CommunityTextField(draft.title, { change(draft.copy(title = it)) }, Modifier.fillMaxWidth(), placeholder = "标题", enabled = !sending)

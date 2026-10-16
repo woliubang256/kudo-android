@@ -144,20 +144,22 @@ internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings
         }
     }
     BackHandler(vm.sending) { }
-    Column(Modifier.fillMaxSize().imePadding()) {
+    MaterialPageScaffold(modifier = Modifier.imePadding(), header = {
         AccountPageTopBar(vm.title, { if (!vm.sending) back() }) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新聊天", { vm.load() }, enabled = !vm.loading)
             CommunityIconButton(Icons.Rounded.Language, "在应用内网页查看聊天", website)
         }
+    }) { padding ->
+    Column(Modifier.fillMaxSize()) {
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.load() }, state = pull,
             modifier = Modifier.weight(1f).fillMaxWidth(), indicator = {
-                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
                     containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
             }) {
         LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scrolled = awayFromTop) {
             scroll.animateScrollToItem((scroll.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
         }, state = scroll, reverseLayout = true,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             items(vm.messages.asReversed(), key = { it.id }) { message ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Avatar(message.author, 32.dp, onClick = { user(message.author.username) })
@@ -187,4 +189,5 @@ internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings
                 enabled = !vm.sending && raw.isNotBlank(), compact = true)
         }
     }
+}
 }

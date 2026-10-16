@@ -61,14 +61,15 @@ internal fun DraftsScreen(user: Member, repository: CommunityRepository, setting
             }
     }
     Box(Modifier.fillMaxSize()) {
-        Column {
+        MaterialPageScaffold(header = {
             AccountPageTopBar("我的草稿", back) { CommunityIconButton(Icons.Rounded.Refresh, "刷新草稿", { refresh++ }, enabled = !loading) }
+        }) { padding ->
             PullToRefreshBox(isRefreshing = refreshing, onRefresh = { scope.launch { load(false) } }, state = pull,
                 modifier = Modifier.fillMaxSize(), indicator = {
-                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter),
+                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
                         containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
                 }) {
-                LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = !sheet.currentState && !sheet.targetState), contentPadding = PaddingValues(bottom = 24.dp)) {
+                LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = !sheet.currentState && !sheet.targetState), contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = 24.dp)) {
                     if (local.isNotEmpty()) item { Text("本机草稿", Modifier.padding(16.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     items(local, key = { "local-${it.key}" }) { saved -> DraftRow(saved, { edit(saved) }, { deleting = saved; sheet.targetState = true }) }
                     item { Text("云端草稿", Modifier.padding(16.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -139,7 +140,7 @@ internal fun CloudDraftScreen(key: String, user: Member, repository: CommunityRe
     BackHandler(loading) { }
     fun change(value: Draft) { draft = value; settings.saveDraft(backupKey, value); message = "本机副本已保存" }
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().imePadding()) {
+        MaterialPageScaffold(modifier = Modifier.imePadding(), header = {
             AccountPageTopBar("编辑云端草稿", { if (!loading) back() }) {
                 CommunityButton("保存", {
                     val snapshot = saved ?: return@CommunityButton
@@ -153,7 +154,9 @@ internal fun CloudDraftScreen(key: String, user: Member, repository: CommunityRe
                     }
                 }, enabled = !loading && saved != null, compact = true)
             }
-            LazyColumn(Modifier.weight(1f).quickScrollTarget(scroll, enabled = !categorySheet.currentState && !categorySheet.targetState), state = scroll, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        }) { padding ->
+        Column(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.weight(1f).quickScrollTarget(scroll, enabled = !categorySheet.currentState && !categorySheet.targetState), state = scroll, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = padding.calculateTopPadding() + 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 if (loading) item { LoadingRow() }
                 if (saved?.topicId == null) item {
                     CommunityTextField(draft.title, { change(draft.copy(title = it)) }, placeholder = "标题", enabled = !loading)
@@ -180,6 +183,7 @@ internal fun CloudDraftScreen(key: String, user: Member, repository: CommunityRe
                 }, enabled = !loading && saved != null && draft.raw.isNotBlank() &&
                     (saved?.topicId != null || draft.title.isNotBlank() && (saved?.privateMessage == true || draft.categoryId > 0)))
             }
+        }
         }
         CommunitySheet(categorySheet, "选择分类", { categorySheet.targetState = false }, showActions = false) {
             categories.forEach { category -> Text(category.name, Modifier.fillMaxWidth().clickable { change(draft.copy(categoryId = category.id)); categorySheet.targetState = false }.padding(vertical = 10.dp), fontSize = 14.sp) }
