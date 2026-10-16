@@ -64,6 +64,11 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                         SettingRow("主题风格", settings.theme.label, !showing) { show("theme") }
                         SettingsDivider()
                         SettingRow("界面材质效果", settings.glass.label, !showing) { show("glass") }
+                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 18.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("??????", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            CommunitySwitch(settings.advancedWebViewMaterial, { update(settings.copy(advancedWebViewMaterial = it)) }, enabled = !showing, modifier = Modifier.testTag("advanced-webview-material"))
+                        }
+                        SettingsDivider()
                         SettingsDivider()
                         SettingRow("字体大小", if (settings.fontScale == 1f) "跟随系统" else "${(settings.fontScale * 100).toInt()}%", !showing) { show("font") }
                         SettingsDivider()
