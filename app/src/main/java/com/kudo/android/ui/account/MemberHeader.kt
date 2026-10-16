@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.Ink
+import com.kyant.backdrop.Backdrop
 
 @Composable
 internal fun MemberHeader(member: Member, summary: UserSummary?, loading: Boolean, error: Boolean,
@@ -77,13 +78,15 @@ internal fun MemberHeader(member: Member, summary: UserSummary?, loading: Boolea
 }
 
 @Composable
-internal fun MemberCompactHeader(member: Member, ink: Color, profile: () -> Unit, trust: () -> Unit, modifier: Modifier) {
-    Row(modifier.fillMaxWidth().statusBarsPadding().height(48.dp).clickable(role = Role.Button, onClick = profile)
-        .padding(horizontal = 16.dp).testTag("member-compact-header"),
+internal fun MemberCompactHeader(member: Member, ink: Color, profile: () -> Unit, trust: () -> Unit, modifier: Modifier,
+    backdrop: Backdrop) {
+    Row(modifier.fillMaxWidth().statusBarsPadding().height(60.dp).clickable(role = Role.Button, onClick = profile)
+        .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp).testTag("member-compact-header"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Avatar(member, 30.dp, presentation = AvatarPresentation.ACCOUNT, onClick = profile)
         Box(Modifier.weight(1f)) { MemberName(member, ink, trust, compact = true) }
-        ProfileArrow(ink, profile)
+        TopBarIconButton(Icons.Rounded.ChevronRight, "打开个人主页", profile,
+            Modifier.testTag("member-profile-arrow"), backdrop = backdrop, tint = ink)
     }
 }
 

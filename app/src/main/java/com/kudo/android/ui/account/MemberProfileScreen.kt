@@ -92,7 +92,7 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
     DisposableEffect(Unit) { onDispose { statusBarStyle(null) } }
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val density = LocalDensity.current
-        val minimum = WindowInsets.statusBars.getTop(density) + with(density) { 48.dp.toPx() }
+        val minimum = WindowInsets.statusBars.getTop(density) + with(density) { 60.dp.toPx() }
         val minimumHeight = with(density) { minimum.toDp() }
         val heightLimit = (maxHeight - 120.dp).coerceAtLeast(minimumHeight)
         // Preserve the existing avatar and inner spacing independently of the natural header height.
@@ -206,7 +206,7 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                 if (canRefract) lens(24.dp.toPx(), 24.dp.toPx())
             }).testTag("member-toolbar-material")) {
             MemberCompactHeader(member, lerp(if (backgroundLoaded) Color.White else Ink, themeInk, compactIdentityAlpha), profile,
-                { destination(AccountDestination.TRUST) }, Modifier)
+                { destination(AccountDestination.TRUST) }, Modifier, backdrop)
         }
     }
 }

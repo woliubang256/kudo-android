@@ -209,6 +209,11 @@ class MemberHeaderUiTest {
                 assertTrue(full[2, full.height - 5].green > full[2, full.height - 5].red * 2)
                 compose.onNodeWithTag("member-profile").performTouchInput { swipeUp() }
                 compose.onNodeWithTag("member-compact-header").assertIsDisplayed()
+                val arrow = compose.onNodeWithTag("member-profile-arrow").assertIsDisplayed()
+                    .assert(!hasAnyAncestor(hasTestTag("member-content-backdrop"))).fetchSemanticsNode().boundsInRoot
+                val density = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+                assertEquals("$theme/$glass 独立主页按钮保留48dp触控区", 48f * density, arrow.width, 2f)
+                assertEquals(arrow.width, arrow.height, 2f)
                 val compact = compose.onNodeWithTag("member-header-viewport").captureToImage().toPixelMap()
                 val bottom = compact[2, compact.height - 5]
                 assertTrue("$theme/$glass 吸顶不应保留绿色头图", kotlin.math.abs(bottom.green - bottom.red) < .08f)
