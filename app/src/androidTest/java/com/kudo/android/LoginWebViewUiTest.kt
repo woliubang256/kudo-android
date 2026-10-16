@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -56,12 +57,22 @@ class LoginWebViewUiTest {
     }
 
     @Test fun captchaFrameKeepsItsHeightAndViewportTracksAvailableSpaceWithoutReload() {
+        checkCaptchaViewport(advanced = false)
+    }
+
+    @Test fun advancedLoginMaterialKeepsTheCaptchaViewportBounded() {
+        checkCaptchaViewport(advanced = true)
+    }
+
+    private fun checkCaptchaViewport(advanced: Boolean) {
         var available by mutableStateOf(600.dp)
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { KudoTheme(DisplaySettings(advancedWebViewMaterial = advanced)) {
             Box(Modifier.fillMaxSize()) { Box(Modifier.fillMaxWidth().height(available)) {
                 LoginScreen(vm, {}, {}, { FixtureWebView(it).also { web -> view = web } })
             } }
         } }
+        if (advanced) compose.onNodeWithTag("material-page-content").assertExists()
+        else compose.onNodeWithTag("material-page-content").assertDoesNotExist()
         compose.waitUntil(10_000) { js("document.getElementById('captcha') !== null") == "true" }
         val original = JSONArray(js("[innerHeight, document.getElementById('vh').offsetHeight, document.getElementById('captcha').offsetHeight]"))
         assertTrue("100vh must reflect the native viewport: $original", original.getDouble(1) > 100)
@@ -75,9 +86,19 @@ class LoginWebViewUiTest {
     }
 
     @Test fun completeLoginButtonRunsSessionCheckOnlyOncePerTap() {
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        checkSingleCompletion(advanced = false)
+    }
+
+    @Test fun advancedLoginMaterialRunsSessionCheckOnlyOncePerTap() {
+        checkSingleCompletion(advanced = true)
+    }
+
+    private fun checkSingleCompletion(advanced: Boolean) {
+        compose.setContent { KudoTheme(DisplaySettings(advancedWebViewMaterial = advanced)) {
             LoginScreen(vm, {}, {}, { FixtureWebView(it).also { web -> view = web } })
         } }
+        if (advanced) compose.onNodeWithTag("material-page-content").assertExists()
+        else compose.onNodeWithTag("material-page-content").assertDoesNotExist()
         compose.waitUntil(10_000) { sessionResets == 1 }
         compose.onNodeWithText("完成登录").performClick()
         compose.waitUntil(10_000) { sessionResets == 2 }

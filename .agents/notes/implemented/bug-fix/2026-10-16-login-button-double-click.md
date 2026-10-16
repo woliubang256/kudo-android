@@ -17,17 +17,19 @@ Status: implemented
 
 ## Consequences
 
-玻璃顶部文字按钮不再由外层容器重复响应点击；非玻璃回退按钮行为保持不变。`n
+玻璃顶部文字按钮不再由外层容器重复响应点击；非玻璃回退按钮行为保持不变。
 
 ## WebView crash fallback (2026-10-17)
 
-Version comparison showed that 0.2.7 changed the login WebView page from the 0.2.6 plain Column and PageTopBar structure to MaterialPageScaffold with TopBarTextButton. Because reports describe an immediate crash when tapping login, the login WebView page now uses the 0.2.6 non-liquid structure while retaining renderer-exit handling. Other native pages keep their current material until this regression is verified.
+版本对比发现 0.2.7 将登录 WebView 页从 0.2.6 的普通 Column 和 PageTopBar 切换到 MaterialPageScaffold 与 TopBarTextButton。由于用户反馈点击登录立即闪退，默认分支恢复普通顺序布局、不创建采样源，保留渲染进程退出处理；高级分支仅在用户明确开启网页高级材质后启用。其他原生页面材质保持不变，当前设备测试不能证明已解决其他厂商系统的闪退。
 
 
 
 ## WebView material preference (2026-10-17)
 
 网页高级材质默认关闭，使用 `advanced_webview_material` 同时读取和保存，重建 AppSettings 后保留用户选择。WebViewMaterialSettingsUiTest 使用隔离偏好验证默认关闭、开启后重建仍开启、关闭后重建仍关闭及其他设置不变；修复前真机已复现重建后错误回到关闭。
+
+登录页读取 LocalDisplaySettings 的网页材质偏好，传给 MaterialPageScaffold，顶部完成操作使用单一点击源的 TopBarTextButton。此前页面固定为普通 Column，导致用户在设置开启后仍看不到高级分支。LoginWebViewUiTest 先复现开启偏好后无采样层，再分别覆盖普通与高级登录的采样选择、验证码高度、视口随可用空间缩放且不重载，以及一次完成点击只检查一次会话。
 
 网页高级材质只影响原生顶部栏与按钮；WebView 仍位于工具栏下方，玻璃背后是主题背景，网页自身不变成透明玻璃。纯色背景下模糊和折射的可见差异较小，视觉判断必须同时核对页面是否实际接入开关。继续遵守[顶部材质](../feature/2026-10-16-page-toolbar-material.md)的有界网页视口约束，避免为放大效果遮挡网页首行或改写网页内容。
 
