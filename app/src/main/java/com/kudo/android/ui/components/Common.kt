@@ -50,10 +50,14 @@ fun mediaUrl(value: String): String? {
 
 @Composable
 fun PageTopBar(title: String, back: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).statusBarsPadding().heightIn(min = 58.dp).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回") }
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        actions()
+    CompositionLocalProvider(LocalToolbarActions provides true) {
+        Row(Modifier.fillMaxWidth().then(if (LocalToolbarBackdrop.current == null) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier)
+            .statusBarsPadding().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            actions()
+        }
     }
 }
 

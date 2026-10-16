@@ -26,6 +26,10 @@ import com.kudo.android.ui.theme.LogoYellow
 
 @Composable
 internal fun CommunityIconButton(icon: ImageVector, description: String, action: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    if (LocalToolbarActions.current) {
+        TopBarIconButton(icon, description, action, modifier, enabled)
+        return
+    }
     Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
         Icon(icon, description, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .6f else .25f))
     }
@@ -34,6 +38,10 @@ internal fun CommunityIconButton(icon: ImageVector, description: String, action:
 @Composable
 internal fun CommunityButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, compact: Boolean = false,
     shape: Shape = RoundedCornerShape(4.dp)) {
+    if (LocalToolbarActions.current) {
+        TopBarTextButton(text, onClick, modifier, enabled)
+        return
+    }
     Box(modifier.clip(shape).background(LogoYellow.copy(alpha = if (enabled) 1f else 0.18f))
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .heightIn(min = if (compact) 36.dp else 48.dp).padding(horizontal = 18.dp, vertical = if (compact) 6.dp else 11.dp), contentAlignment = Alignment.Center) {
