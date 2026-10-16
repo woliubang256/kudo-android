@@ -12,7 +12,7 @@ Status: implemented
 
 列表改为全屏采样内容，顶部contentPadding随折叠视口高度变化，保留先收起头部再滚动列表、先回列表顶部再展开的顺序。采样源包含列表与原头部，不包含兄弟节点中的紧凑玻璃工具栏，防止祖先采样导致RenderNode环。工具栏使用首页相同的20%表面色、4dp模糊和液态24/24dp折射；半透明与旧系统保留既有94%表面色降级。零圆角形状保持lens契约，不另造磨砂参数。
 
-紧凑身份颜色随头图淡出过渡到主题onSurface，状态栏在过渡中点切换到主题表面适用的深/浅图标，离开仍恢复默认。头像、昵称、等级和箭头保留；“不显示图片”指顶部背景，不移除身份头像。
+紧凑身份颜色随头图淡出过渡到主题onSurface，状态栏在过渡中点切换到主题表面适用的深/浅图标，离开仍恢复默认。头像、昵称、等级和箭头保留；“不显示图片”指顶部背景，不移除身份头像。吸顶后的主页箭头使用48dp独立玻璃按钮，和身份栏采样同一兄弟内容源；身份栏高度与折叠终点同步为60dp，展开头部的整排身份入口和等级分流不变。
 
 ## Existing note audit
 
@@ -30,6 +30,7 @@ Status: implemented
 ## Testing
 
 - 修改运行时源码前，pinnedHeaderUsesSelectedMaterialWithoutPictureAndRestoresExpandedHeader在红绿图片夹具上失败：LIGHT/LIQUID吸顶仍保留绿色头图，记录 artifacts/member-material-repro-device.txt。
+- 吸顶主页箭头新增独立容器断言：浅深色×三种材质均为48dp方形触控区，按钮不进入内容采样源；相关 MemberHeaderUiTest / MemberHeaderStatusUiTest 仍全部通过。
 - Debug与AndroidTest构建通过（artifacts/member-material-final-build.txt）。先读构建配置默认版本及真机2011 / 0.2.6-dev，再显式传入相同版本；核对SHA-256签名一致后使用adb install -r覆盖主包，测试包-r -t安装并手动am instrument，无卸载或清数据。
 - 首轮12项中账号/消息5项和顶部3项通过，另外3项暴露旧测试契约：未合并树包含持续测量的隐藏展开昵称、白色角标断言依赖系统主题、吸顶状态栏仍按旧图片白底断言。紧凑文字按祖先定位、角标固定浅色、状态栏迁移到浅深色新契约后，最终MemberHeaderUiTest与MemberHeaderStatusUiTest共7/7通过，18.341秒（artifacts/member-material-final-device.txt），crash buffer为空。运行时代码未因这些测试迁移再变更，已通过的5项账号/消息测试不重复运行。
 - 顶部测试覆盖浅深色×三种材质共6组合：展开红绿图片、吸顶去头图、文字onSurface颜色、采样内容与工具栏为兄弟、反向展开恢复原图和高度、退出恢复状态栏；并回归26dp留白、头像角标、真实触摸整排/等级分流、箭头、280dp窗口与130%字号及吸顶重测。六组合截图保存为 artifacts/member-material-{light,dark}-{liquid,blur,translucent}.png，已独立查看浅深色液态截图，不以用例通过代替所有材质/设备的人工验收。

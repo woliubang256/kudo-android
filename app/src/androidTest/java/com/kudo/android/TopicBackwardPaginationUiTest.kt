@@ -59,10 +59,12 @@ class TopicBackwardPaginationUiTest {
             jump(fixture)
             val viewport = compose.onNodeWithTag("topic-posts").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithTag("topic-posts").performScrollToIndex(0)
-            val titleHeight = compose.onNodeWithText(fixture.title, useUnmergedTree = true).fetchSemanticsNode().size.height
+            val titleNode = compose.onNodeWithText(fixture.title, useUnmergedTree = true).fetchSemanticsNode()
+            val titleBottom = titleNode.positionInRoot.y + titleNode.size.height
             val density = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
             compose.onNodeWithTag("topic-posts").performSemanticsAction(SemanticsActions.ScrollBy) {
-                it(0f, titleHeight + 40f * density - viewport.height + 120f)
+                // The title starts below the measured overlay toolbar, inside the full-height list.
+                it(0f, titleBottom + 24f * density - viewport.bottom + 120f)
             }
             compose.onNodeWithTag("post-1490").assertIsNotDisplayed()
             compose.waitUntil(3000) { fixture.vm.state.value.loadingPrevious && fixture.backwardRequests.size == 1 }

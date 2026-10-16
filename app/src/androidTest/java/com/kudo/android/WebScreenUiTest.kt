@@ -100,14 +100,13 @@ class WebScreenUiTest {
 
     @Test fun darkLoadingKeepsWindowStatusBarAndToolbarOnTheSameTheme() {
         compose.runOnUiThread { compose.activity.enableEdgeToEdge() }
-        val surface = AtomicInteger()
         val background = AtomicInteger()
         val gate = CountDownLatch(1)
         responseGate = gate
         try {
             compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK)) {
                 val colors = MaterialTheme.colorScheme
-                SideEffect { surface.set(colors.surface.toArgb()); background.set(colors.background.toArgb()) }
+                SideEffect { background.set(colors.background.toArgb()) }
                 WebScreen(start, {}, {}, ::create)
             } }
             fun assertDarkChrome(stage: String) {
@@ -116,9 +115,17 @@ class WebScreenUiTest {
                 val titleBounds = compose.onNodeWithText(if (stage == "initial") "网页" else "指南").fetchSemanticsNode().boundsInRoot
                 val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
                 try {
-                    assertEquals("$stage status bar background", surface.get(), screenshot.getPixel(screenshot.width / 2, 4))
-                    assertEquals("$stage toolbar background", surface.get(), screenshot.getPixel(screenshot.width - 4, titleBounds.center.y.toInt()))
+                    val status = screenshot.getPixel(screenshot.width / 2, 4)
+                    val toolbar = screenshot.getPixel(screenshot.width - 4, titleBounds.center.y.toInt())
+                    assertTrue("$stage status bar and glass toolbar share the same dark tone",
+                        kotlin.math.abs(android.graphics.Color.red(status) - android.graphics.Color.red(toolbar)) <= 3 &&
+                        kotlin.math.abs(android.graphics.Color.green(status) - android.graphics.Color.green(toolbar)) <= 3 &&
+                        kotlin.math.abs(android.graphics.Color.blue(status) - android.graphics.Color.blue(toolbar)) <= 3)
+                    assertTrue("$stage chrome stays dark", androidx.core.graphics.ColorUtils.calculateLuminance(status) < .15)
                 } finally { screenshot.recycle() }
+                val header = compose.onNodeWithTag("material-page-header").fetchSemanticsNode().boundsInRoot
+                val content = compose.onNodeWithTag("web-content").fetchSemanticsNode().boundsInRoot
+                assertTrue("$stage web viewport stays below the toolbar", content.top >= header.bottom)
                 compose.runOnIdle {
                     assertFalse(WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView).isAppearanceLightStatusBars)
                     assertEquals("$stage native window fallback", background.get(), (compose.activity.window.decorView.background as? ColorDrawable)?.color)

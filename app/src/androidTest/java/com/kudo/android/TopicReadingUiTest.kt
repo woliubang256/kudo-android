@@ -213,6 +213,26 @@ class TopicReadingUiTest {
         compose.runOnIdle { assertEquals(before, batches.size) }
     }
 
+    @Test fun bodyBehindTheGlassToolbarIsExcludedFromReadingExposure() {
+        var inset by mutableStateOf(80.dp)
+        var active by mutableStateOf(true)
+        val read = mutableSetOf<Int>()
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicReadingEnvironment(12, 7, active, {}, { read += it }) {
+                PostReadingViewport(topInset = inset) { viewport ->
+                    Column(Modifier.fillMaxWidth().height(240.dp).then(viewport)) {
+                        PostReadingContent(1, true) { Box(Modifier.fillMaxWidth().height(60.dp)) }
+                    }
+                }
+            }
+        } }
+        compose.waitForIdle()
+        SystemClock.sleep(1300)
+        compose.runOnIdle { assertTrue("顶部玻璃遮挡的正文不能标读", read.isEmpty()); active = false; inset = 0.dp }
+        compose.runOnIdle { active = true }
+        compose.waitUntil(4000) { 1 in read }
+    }
+
     @Test fun longBodyIsNotReadFromItsHeaderButCountsWhenItsEndIsVisible() {
         var active by mutableStateOf(true)
         val batches = mutableListOf<TopicReadingBatch>()
