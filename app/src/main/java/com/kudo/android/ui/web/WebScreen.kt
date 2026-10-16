@@ -30,6 +30,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kudo.android.ui.LinuxDoLink
 import com.kudo.android.ui.ExternalAppLinkPolicy
+import com.kudo.android.ui.web.webViewProviderLabel
 import com.kudo.android.data.ExternalLinkMode
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
@@ -165,7 +166,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 if (page.view === view) page.view = null
                                 progress = 100
                                 awaitingContent = false
-                                error = "系统 WebView 渲染进程已退出，请更新 Android System WebView 或 Chrome 后重试。"
+                                error = "系统 WebView 渲染进程已退出（${webViewProviderLabel(view.context)}），请更新 Android System WebView 或 Chrome 后重试。"
                                 webViewGeneration++
                                 return true
                             }

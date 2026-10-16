@@ -19,3 +19,6 @@ Handle `onRenderProcessGone` in both the login WebView and the in-app web reader
 ## Consequences
 
 Java/Kotlin-level renderer termination callbacks now degrade to an error state when Android delivers the callback. Provider crashes during WebView construction or system-level failures may still terminate the process; provider diagnostics and a fallback entry point remain follow-up work.
+## Follow-up
+
+Renderer error messages include the current WebView provider package and version so affected users can report diagnostics without Logcat.

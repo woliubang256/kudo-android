@@ -15,6 +15,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.kudo.android.ui.components.PageTopBar
 import com.kudo.android.ui.components.MaterialPageScaffold
 import com.kudo.android.ui.components.TopBarTextButton
+import com.kudo.android.ui.web.webViewProviderLabel
 import kotlinx.coroutines.launch
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -62,7 +63,7 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
                         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                             if (webView === view) webView = null
                             loading = false
-                            message = "系统 WebView 渲染进程已退出，请更新 Android System WebView 或 Chrome 后重试。"
+                            message = "系统 WebView 渲染进程已退出（${webViewProviderLabel(view.context)}），请更新 Android System WebView 或 Chrome 后重试。"
                             webViewGeneration++
                             return true
                         }
