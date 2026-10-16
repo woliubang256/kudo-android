@@ -28,6 +28,7 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
+import com.kyant.backdrop.Backdrop
 
 internal fun profileHeaderImage(member: Member, card: String): String = card.ifBlank {
     member.animatedAvatar.ifBlank { member.avatar.replace("{size}", "512") }
@@ -111,14 +112,14 @@ private fun HeaderStat(value: Int?, label: String, modifier: Modifier = Modifier
 @Composable
 internal fun ProfileToolbar(member: Member, collapsed: Boolean, viewerId: Int?, busy: Boolean, follow: () -> Unit,
     back: () -> Unit, search: () -> Unit, more: () -> Unit, modifier: Modifier = Modifier,
-    collapseFraction: Float = if (collapsed) 1f else 0f, ink: Color = Color.White) {
+    collapseFraction: Float = if (collapsed) 1f else 0f, ink: Color = Color.White,
+    backdrop: Backdrop? = LocalToolbarBackdrop.current) {
     val color = ink
     val identityAlpha = profileToolbarIdentityAlpha(collapseFraction)
     Row(modifier.fillMaxWidth().testTag("profile-toolbar")
-        .statusBarsPadding().height(48.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = back), contentAlignment = Alignment.Center) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "返回", Modifier.size(24.dp), tint = color)
-        }
+        .statusBarsPadding().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = backdrop, tint = color)
         Box(Modifier.graphicsLayer { alpha = identityAlpha }) {
             Avatar(member, 30.dp, Modifier.testTag("profile-toolbar-avatar"))
         }
@@ -127,12 +128,8 @@ internal fun ProfileToolbar(member: Member, collapsed: Boolean, viewerId: Int?, 
         Box(Modifier.graphicsLayer { alpha = identityAlpha }) {
             ProfileFollowButton(member, viewerId, busy, follow, Modifier.testTag("profile-toolbar-follow"), compact = true)
         }
-        Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = search), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Search, "搜索该用户的帖子", Modifier.size(23.dp), tint = color)
-        }
-        Box(Modifier.size(40.dp).clickable(role = Role.Button, onClick = more), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.MoreVert, "个人主页更多操作", Modifier.size(23.dp), tint = color)
-        }
+        TopBarIconButton(Icons.Rounded.Search, "搜索该用户的帖子", search, backdrop = backdrop, tint = color)
+        TopBarIconButton(Icons.Rounded.MoreVert, "个人主页更多操作", more, backdrop = backdrop, tint = color)
     }
 }
 

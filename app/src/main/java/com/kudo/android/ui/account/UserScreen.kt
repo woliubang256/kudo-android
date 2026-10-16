@@ -215,7 +215,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                 .testTag("public-profile-toolbar-material")) {
                 ProfileToolbar(profile.member, collapsed, viewerId, state.followBusy,
                     { if (viewerId == null) login() else follow() }, back, search, { moreVisibility.targetState = true },
-                    collapseFraction = fraction, ink = lerp(Color.White, MaterialTheme.colorScheme.onSurface, compactIdentityAlpha))
+                    collapseFraction = fraction, ink = lerp(Color.White, MaterialTheme.colorScheme.onSurface, compactIdentityAlpha), backdrop = backdrop)
             }
         }
         CommunitySheet(detailsVisibility, "个人资料", { detailsVisibility.targetState = false }, showActions = false) {
@@ -265,13 +265,14 @@ private fun ProfileMenuRow(key: String, icon: ImageVector, title: String, action
 
 @Composable
 private fun ProfileTabs(selected: Int, select: (Int) -> Unit) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup()
-        .padding(horizontal = 5.dp).testTag("profile-tabs"), verticalAlignment = Alignment.CenterVertically) {
-        ProfileTab.entries.forEachIndexed { index, tab -> key(tab) {
+    BalancedTabRow(ProfileTab.entries.map { it.label }, MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
+        Modifier.testTag("profile-tabs")) { index, slot ->
+        val tab = ProfileTab.entries[index]
+        key(tab) {
             val active = selected == index
             val bring = remember { BringIntoViewRequester() }
             LaunchedEffect(active) { if (active) bring.bringIntoView() }
-            Box(Modifier.bringIntoViewRequester(bring).selectable(active, role = Role.Tab, onClick = { select(index) })
+            Box(slot.bringIntoViewRequester(bring).selectable(active, role = Role.Tab, onClick = { select(index) })
                 .heightIn(min = 40.dp).padding(horizontal = 12.dp).testTag("profile-tab-${tab.name}"), contentAlignment = Alignment.Center) {
                 Text(tab.label, Modifier.padding(vertical = 7.dp).drawBehind {
                     if (active) drawRoundRect(Brush.horizontalGradient(listOf(LogoYellow.copy(alpha = .22f), LogoYellow.copy(alpha = .95f), LogoYellow.copy(alpha = .35f))),
@@ -279,6 +280,6 @@ private fun ProfileTabs(selected: Int, select: (Int) -> Unit) {
                 }, fontSize = if (active) 16.sp else 14.sp, lineHeight = 23.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                     color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        } }
+        }
     }
 }
