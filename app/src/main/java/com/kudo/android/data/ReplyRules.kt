@@ -73,7 +73,12 @@ internal fun parsePersonalMessageRules(html: String): PersonalMessageRules {
 
 suspend fun CommunityRepository.replyRules(topicId: Int, categoryId: Int? = null): ReplyRules {
     require(topicId > 0)
-    val category = categoryId ?: detail(topicId).categoryId
+    val topic = if (categoryId == null || categoryId <= 0) client.get("/t/$topicId.json") else null
+    if (topic?.text("archetype") == "private_message") {
+        val rules = personalMessageRules()
+        return ReplyRules(rules.minimum, rules.maximum)
+    }
+    val category = topic?.optInt("category_id") ?: requireNotNull(categoryId)
     return parseReplyRules(client.siteSettingsHtml(), client.get("/site.json"), category)
 }
 
