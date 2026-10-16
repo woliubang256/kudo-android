@@ -223,13 +223,13 @@ fun SearchScreen(
                                     fontWeight = if (state.sort == sort) FontWeight.Bold else FontWeight.Normal)
                             }
                         }
-                        Box(Modifier.padding(end = 8.dp, bottom = 4.dp)) {
+                        Box(Modifier.padding(end = 8.dp, bottom = 2.dp)) {
                             TopBarIconButton(Icons.Rounded.Tune, "高级筛选", {
                                 focus.clearFocus(); keyboard?.hide()
                                 if (!filtersOpen) { draft = parseSearchFilters(query); loadMetadata() }
                                 filtersOpen = !filtersOpen
                             }, Modifier.testTag("search-filter-toggle"), backdrop = contentBackdrop,
-                                touchSize = 40.dp, visualSize = 36.dp, iconSize = 22.dp)
+                                touchSize = 36.dp, visualSize = 32.dp, iconSize = 20.dp)
                             if (state.filters.count > 0) Text(state.filters.count.toString(), Modifier.align(Alignment.TopEnd).padding(4.dp), color = LogoYellow, style = MaterialTheme.typography.labelSmall)
                         }
                     }
