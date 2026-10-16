@@ -220,10 +220,10 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                     ink = lerp(Color.White, MaterialTheme.colorScheme.onSurface, compactIdentityAlpha), backdrop = backdrop)
             }
         }
-        CommunitySheet(detailsVisibility, "个人资料", { detailsVisibility.targetState = false }, showActions = false) {
+        CommunitySheet(detailsVisibility, "个人资料", { detailsVisibility.targetState = false }, backdrop = backdrop, showActions = false) {
             profile?.let { PublicProfileDetails(it, state.summary, openLink) }
         }
-        CommunitySheet(moreVisibility, "个人主页", { moreVisibility.targetState = false }, showTitle = false, showActions = false) {
+        CommunitySheet(moreVisibility, "个人主页", { moreVisibility.targetState = false }, backdrop = backdrop, showTitle = false, showActions = false) {
             ProfileMenuRow("copy", Icons.Rounded.ContentCopy, "复制链接") {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("个人主页", pageUrl))
                 moreVisibility.targetState = false
@@ -235,7 +235,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
             ProfileMenuRow("web", Icons.Rounded.Language, "网页查看") { moreVisibility.targetState = false; openWeb(pageUrl) }
             ProfileMenuRow("refresh", Icons.Rounded.Refresh, "刷新") { moreVisibility.targetState = false; refresh() }
         }
-        CommunitySheet(followsVisibility, if (state.showingFollowers == true) "粉丝" else "关注", closeFollows, showActions = false, scrollContent = false) {
+        CommunitySheet(followsVisibility, if (state.showingFollowers == true) "粉丝" else "关注", closeFollows, backdrop = backdrop, showActions = false, scrollContent = false) {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
             if (state.followsLoading) item { LoadingRow() }
             state.followsError?.let { error -> item { ErrorState(error, { showFollows(state.showingFollowers == true) }, login) } }
@@ -249,7 +249,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
             }
             }
         }
-        CommunitySheet(badgeVisibility, selectedBadge?.name.orEmpty(), { badgeVisibility.targetState = false }, showActions = false) {
+        CommunitySheet(badgeVisibility, selectedBadge?.name.orEmpty(), { badgeVisibility.targetState = false }, backdrop = backdrop, showActions = false) {
             selectedBadge?.let { badge -> RichContent(badge.longDescription.ifBlank { badge.description }, openLink, {}) }
         }
     }

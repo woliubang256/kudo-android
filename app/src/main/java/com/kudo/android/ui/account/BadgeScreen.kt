@@ -34,6 +34,8 @@ import com.kudo.android.ui.components.*
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import com.kudo.android.ui.topic.RichContent
 import kotlinx.coroutines.*
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @Composable
 internal fun BadgeScreen(user: Member, repository: CommunityRepository, back: () -> Unit, login: () -> Unit, website: (String) -> Unit) {
@@ -57,9 +59,11 @@ internal fun BadgePage(badges: List<UserBadge>, loading: Boolean = false, error:
     val sheet = remember { MutableTransitionState(false) }
     val showing = sheet.currentState || sheet.targetState
     val scroll = rememberLazyGridState()
+    val backdrop = rememberLayerBackdrop()
     val columns = GridCells.Adaptive(100.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.15f))
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        MaterialPageScaffold(modifier = Modifier.then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
+        MaterialPageScaffold(modifier = Modifier.layerBackdrop(backdrop)
+            .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
             .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup(), header = {
             AccountPageTopBar("我的徽章", back) {
                 if (!loading && error == null) Text("已获得 ${badges.count { it.earned }} / ${badges.size}",
@@ -90,7 +94,7 @@ internal fun BadgePage(badges: List<UserBadge>, loading: Boolean = false, error:
                 }
             }
         }
-        CommunitySheet(sheet, selected?.name ?: "徽章详情", { sheet.targetState = false }, showActions = false) {
+        CommunitySheet(sheet, selected?.name ?: "徽章详情", { sheet.targetState = false }, backdrop = backdrop, showActions = false) {
             selected?.let { badge ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     BadgeEmblem(badge, Modifier.size(64.dp))

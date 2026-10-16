@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.*
 import org.json.JSONObject
 
@@ -40,6 +42,7 @@ internal fun AccountRecordsScreen(destination: AccountDestination, user: Member,
     val sheet = remember { MutableTransitionState(false) }
     val scroll = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val backdrop = rememberLayerBackdrop()
     LaunchedEffect(user.id, destination, refresh) {
         loading = true; error = null
         try { records = withContext(Dispatchers.IO) { repository.accountRecords(destination, user.username) } }
@@ -48,7 +51,7 @@ internal fun AccountRecordsScreen(destination: AccountDestination, user: Member,
     }
     BackHandler(busy) { }
     Box(Modifier.fillMaxSize()) {
-        MaterialPageScaffold(header = {
+        MaterialPageScaffold(modifier = Modifier.layerBackdrop(backdrop), header = {
             AccountPageTopBar(destination.title, { if (!busy) back() }) {
                 if (destination == AccountDestination.INVITES) CommunityIconButton(Icons.Rounded.Add, "创建邀请链接", { selected = null; sheet.targetState = true })
                 if (destination == AccountDestination.CHAT) CommunityIconButton(Icons.Rounded.AddComment, "发起聊天", { selected = null; sheet.targetState = true })
@@ -83,7 +86,7 @@ internal fun AccountRecordsScreen(destination: AccountDestination, user: Member,
             }
         }
         CommunitySheet(sheet, when (destination) { AccountDestination.INVITES -> "创建邀请链接"; AccountDestination.CHAT -> "发起聊天"; else -> "待审核内容" },
-            { if (!busy) sheet.targetState = false }, dismissEnabled = !busy, showActions = false) {
+            { if (!busy) sheet.targetState = false }, backdrop = backdrop, dismissEnabled = !busy, showActions = false) {
             if (destination == AccountDestination.INVITES) {
                 CommunityTextField(description, { description = it }, placeholder = "备注（选填）", enabled = !busy)
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

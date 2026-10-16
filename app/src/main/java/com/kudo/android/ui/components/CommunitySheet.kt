@@ -1,5 +1,6 @@
 package com.kudo.android.ui.components
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -21,11 +23,18 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
+import com.kudo.android.data.GlassMode
+import com.kudo.android.ui.theme.LocalDisplaySettings
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 internal val LocalSheetActions = staticCompositionLocalOf { false }
+internal val LocalSheetBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 
 /** Same-window sheet: children scroll first; downward overflow moves the panel. */
 @Composable
@@ -34,6 +43,8 @@ internal fun CommunitySheet(
     modifier: Modifier = Modifier, showTitle: Boolean = false, dismissEnabled: Boolean = true,
     scrollContent: Boolean = true, showActions: Boolean = false, maxHeightFraction: Float = 1f,
     containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surface,
+    backdrop: Backdrop? = LocalSheetBackdrop.current,
+    glass: GlassMode = LocalDisplaySettings.current.glass,
     contentPadding: PaddingValues = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
     actions: @Composable RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -46,6 +57,10 @@ internal fun CommunitySheet(
     var settling by remember { mutableStateOf<Job?>(null) }
     val currentDismiss by rememberUpdatedState(dismiss)
     val canDismiss by rememberUpdatedState(dismissEnabled && visibility.targetState)
+    val light = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    val canBlur = backdrop != null && glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
+    val canRefract = backdrop != null && glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
+    val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     val minimum = with(density) { 72.dp.toPx() }
     val maximum = with(density) { 160.dp.toPx() }
     val flingSpeed = with(density) { 1000.dp.toPx() }
@@ -94,7 +109,14 @@ internal fun CommunitySheet(
                 .widthIn(max = 600.dp).fillMaxWidth().heightIn(max = maxPanelHeight)
                 .animateEnterExit(enter = slideInVertically(tween(240)) { it }, exit = slideOutVertically(tween(180)) { it })
                 .offset { IntOffset(0, offset.roundToInt()) }.onSizeChanged { panelHeight = it.height.toFloat().coerceAtLeast(1f) }
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)).background(containerColor)
+                .clip(panelShape)
+                .then(if (backdrop != null) Modifier.drawBackdrop(backdrop, shape = { panelShape }, effects = {
+                    if (canBlur) blur((if (light) 18.dp else 10.dp).toPx())
+                    if (canRefract) lens(20.dp.toPx(), 40.dp.toPx(), depthEffect = true)
+                }, onDrawSurface = {
+                    drawRect(containerColor.copy(alpha = if (canBlur) if (light) .68f else .52f else .94f))
+                }) else Modifier.background(containerColor))
+                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = if (backdrop != null) .16f else .08f), panelShape)
                 .nestedScroll(nestedScroll).focusRequester(focus)
                 .focusProperties { onExit = { if (visibility.targetState) cancelFocusChange() } }.focusGroup()
                 .pointerInput(Unit) { detectTapGestures(onTap = {}) }
@@ -102,14 +124,16 @@ internal fun CommunitySheet(
                 Box(Modifier.fillMaxWidth().height(32.dp).testTag("sheet-drag-handle")
                     .draggable(rememberDraggableState { drag(it) }, Orientation.Vertical, enabled = dismissEnabled,
                         onDragStarted = { settling?.cancel() }, onDragStopped = { settle(it) }), contentAlignment = Alignment.Center) {
-                    Box(Modifier.width(36.dp).height(4.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f), RoundedCornerShape(2.dp)))
+                    Box(Modifier.width(36.dp).height(5.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f), RoundedCornerShape(3.dp)))
                 }
-                if (showTitle) Text(title, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 14.dp), style = MaterialTheme.typography.titleMedium)
+                if (showTitle) Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 14.dp)) {
+                    Text(title, Modifier.align(Alignment.Center), style = MaterialTheme.typography.titleMedium)
+                }
                 Column(Modifier.weight(1f, fill = false)
                     .then(if (scrollContent) Modifier.verticalScroll(rememberScrollState()) else Modifier)
                     .padding(contentPadding), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
                 if (showActions) CompositionLocalProvider(LocalSheetActions provides true) {
-                    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).navigationBarsPadding(),
+                    Row(Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color.Transparent).navigationBarsPadding(),
                         verticalAlignment = Alignment.CenterVertically, content = actions)
                 } else Spacer(Modifier.navigationBarsPadding())
             }

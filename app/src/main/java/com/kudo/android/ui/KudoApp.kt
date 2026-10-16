@@ -373,11 +373,12 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         val replyVisibility = remember(account.user?.id) { MutableTransitionState(replyTarget != null) }
                         val keyboard = LocalSoftwareKeyboardController.current
                         val replyShowing = replyVisibility.currentState || replyVisibility.targetState
+                        val replyBackdrop = rememberLayerBackdrop()
                         LaunchedEffect(replyVisibility.currentState, replyVisibility.targetState) {
                             if (!replyVisibility.currentState && !replyVisibility.targetState) replyTarget = null
                         }
                         Box(Modifier.fillMaxSize()) {
-                        Box(Modifier.fillMaxSize().then(if (replyShowing) Modifier.clearAndSetSemantics {} else Modifier)
+                        Box(Modifier.fillMaxSize().layerBackdrop(replyBackdrop).then(if (replyShowing) Modifier.clearAndSetSemantics {} else Modifier)
                             .focusProperties { onEnter = { if (replyShowing) cancelFocusChange() } }.focusGroup()) {
                         TopicScreen(state, display.glass, { nav.popBackStack() }, vm::refresh, vm::more, ::login, { authenticated { vm.like(it) } }, { authenticated { vm.bookmark(it) } }, { post -> authenticated { replyTarget = post?.number ?: 0; replyVisibility.targetState = true } }, ::user, {}, ::openLink,
                             { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "${state.detail?.title.orEmpty()}\nhttps://linux.do/t/$id") }, "分享话题")) },
@@ -397,7 +398,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 vm.refresh(); refreshEpoch++
                                 showMessage(if (result.queued) "内容已提交，等待社区审核" else "发布成功")
                             } }
-                            ReplyEditorSheet(replyVisibility, editorVm.sending, { replyVisibility.targetState = false }) {
+                            ReplyEditorSheet(replyVisibility, editorVm.sending, { replyVisibility.targetState = false }, backdrop = replyBackdrop) {
                                 val replyAuthor = if (target > 0) state.allPosts.firstOrNull { it.number == target }?.author
                                     else state.authorProfile ?: state.detail?.author
                                 EditorScreen(editorVm, account.categories, account.categoryError, account::loadCategories,

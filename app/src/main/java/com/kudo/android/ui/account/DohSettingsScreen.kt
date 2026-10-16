@@ -146,7 +146,8 @@ internal fun DohSettingsScreen(network: DohNetwork, requests: RequestSettings, b
             }
         }
         CommunitySheet(panel, when (mode) { "edit" -> if (serverId == null) "添加服务器" else "编辑服务器"; "view" -> "服务器信息"; "delete" -> "删除服务器？"; else -> "服务器管理" },
-            ::dismiss, showTitle = mode != "actions", showActions = mode != "actions", actions = {
+            ::dismiss, backdrop = backdrop, glass = LocalDisplaySettings.current.glass,
+            showTitle = mode != "actions", showActions = mode != "actions", actions = {
                 if (mode == "view") LiquidModalAction("完成", ::dismiss, Modifier.fillMaxWidth(), primary = true)
                 else {
                     LiquidModalAction("取消", ::dismiss, Modifier.weight(1f))

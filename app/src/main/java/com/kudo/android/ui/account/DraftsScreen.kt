@@ -24,6 +24,8 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.distinctUntilChanged
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +42,7 @@ internal fun DraftsScreen(user: Member, repository: CommunityRepository, setting
     val sheet = remember { MutableTransitionState(false) }
     val scroll = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val backdrop = rememberLayerBackdrop()
     suspend fun load(more: Boolean) {
         loading = true; error = null
         local = settings.drafts(user.id)
@@ -61,7 +64,7 @@ internal fun DraftsScreen(user: Member, repository: CommunityRepository, setting
             }
     }
     Box(Modifier.fillMaxSize()) {
-        MaterialPageScaffold(header = {
+        MaterialPageScaffold(modifier = Modifier.layerBackdrop(backdrop), header = {
             AccountPageTopBar("我的草稿", back) { CommunityIconButton(Icons.Rounded.Refresh, "刷新草稿", { refresh++ }, enabled = !loading) }
         }) { padding ->
             PullToRefreshBox(isRefreshing = refreshing, onRefresh = { scope.launch { load(false) } }, state = pull,
@@ -84,7 +87,7 @@ internal fun DraftsScreen(user: Member, repository: CommunityRepository, setting
                 }
             }
         }
-        CommunitySheet(sheet, "删除草稿", { if (!loading) sheet.targetState = false }, dismissEnabled = !loading, showActions = false) {
+        CommunitySheet(sheet, "删除草稿", { if (!loading) sheet.targetState = false }, backdrop = backdrop, dismissEnabled = !loading, showActions = false) {
             Text("删除后无法恢复。", fontSize = 14.sp)
             error?.let { Text(it.message.orEmpty(), color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
             CommunityButton(if (loading) "正在删除…" else "删除草稿", {
@@ -128,6 +131,7 @@ internal fun CloudDraftScreen(key: String, user: Member, repository: CommunityRe
     val scope = rememberCoroutineScope()
     val categorySheet = remember { MutableTransitionState(false) }
     val scroll = rememberLazyListState()
+    val backdrop = rememberLayerBackdrop()
     LaunchedEffect(user.id, key, refresh) {
         loading = true; error = null
         try {
@@ -140,7 +144,7 @@ internal fun CloudDraftScreen(key: String, user: Member, repository: CommunityRe
     BackHandler(loading) { }
     fun change(value: Draft) { draft = value; settings.saveDraft(backupKey, value); message = "本机副本已保存" }
     Box(Modifier.fillMaxSize()) {
-        MaterialPageScaffold(modifier = Modifier.imePadding(), header = {
+        MaterialPageScaffold(modifier = Modifier.imePadding().layerBackdrop(backdrop), header = {
             AccountPageTopBar("编辑云端草稿", { if (!loading) back() }) {
                 CommunityButton("保存", {
                     val snapshot = saved ?: return@CommunityButton
@@ -185,7 +189,7 @@ internal fun CloudDraftScreen(key: String, user: Member, repository: CommunityRe
                 }
             }
         }
-        CommunitySheet(categorySheet, "选择分类", { categorySheet.targetState = false }, showActions = false) {
+        CommunitySheet(categorySheet, "选择分类", { categorySheet.targetState = false }, backdrop = backdrop, showActions = false) {
             categories.forEach { category -> Text(category.name, Modifier.fillMaxWidth().clickable { change(draft.copy(categoryId = category.id)); categorySheet.targetState = false }.padding(vertical = 10.dp), fontSize = 14.sp) }
         }
     }

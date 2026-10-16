@@ -30,6 +30,8 @@ import com.kudo.android.ui.account.LocalWebVerification
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.components.liquid.LiquidModalAction
 import com.kudo.android.ui.theme.LogoYellow
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @Composable
 fun EditorScreen(vm: EditorViewModel, categories: List<Category>, categoryError: Throwable?, reloadCategories: () -> Unit, back: () -> Unit,
@@ -45,9 +47,10 @@ fun EditorScreen(vm: EditorViewModel, categories: List<Category>, categoryError:
 }
 
 @Composable
-internal fun ReplyEditorSheet(visibility: MutableTransitionState<Boolean>, sending: Boolean, dismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun ReplyEditorSheet(visibility: MutableTransitionState<Boolean>, sending: Boolean, dismiss: () -> Unit,
+    backdrop: com.kyant.backdrop.Backdrop? = null, content: @Composable ColumnScope.() -> Unit) {
     val keyboard = LocalSoftwareKeyboardController.current
-    CommunitySheet(visibility, "写回复", { if (!sending) { keyboard?.hide(); dismiss() } }, showTitle = false,
+    CommunitySheet(visibility, "写回复", { if (!sending) { keyboard?.hide(); dismiss() } }, backdrop = backdrop, showTitle = false,
         dismissEnabled = !sending, scrollContent = false, showActions = false, contentPadding = PaddingValues(0.dp), content = content)
 }
 
@@ -64,6 +67,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
     val tagSheet = remember { MutableTransitionState(false) }
     val modalShowing = categorySheet.currentState || categorySheet.targetState || tagSheet.currentState || tagSheet.targetState
     val bodyFocus = remember { FocusRequester() }
+    val sheetBackdrop = rememberLayerBackdrop()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val verification = LocalWebVerification.current
@@ -160,11 +164,13 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             }
         }
         if (reply) form(PaddingValues())
-        else MaterialPageScaffold(header = header, modifier = Modifier.imePadding()
-            .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
-            .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup(), content = form)
+        else Box(Modifier.fillMaxSize().layerBackdrop(sheetBackdrop)) {
+            MaterialPageScaffold(header = header, modifier = Modifier.imePadding()
+                .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
+                .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup(), content = form)
+        }
         if (!reply && !editing) CommunitySheet(categorySheet, "类别", { categorySheet.targetState = false },
-            containerColor = MaterialTheme.colorScheme.background) {
+            backdrop = sheetBackdrop, containerColor = MaterialTheme.colorScheme.background) {
             if (categories.isEmpty()) {
                 Text(categoryError?.message ?: "分类暂未加载", style = MaterialTheme.typography.bodyMedium)
                 CommunityButton("重新加载", reloadCategories)
@@ -184,7 +190,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                 }
             }
         }
-        if (!reply && !editing) EditorTags(tagSheet, draft.categoryId, draft.tags, tagSearch, sending) {
+        if (!reply && !editing) EditorTags(tagSheet, draft.categoryId, draft.tags, tagSearch, sending, backdrop = sheetBackdrop) {
             edit(draft.copy(tags = it))
         }
     }

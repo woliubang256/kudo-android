@@ -23,6 +23,7 @@ import com.kudo.android.data.TopicTag
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.components.liquid.LiquidModalAction
 import com.kudo.android.ui.theme.LogoYellow
+import com.kyant.backdrop.Backdrop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
@@ -31,7 +32,8 @@ import kotlinx.coroutines.isActive
 
 @Composable
 internal fun EditorTags(visibility: MutableTransitionState<Boolean>, categoryId: Int, tags: List<String>,
-    search: suspend (String, Int, List<TopicTag>) -> List<TopicTag>, sending: Boolean, apply: (List<String>) -> Unit) {
+    search: suspend (String, Int, List<TopicTag>) -> List<TopicTag>, sending: Boolean, backdrop: Backdrop? = null,
+    apply: (List<String>) -> Unit) {
     if (!visibility.currentState && !visibility.targetState) return
     var selected by remember(categoryId) { mutableStateOf(tags.distinct().map { TopicTag(it) }) }
     var query by remember(categoryId) { mutableStateOf("") }
@@ -60,7 +62,7 @@ internal fun EditorTags(visibility: MutableTransitionState<Boolean>, categoryId:
         }
         finally { if (requestJob.isActive) loading = false }
     }
-    CommunitySheet(visibility, "标签", ::dismiss, showTitle = true, dismissEnabled = !sending,
+    CommunitySheet(visibility, "标签", ::dismiss, backdrop = backdrop, showTitle = true, dismissEnabled = !sending,
         scrollContent = false, showActions = true, maxHeightFraction = .85f, actions = {
             LiquidModalAction("取消", ::dismiss, Modifier.weight(1f).testTag("editor-tags-cancel"))
             LiquidModalAction("确定", {

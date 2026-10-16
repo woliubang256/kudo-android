@@ -84,7 +84,7 @@ internal fun LiquidModal(
     if (actionSheet) {
         CommunitySheet(visibility, title, dismiss, showTitle = showTitle, showActions = showActions,
             scrollContent = scrollContent, dismissEnabled = dismissEnabled, containerColor = sheetBackground,
-            actions = actions, content = content)
+            backdrop = backdrop, glass = mode, actions = actions, content = content)
         return
     }
     val light = MaterialTheme.colorScheme.surface.luminance() > 0.5f

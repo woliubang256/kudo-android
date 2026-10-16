@@ -107,7 +107,7 @@ internal fun EditorToolSheet(title: String, dismiss: () -> Unit, content: @Compo
     }
     Dialog({ visibility.targetState = false }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize()) {
-            CommunitySheet(visibility, title, { visibility.targetState = false }, showTitle = true) { content { visibility.targetState = false } }
+            CommunitySheet(visibility, title, { visibility.targetState = false }, showTitle = true, backdrop = null) { content { visibility.targetState = false } }
         }
     }
 }

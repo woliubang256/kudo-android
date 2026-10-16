@@ -355,6 +355,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
         val boostPost = state.allPosts.firstOrNull { it.id == boostPostId }
         val boosting = boostPostId in state.busy
         CommunitySheet(boostVisibility, "Boost", { if (!boosting) closeBoost() }, showTitle = false,
+            backdrop = modalBackdrop, glass = glass,
             dismissEnabled = !boosting, scrollContent = false, showActions = false) {
             BoostForm(boostRaw, { boostRaw = it }, state, boosting,
                 send = { boostPost?.let { post -> boost(post, boostRaw) { boostRaw = ""; closeBoost() } } },
