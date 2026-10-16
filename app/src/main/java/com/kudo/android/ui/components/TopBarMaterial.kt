@@ -85,15 +85,21 @@ internal fun TopBarIconButton(
 internal fun TopBarTextButton(text: String, action: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val backdrop = LocalToolbarBackdrop.current
     if (backdrop != null) {
-        LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, modifier,
-            enabled = enabled, tint = LogoYellow, contentColor = Ink) {
-            Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        Box(modifier.height(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action),
+            contentAlignment = Alignment.Center) {
+            LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, Modifier.height(40.dp),
+                enabled = enabled, minimumHeight = 40.dp, tint = LogoYellow, contentColor = Ink) {
+                Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
         }
     } else {
-        Box(modifier.clip(CircleShape).background(LogoYellow.copy(alpha = if (enabled) 1f else .18f))
-            .clickable(enabled = enabled, role = Role.Button, onClick = action)
-            .heightIn(min = 48.dp).padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-            Text(text, color = Ink.copy(alpha = if (enabled) 1f else .38f), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        Box(modifier.height(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action),
+            contentAlignment = Alignment.Center) {
+            Box(Modifier.height(40.dp).clip(CircleShape)
+                .background(LogoYellow.copy(alpha = if (enabled) 1f else .18f))
+                .padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                Text(text, color = Ink.copy(alpha = if (enabled) 1f else .38f), style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            }
         }
     }
 }
