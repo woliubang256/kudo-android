@@ -21,9 +21,8 @@ fun IgnoredUsersScreen(viewer: Member?, repository: CommunityRepository, back: (
     var busy by remember(viewer?.id) { mutableStateOf<String?>(null) }
     var error by remember(viewer?.id) { mutableStateOf<Throwable?>(null) }
     var uncertain by remember(viewer?.id) { mutableStateOf(setOf<String>()) }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        PageTopBar("已忽略用户", back)
-        LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    MaterialPageScaffold(header = { PageTopBar("已忽略用户", back) }) { padding ->
+        LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { Text("与 Linux.do 账号同步。取消忽略后，恢复此用户的内容和正常通知。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (viewer == null) item { EmptyState("登录后管理忽略用户", "使用与社区相同的账号设置。", actionLabel = "登录", action = login) }
             else {

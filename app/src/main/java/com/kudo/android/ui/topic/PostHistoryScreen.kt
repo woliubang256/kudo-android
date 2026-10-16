@@ -34,13 +34,12 @@ fun PostHistoryScreen(postId: Int, state: PostHistoryState, reload: () -> Unit, 
             if (index != null && index >= state.versions.lastIndex) more()
         }
     }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("post-history-page")) {
-        PageTopBar("编辑历史", back)
+    MaterialPageScaffold(modifier = Modifier.testTag("post-history-page"), header = { PageTopBar("编辑历史", back) }) { padding ->
         when {
-            state.loading -> LoadingRow()
-            state.error != null -> ErrorState(state.error, reload, login, back)
+            state.loading -> Box(Modifier.padding(padding)) { LoadingRow() }
+            state.error != null -> Box(Modifier.padding(padding)) { ErrorState(state.error, reload, login, back) }
             else -> LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().testTag("post-history-list").quickScrollTarget(scroll),
-                contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp)) {
+                contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp)) {
                 itemsIndexed(state.versions, key = { _, version -> version.number }) { index, version ->
                     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(16.dp)
                         .testTag("history-version-${version.number}"), verticalArrangement = Arrangement.spacedBy(12.dp)) {

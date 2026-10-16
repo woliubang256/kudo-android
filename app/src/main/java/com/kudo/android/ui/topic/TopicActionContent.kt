@@ -134,9 +134,9 @@ private fun ReportSection(title: String) {
 internal fun TopicReportPage(state: TopicActionState, dismiss: () -> Unit, choose: (FlagReason) -> Unit,
     message: (String) -> Unit, confirm: (Boolean) -> Unit, submit: () -> Unit, retry: () -> Unit, active: Boolean = true) {
     BackHandler { dismiss() }
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).imePadding().testTag("topic-report-page")) {
-        PageTopBar("举报", dismiss)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+    MaterialPageScaffold(modifier = Modifier.imePadding().testTag("topic-report-page"), header = { PageTopBar("举报", dismiss) }) { padding ->
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = padding.calculateTopPadding())) {
             TopicReportContent(state, choose, message, confirm, active)
             state.error?.let {
                 Text(it.message ?: "操作失败，请稍后重试", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
@@ -149,4 +149,5 @@ internal fun TopicReportPage(state: TopicActionState, dismiss: () -> Unit, choos
                 Modifier.fillMaxWidth(), enabled = active && !state.loading && !state.busy && !state.writeLocked && state.flags?.valid(state.selectedFlag, state.message, state.confirmed) == true)
         }
     }
+}
 }
