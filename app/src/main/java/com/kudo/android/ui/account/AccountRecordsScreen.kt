@@ -48,13 +48,14 @@ internal fun AccountRecordsScreen(destination: AccountDestination, user: Member,
     }
     BackHandler(busy) { }
     Box(Modifier.fillMaxSize()) {
-        Column {
+        MaterialPageScaffold(header = {
             AccountPageTopBar(destination.title, { if (!busy) back() }) {
                 if (destination == AccountDestination.INVITES) CommunityIconButton(Icons.Rounded.Add, "创建邀请链接", { selected = null; sheet.targetState = true })
                 if (destination == AccountDestination.CHAT) CommunityIconButton(Icons.Rounded.AddComment, "发起聊天", { selected = null; sheet.targetState = true })
                 CommunityIconButton(Icons.Rounded.Refresh, "刷新", { refresh++ }, enabled = !busy && !loading)
             }
-            LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll, enabled = !sheet.currentState && !sheet.targetState), contentPadding = PaddingValues(bottom = 24.dp)) {
+        }) { padding ->
+            LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = !sheet.currentState && !sheet.targetState), contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = 24.dp)) {
                 if (loading) item { LoadingRow() }
                 error?.let { item { ErrorState(it, { refresh++ }, login) } }
                 itemsIndexed(records, key = { index, record -> "${record.id}-$index" }) { _, record ->

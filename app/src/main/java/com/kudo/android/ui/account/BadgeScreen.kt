@@ -59,14 +59,15 @@ internal fun BadgePage(badges: List<UserBadge>, loading: Boolean = false, error:
     val scroll = rememberLazyGridState()
     val columns = GridCells.Adaptive(100.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.15f))
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Column(Modifier.fillMaxSize().then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
-            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
+        MaterialPageScaffold(modifier = Modifier.then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
+            .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup(), header = {
             AccountPageTopBar("我的徽章", back) {
                 if (!loading && error == null) Text("已获得 ${badges.count { it.earned }} / ${badges.size}",
                     Modifier.padding(horizontal = 8.dp).testTag("badge-statistics"), maxLines = 1,
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            LazyVerticalGrid(columns, Modifier.weight(1f).testTag("badge-grid").quickScrollTarget(scroll, enabled = !showing), state = scroll, contentPadding = PaddingValues(16.dp),
+        }) { padding ->
+            LazyVerticalGrid(columns, Modifier.fillMaxSize().testTag("badge-grid").quickScrollTarget(scroll, enabled = !showing), state = scroll, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 16.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (loading) item(span = { GridItemSpan(maxLineSpan) }) { LoadingRow() }
                 else if (error != null) item(span = { GridItemSpan(maxLineSpan) }) { ErrorState(error, refresh, login) }

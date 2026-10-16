@@ -35,12 +35,13 @@ internal fun TrustScreen(member: Member, repository: ConnectRepository, back: ()
         catch (e: CancellationException) { throw e } catch (e: Exception) { error = e }
         finally { loading = false }
     }
-    Column(Modifier.fillMaxSize()) {
+    MaterialPageScaffold(header = {
         AccountPageTopBar("等级要求", back) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新等级数据", { refresh++ })
             CommunityIconButton(Icons.Rounded.Language, "打开等级网页", website)
         }
-        LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    }) { padding ->
+        LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             item { Text("当前等级 Lv.${member.trustLevel}", fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold) }
             if (loading) item { LoadingRow() }
             error?.let { item {
