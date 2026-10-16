@@ -155,35 +155,35 @@ internal fun CloudDraftScreen(key: String, user: Member, repository: CommunityRe
                 }, enabled = !loading && saved != null, compact = true)
             }
         }) { padding ->
-        Column(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.weight(1f).quickScrollTarget(scroll, enabled = !categorySheet.currentState && !categorySheet.targetState), state = scroll, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = padding.calculateTopPadding() + 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                if (loading) item { LoadingRow() }
-                if (saved?.topicId == null) item {
-                    CommunityTextField(draft.title, { change(draft.copy(title = it)) }, placeholder = "标题", enabled = !loading)
-                }
-                if (saved?.topicId == null && saved?.privateMessage == false) item {
-                    Text("分类：${categories.firstOrNull { it.id == draft.categoryId }?.name ?: "选择分类"}",
-                        Modifier.fillMaxWidth().clickable(enabled = !loading) { categorySheet.targetState = true }, fontSize = 14.sp)
-                }
-                item { CommunityTextField(draft.raw, { change(draft.copy(raw = it)) }, Modifier.fillMaxWidth().heightIn(min = 220.dp), placeholder = "正文", enabled = !loading, minLines = 8) }
-                error?.let { item { ErrorState(it, { refresh++ }, login) } }
-                if (message.isNotBlank()) item { Text(message, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), horizontalArrangement = Arrangement.End) {
-                CommunityButton("发布", {
-                    val snapshot = saved ?: return@CommunityButton
-                    scope.launch {
-                        loading = true; error = null
-                        try {
-                            val result = withContext(Dispatchers.IO) { repository.publishCloudDraft(snapshot, draft) }
-                            settings.clearDraft(backupKey); published(result)
-                        } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e }
-                        finally { loading = false }
+            Column(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.weight(1f).quickScrollTarget(scroll, enabled = !categorySheet.currentState && !categorySheet.targetState), state = scroll, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = padding.calculateTopPadding() + 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    if (loading) item { LoadingRow() }
+                    if (saved?.topicId == null) item {
+                        CommunityTextField(draft.title, { change(draft.copy(title = it)) }, placeholder = "标题", enabled = !loading)
                     }
-                }, enabled = !loading && saved != null && draft.raw.isNotBlank() &&
-                    (saved?.topicId != null || draft.title.isNotBlank() && (saved?.privateMessage == true || draft.categoryId > 0)))
+                    if (saved?.topicId == null && saved?.privateMessage == false) item {
+                        Text("分类：${categories.firstOrNull { it.id == draft.categoryId }?.name ?: "选择分类"}",
+                            Modifier.fillMaxWidth().clickable(enabled = !loading) { categorySheet.targetState = true }, fontSize = 14.sp)
+                    }
+                    item { CommunityTextField(draft.raw, { change(draft.copy(raw = it)) }, Modifier.fillMaxWidth().heightIn(min = 220.dp), placeholder = "正文", enabled = !loading, minLines = 8) }
+                    error?.let { item { ErrorState(it, { refresh++ }, login) } }
+                    if (message.isNotBlank()) item { Text(message, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), horizontalArrangement = Arrangement.End) {
+                    CommunityButton("发布", {
+                        val snapshot = saved ?: return@CommunityButton
+                        scope.launch {
+                            loading = true; error = null
+                            try {
+                                val result = withContext(Dispatchers.IO) { repository.publishCloudDraft(snapshot, draft) }
+                                settings.clearDraft(backupKey); published(result)
+                            } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e }
+                            finally { loading = false }
+                        }
+                    }, enabled = !loading && saved != null && draft.raw.isNotBlank() &&
+                        (saved?.topicId != null || draft.title.isNotBlank() && (saved?.privateMessage == true || draft.categoryId > 0)))
+                }
             }
-        }
         }
         CommunitySheet(categorySheet, "选择分类", { categorySheet.targetState = false }, showActions = false) {
             categories.forEach { category -> Text(category.name, Modifier.fillMaxWidth().clickable { change(draft.copy(categoryId = category.id)); categorySheet.targetState = false }.padding(vertical = 10.dp), fontSize = 14.sp) }

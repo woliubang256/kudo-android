@@ -135,19 +135,19 @@ internal fun TopicReportPage(state: TopicActionState, dismiss: () -> Unit, choos
     message: (String) -> Unit, confirm: (Boolean) -> Unit, submit: () -> Unit, retry: () -> Unit, active: Boolean = true) {
     BackHandler { dismiss() }
     MaterialPageScaffold(modifier = Modifier.imePadding().testTag("topic-report-page"), header = { PageTopBar("举报", dismiss) }) { padding ->
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = padding.calculateTopPadding())) {
-            TopicReportContent(state, choose, message, confirm, active)
-            state.error?.let {
-                Text(it.message ?: "操作失败，请稍后重试", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
-                if (state.flags == null && !state.busy) CommunityButton("重试", retry, Modifier.padding(horizontal = 20.dp))
+        Column(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = padding.calculateTopPadding())) {
+                TopicReportContent(state, choose, message, confirm, active)
+                state.error?.let {
+                    Text(it.message ?: "操作失败，请稍后重试", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
+                    if (state.flags == null && !state.busy) CommunityButton("重试", retry, Modifier.padding(horizontal = 20.dp))
+                }
+                if (state.writeLocked) Text("上次提交结果尚未确认，请在网站核对后再操作。", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
-            if (state.writeLocked) Text("上次提交结果尚未确认，请在网站核对后再操作。", Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
-        Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
-            CommunityButton(if (state.busy) "提交中…" else if (state.selectedFlag?.contactAuthor == true) "发送消息" else "提交举报", submit,
-                Modifier.fillMaxWidth(), enabled = active && !state.loading && !state.busy && !state.writeLocked && state.flags?.valid(state.selectedFlag, state.message, state.confirmed) == true)
+            Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
+                CommunityButton(if (state.busy) "提交中…" else if (state.selectedFlag?.contactAuthor == true) "发送消息" else "提交举报", submit,
+                    Modifier.fillMaxWidth(), enabled = active && !state.loading && !state.busy && !state.writeLocked && state.flags?.valid(state.selectedFlag, state.message, state.confirmed) == true)
+            }
         }
     }
-}
 }

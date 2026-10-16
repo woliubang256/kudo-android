@@ -87,40 +87,40 @@ internal fun VerificationScreen(userAgent: String, back: () -> Unit, check: susp
             }, enabled = !checking, modifier = Modifier.testTag("verification-complete"))
         }
     }) { padding ->
-    Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
-        Text("如果页面显示不存在，请多刷新几次，直到出现验证页面；完成过盾后，再点击「完成验证」。",
-            Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        AndroidView(factory = { context -> webViewFactory(context).apply {
-            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            settings.userAgentString = userAgent
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.cacheMode = WebSettings.LOAD_NO_CACHE
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            CookieManager.getInstance().setAcceptCookie(true)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = request.url.scheme != "https"
-                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { loading = true }
-                override fun onPageFinished(view: WebView, url: String) { loading = false; CookieManager.getInstance().flush() }
-                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                    if (request.isForMainFrame) { loading = false; message = "网页加载失败，请点击刷新重试" }
+        Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
+            Text("如果页面显示不存在，请多刷新几次，直到出现验证页面；完成过盾后，再点击「完成验证」。",
+                Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            AndroidView(factory = { context -> webViewFactory(context).apply {
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                settings.userAgentString = userAgent
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                CookieManager.getInstance().setAcceptCookie(true)
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = request.url.scheme != "https"
+                    override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) { loading = true }
+                    override fun onPageFinished(view: WebView, url: String) { loading = false; CookieManager.getInstance().flush() }
+                    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                        if (request.isForMainFrame) { loading = false; message = "网页加载失败，请点击刷新重试" }
+                    }
                 }
-            }
-            webChromeClient = WebChromeClient()
-            webView = this
-            loadUrl(ChallengeUrl)
-        } }, onRelease = { view ->
-            webView = null
-            view.stopLoading(); view.removeAllViews(); view.destroy()
-            CookieManager.getInstance().flush()
-        }, modifier = Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding())
+                webChromeClient = WebChromeClient()
+                webView = this
+                loadUrl(ChallengeUrl)
+            } }, onRelease = { view ->
+                webView = null
+                view.stopLoading(); view.removeAllViews(); view.destroy()
+                CookieManager.getInstance().flush()
+            }, modifier = Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding())
+        }
     }
-}
 }

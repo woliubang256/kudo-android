@@ -108,56 +108,56 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
             }
         }
         val form: @Composable (PaddingValues) -> Unit = { padding ->
-        Column(Modifier.then(if (reply) Modifier.fillMaxWidth().heightIn(max = 300.dp) else Modifier.fillMaxSize())
-            .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
-            .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup().testTag("editor-form")) {
-            Column(Modifier.weight(1f, fill = !reply).then(if (!reply) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                .padding(top = padding.calculateTopPadding()).padding(horizontal = 20.dp)) {
-                if (!reply && (!editing || !editingReply)) {
-                    CommunityTextField(draft.title, { edit(draft.copy(title = it)) }, Modifier.fillMaxWidth().padding(vertical = 20.dp).testTag("editor-title"),
-                        placeholder = "标题", enabled = enabled, maxLines = 3,
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Column(Modifier.then(if (reply) Modifier.fillMaxWidth().heightIn(max = 300.dp) else Modifier.fillMaxSize())
+                .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
+                .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup().testTag("editor-form")) {
+                Column(Modifier.weight(1f, fill = !reply).then(if (!reply) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+                    .padding(top = padding.calculateTopPadding()).padding(horizontal = 20.dp)) {
+                    if (!reply && (!editing || !editingReply)) {
+                        CommunityTextField(draft.title, { edit(draft.copy(title = it)) }, Modifier.fillMaxWidth().padding(vertical = 20.dp).testTag("editor-title"),
+                            placeholder = "标题", enabled = enabled, maxLines = 3,
+                            textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                    CommunityTextField(body, ::changeBody, Modifier.fillMaxWidth()
+                        .then(if (reply) Modifier.heightIn(min = 80.dp, max = 180.dp) else Modifier.heightIn(min = 280.dp))
+                        .padding(vertical = 14.dp).focusRequester(bodyFocus).testTag("editor-body"),
+                        placeholder = if (reply) replyAuthor?.displayName?.takeIf(String::isNotBlank)?.let { "回复 $it" } ?: "回复" else "正文",
+                        enabled = enabled, minLines = if (reply) 3 else 8,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp, textDirection = if (rtl) TextDirection.ContentOrRtl else TextDirection.ContentOrLtr))
+                    if (editing) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        CommunityTextField(editReason, reasonChange, Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("edit-reason"),
+                            placeholder = "编辑说明（选填）", enabled = enabled, maxLines = 3)
+                    }
                 }
-                CommunityTextField(body, ::changeBody, Modifier.fillMaxWidth()
-                    .then(if (reply) Modifier.heightIn(min = 80.dp, max = 180.dp) else Modifier.heightIn(min = 280.dp))
-                    .padding(vertical = 14.dp).focusRequester(bodyFocus).testTag("editor-body"),
-                    placeholder = if (reply) replyAuthor?.displayName?.takeIf(String::isNotBlank)?.let { "回复 $it" } ?: "回复" else "正文",
-                    enabled = enabled, minLines = if (reply) 3 else 8,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp, textDirection = if (rtl) TextDirection.ContentOrRtl else TextDirection.ContentOrLtr))
-                if (editing) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    CommunityTextField(editReason, reasonChange, Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("edit-reason"),
-                        placeholder = "编辑说明（选填）", enabled = enabled, maxLines = 3)
+                error?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                extra()
+                if (reply && rulesError != null) Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(rulesError.message ?: "读取回帖字数规则失败", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    CommunityButton(if (rulesNeedVerification) "完成网页验证" else "重试", {
+                        if (rulesNeedVerification) { keyboard?.hide(); verification?.invoke(reloadRules) }
+                        else reloadRules()
+                    }, enabled = enabled && (!rulesNeedVerification || verification != null), compact = true)
+                }
+                Text(if (uploading) "正在上传图片…" else if (sending) { if (editing) "正在保存…" else "正在发布…" } else if (reply) {
+                    if (replyRules == null) when {
+                        rulesNeedVerification -> "等待网页验证"
+                        rulesError != null -> "回帖字数规则读取失败"
+                        else -> "正在读取回帖字数规则…"
+                    }
+                    else replyLength(draft.raw).let { length ->
+                        if (length < replyRules.minimum) "$length / ${replyRules.minimum} 字" else "$length 字"
+                    }
+                } else "草稿已自动保存 · ${draft.raw.length} 字",
+                    Modifier.padding(horizontal = 20.dp, vertical = 4.dp).then(if (reply) Modifier.testTag("reply-length") else Modifier), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth().then(if (reply) Modifier else Modifier.navigationBarsPadding()).padding(start = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    EditorToolbar(body, ::changeBody, { imageSelection(body.selection); pickImage() }, enabled, uploading,
+                        { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f),
+                        preview = { keyboard?.hide(); preview = true })
+                    if (reply) CommunityButton(publishText, publish, enabled = canPublish, compact = true)
                 }
             }
-            error?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-            extra()
-            if (reply && rulesError != null) Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(rulesError.message ?: "读取回帖字数规则失败", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                CommunityButton(if (rulesNeedVerification) "完成网页验证" else "重试", {
-                    if (rulesNeedVerification) { keyboard?.hide(); verification?.invoke(reloadRules) }
-                    else reloadRules()
-                }, enabled = enabled && (!rulesNeedVerification || verification != null), compact = true)
-            }
-            Text(if (uploading) "正在上传图片…" else if (sending) { if (editing) "正在保存…" else "正在发布…" } else if (reply) {
-                if (replyRules == null) when {
-                    rulesNeedVerification -> "等待网页验证"
-                    rulesError != null -> "回帖字数规则读取失败"
-                    else -> "正在读取回帖字数规则…"
-                }
-                else replyLength(draft.raw).let { length ->
-                    if (length < replyRules.minimum) "$length / ${replyRules.minimum} 字" else "$length 字"
-                }
-            } else "草稿已自动保存 · ${draft.raw.length} 字",
-                Modifier.padding(horizontal = 20.dp, vertical = 4.dp).then(if (reply) Modifier.testTag("reply-length") else Modifier), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth().then(if (reply) Modifier else Modifier.navigationBarsPadding()).padding(start = 8.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                EditorToolbar(body, ::changeBody, { imageSelection(body.selection); pickImage() }, enabled, uploading,
-                    { bodyFocus.requestFocus() }, rtl, { rtl = !rtl }, Modifier.weight(1f),
-                    preview = { keyboard?.hide(); preview = true })
-                if (reply) CommunityButton(publishText, publish, enabled = canPublish, compact = true)
-            }
-        }
         }
         if (reply) form(PaddingValues())
         else MaterialPageScaffold(header = header, modifier = Modifier.imePadding()

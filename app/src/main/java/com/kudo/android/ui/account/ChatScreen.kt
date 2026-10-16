@@ -150,44 +150,44 @@ internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings
             CommunityIconButton(Icons.Rounded.Language, "在应用内网页查看聊天", website)
         }
     }) { padding ->
-    Column(Modifier.fillMaxSize()) {
-        PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.load() }, state = pull,
-            modifier = Modifier.weight(1f).fillMaxWidth(), indicator = {
-                PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
-                    containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
-            }) {
-        LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scrolled = awayFromTop) {
-            scroll.animateScrollToItem((scroll.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
-        }, state = scroll, reverseLayout = true,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            items(vm.messages.asReversed(), key = { it.id }) { message ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Avatar(message.author, 32.dp, onClick = { user(message.author.username) })
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Row {
-                            Text(message.author.displayName, Modifier.weight(1f), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(relativeTime(message.time), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.fillMaxSize()) {
+            PullToRefreshBox(isRefreshing = refreshing, onRefresh = { vm.load() }, state = pull,
+                modifier = Modifier.weight(1f).fillMaxWidth(), indicator = {
+                    PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
+                        containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
+                }) {
+            LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scrolled = awayFromTop) {
+                scroll.animateScrollToItem((scroll.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+            }, state = scroll, reverseLayout = true,
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(vm.messages.asReversed(), key = { it.id }) { message ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Avatar(message.author, 32.dp, onClick = { user(message.author.username) })
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Row {
+                                Text(message.author.displayName, Modifier.weight(1f), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(relativeTime(message.time), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            RichContent(message.cooked.ifBlank { Entities.escape(message.raw).replace("\n", "<br>") }, {}, link, galleryKey = "chat-${vm.channelId}-${message.id}")
                         }
-                        RichContent(message.cooked.ifBlank { Entities.escape(message.raw).replace("\n", "<br>") }, {}, link, galleryKey = "chat-${vm.channelId}-${message.id}")
                     }
                 }
+                vm.error?.let { item { ErrorState(it, { vm.load() }, login) } }
+                if (vm.loading) item { LoadingRow() }
+                if (vm.morePast && !vm.loading) item {
+                    Text("向上滑动加载更早的消息", Modifier.fillMaxWidth().padding(12.dp), fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+                if (!vm.loading && vm.messages.isEmpty() && vm.error == null) item { EmptyState("还没有消息", "写下第一条消息。", Icons.Rounded.Forum) }
             }
-            vm.error?.let { item { ErrorState(it, { vm.load() }, login) } }
-            if (vm.loading) item { LoadingRow() }
-            if (vm.morePast && !vm.loading) item {
-                Text("向上滑动加载更早的消息", Modifier.fillMaxWidth().padding(12.dp), fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.outline, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
-            if (!vm.loading && vm.messages.isEmpty() && vm.error == null) item { EmptyState("还没有消息", "写下第一条消息。", Icons.Rounded.Forum) }
-        }
-        }
-        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).navigationBarsPadding().padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            CommunityTextField(raw, { raw = it; settings.saveDraft(draftKey, Draft(raw = it)) }, Modifier.weight(1f).heightIn(min = 40.dp, max = 140.dp),
-                placeholder = "发送消息…", enabled = !vm.sending, maxLines = 5)
-            CommunityButton(if (vm.sending) "发送中" else "发送", { vm.send(raw) { raw = ""; settings.clearDraft(draftKey) } },
-                enabled = !vm.sending && raw.isNotBlank(), compact = true)
+            Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).navigationBarsPadding().padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CommunityTextField(raw, { raw = it; settings.saveDraft(draftKey, Draft(raw = it)) }, Modifier.weight(1f).heightIn(min = 40.dp, max = 140.dp),
+                    placeholder = "发送消息…", enabled = !vm.sending, maxLines = 5)
+                CommunityButton(if (vm.sending) "发送中" else "发送", { vm.send(raw) { raw = ""; settings.clearDraft(draftKey) } },
+                    enabled = !vm.sending && raw.isNotBlank(), compact = true)
+            }
         }
     }
-}
 }

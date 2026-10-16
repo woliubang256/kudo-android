@@ -88,111 +88,111 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             CommunityIconButton(Icons.Rounded.Close, "关闭网页", { currentBack() })
         }
     }) { padding ->
-    Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
-        Box(Modifier.fillMaxWidth().height(2.dp)) {
-            if (progress < 100) Box(Modifier.fillMaxWidth((progress / 100f).coerceIn(0f, 1f)).fillMaxHeight().background(LogoYellow))
-        }
-        message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall) }
-        Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()
-            .quickScrollTarget(scrolled = scrolled, enabled = error == null && !awaitingContent) {
-                page.view?.let { view ->
-                    androidx.compose.animation.core.animate(view.scrollY.toFloat(), 0f) { value, _ -> view.scrollTo(0, value.toInt()) }
-                }
-            }) {
-            AndroidView(factory = { context ->
-                webViewFactory(context).apply {
-                    setBackgroundColor(surfaceColor)
-                    outlineProvider = ViewOutlineProvider.BOUNDS
-                    clipToOutline = true
-                    // Keep CSS viewport units bounded; AndroidView otherwise defaults to WRAP_CONTENT.
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                    settings.setSupportMultipleWindows(false)
-                    settings.javaScriptCanOpenWindowsAutomatically = false
-                    CookieManager.getInstance().setAcceptCookie(true)
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                            val value = request.url.toString()
-                            val web = LinuxDoLink.webUrl(value)
-                            val deliberate = ExternalAppLinkPolicy.canOpenFromWeb(request.isForMainFrame,
-                                request.hasGesture(), request.isRedirect)
-                            // Linux.do pages, script navigation and redirects keep their web history.
-                            if (deliberate && currentExternalLinkMode == ExternalLinkMode.SYSTEM &&
-                                !ExternalAppLinkPolicy.isSiteUrl(value)) {
-                                ExternalAppLinkPolicy.contentUrl(value)?.let { if (currentOpenApp(it)) return true }
-                            }
-                            if (web != null) return false
-                            if (request.isForMainFrame) {
-                                val fallback = ExternalAppLinkPolicy.fallbackUrl(value)
-                                if (deliberate && fallback != null) view.loadUrl(fallback)
-                                else message = if (fallback != null) "请手动点击链接打开应用" else "暂不支持此类链接"
-                            }
-                            return true
-                        }
-                        override fun onPageStarted(view: WebView, value: String, favicon: Bitmap?) {
-                            navigationGeneration++
-                            currentUrl = value; progress = 0; awaitingContent = true; error = null; message = null
-                        }
-                        override fun doUpdateVisitedHistory(view: WebView, value: String, isReload: Boolean) { currentUrl = value }
-                        override fun onPageCommitVisible(view: WebView, value: String) {
-                            if (view.url == value) awaitingContent = false
-                        }
-                        override fun onPageFinished(view: WebView, value: String) {
-                            CookieManager.getInstance().flush()
-                            if (page.view !== view || view.url != value) return
-                            progress = 100
-                            val generation = navigationGeneration
-                            view.postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {
-                                override fun onComplete(requestId: Long) {
-                                    if (page.view === view && navigationGeneration == generation && error == null) awaitingContent = false
-                                }
-                            })
-                        }
-                        override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) {
-                            if (request.isForMainFrame) { progress = 100; awaitingContent = false; error = "网页加载失败，请检查网络后重试。" }
-                        }
-                        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
-                            if (request.isForMainFrame && response.statusCode >= 400) { progress = 100; awaitingContent = false; error = "网页返回 ${response.statusCode}，请稍后重试。" }
-                        }
-                    }
-                    webChromeClient = object : WebChromeClient() {
-                        override fun onProgressChanged(view: WebView, value: Int) { progress = value }
-                        override fun onReceivedTitle(view: WebView, value: String?) { title = value?.takeIf(String::isNotBlank) ?: "网页" }
-                    }
-                    setDownloadListener { _, _, _, _, _ ->
-                        awaitingContent = false; progress = 100
-                        message = "下载文件请使用右上角的浏览器打开"
-                    }
-                    page.view = this
-                    setOnScrollChangeListener { _, _, y, _, _ -> scrollY = y }
-                    if (page.saved?.let { restoreState(it) } == null) loadUrl(url)
-                }
-            }, update = { view -> view.setBackgroundColor(surfaceColor) }, onRelease = { view ->
-                page.view = null
-                view.setOnScrollChangeListener(null)
-                view.stopLoading(); view.removeAllViews(); view.destroy()
-                CookieManager.getInstance().flush()
-            }, modifier = Modifier.fillMaxSize().clipToBounds().onSizeChanged { viewportHeight = it.height }.testTag("web-content"))
-            if (awaitingContent && error == null) Column(
-                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).testTag("web-loading"),
-                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                CommunityLoadingIndicator()
-                Text("加载中…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
+            Box(Modifier.fillMaxWidth().height(2.dp)) {
+                if (progress < 100) Box(Modifier.fillMaxWidth((progress / 100f).coerceIn(0f, 1f)).fillMaxHeight().background(LogoYellow))
             }
-            error?.let { text ->
-                Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(24.dp).testTag("web-error"),
-                    verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text, style = MaterialTheme.typography.bodyLarge)
-                    CommunityButton("重新加载", ::retry)
+            message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall) }
+            Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()
+                .quickScrollTarget(scrolled = scrolled, enabled = error == null && !awaitingContent) {
+                    page.view?.let { view ->
+                        androidx.compose.animation.core.animate(view.scrollY.toFloat(), 0f) { value, _ -> view.scrollTo(0, value.toInt()) }
+                    }
+                }) {
+                AndroidView(factory = { context ->
+                    webViewFactory(context).apply {
+                        setBackgroundColor(surfaceColor)
+                        outlineProvider = ViewOutlineProvider.BOUNDS
+                        clipToOutline = true
+                        // Keep CSS viewport units bounded; AndroidView otherwise defaults to WRAP_CONTENT.
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        settings.setSupportMultipleWindows(false)
+                        settings.javaScriptCanOpenWindowsAutomatically = false
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                val value = request.url.toString()
+                                val web = LinuxDoLink.webUrl(value)
+                                val deliberate = ExternalAppLinkPolicy.canOpenFromWeb(request.isForMainFrame,
+                                    request.hasGesture(), request.isRedirect)
+                                // Linux.do pages, script navigation and redirects keep their web history.
+                                if (deliberate && currentExternalLinkMode == ExternalLinkMode.SYSTEM &&
+                                    !ExternalAppLinkPolicy.isSiteUrl(value)) {
+                                    ExternalAppLinkPolicy.contentUrl(value)?.let { if (currentOpenApp(it)) return true }
+                                }
+                                if (web != null) return false
+                                if (request.isForMainFrame) {
+                                    val fallback = ExternalAppLinkPolicy.fallbackUrl(value)
+                                    if (deliberate && fallback != null) view.loadUrl(fallback)
+                                    else message = if (fallback != null) "请手动点击链接打开应用" else "暂不支持此类链接"
+                                }
+                                return true
+                            }
+                            override fun onPageStarted(view: WebView, value: String, favicon: Bitmap?) {
+                                navigationGeneration++
+                                currentUrl = value; progress = 0; awaitingContent = true; error = null; message = null
+                            }
+                            override fun doUpdateVisitedHistory(view: WebView, value: String, isReload: Boolean) { currentUrl = value }
+                            override fun onPageCommitVisible(view: WebView, value: String) {
+                                if (view.url == value) awaitingContent = false
+                            }
+                            override fun onPageFinished(view: WebView, value: String) {
+                                CookieManager.getInstance().flush()
+                                if (page.view !== view || view.url != value) return
+                                progress = 100
+                                val generation = navigationGeneration
+                                view.postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {
+                                    override fun onComplete(requestId: Long) {
+                                        if (page.view === view && navigationGeneration == generation && error == null) awaitingContent = false
+                                    }
+                                })
+                            }
+                            override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) {
+                                if (request.isForMainFrame) { progress = 100; awaitingContent = false; error = "网页加载失败，请检查网络后重试。" }
+                            }
+                            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                                if (request.isForMainFrame && response.statusCode >= 400) { progress = 100; awaitingContent = false; error = "网页返回 ${response.statusCode}，请稍后重试。" }
+                            }
+                        }
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onProgressChanged(view: WebView, value: Int) { progress = value }
+                            override fun onReceivedTitle(view: WebView, value: String?) { title = value?.takeIf(String::isNotBlank) ?: "网页" }
+                        }
+                        setDownloadListener { _, _, _, _, _ ->
+                            awaitingContent = false; progress = 100
+                            message = "下载文件请使用右上角的浏览器打开"
+                        }
+                        page.view = this
+                        setOnScrollChangeListener { _, _, y, _, _ -> scrollY = y }
+                        if (page.saved?.let { restoreState(it) } == null) loadUrl(url)
+                    }
+                }, update = { view -> view.setBackgroundColor(surfaceColor) }, onRelease = { view ->
+                    page.view = null
+                    view.setOnScrollChangeListener(null)
+                    view.stopLoading(); view.removeAllViews(); view.destroy()
+                    CookieManager.getInstance().flush()
+                }, modifier = Modifier.fillMaxSize().clipToBounds().onSizeChanged { viewportHeight = it.height }.testTag("web-content"))
+                if (awaitingContent && error == null) Column(
+                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).testTag("web-loading"),
+                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    CommunityLoadingIndicator()
+                    Text("加载中…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                error?.let { text ->
+                    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(24.dp).testTag("web-error"),
+                        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text, style = MaterialTheme.typography.bodyLarge)
+                        CommunityButton("重新加载", ::retry)
+                    }
                 }
             }
         }
     }
-}
 }
