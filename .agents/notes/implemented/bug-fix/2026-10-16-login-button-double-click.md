@@ -27,5 +27,7 @@ Version comparison showed that 0.2.7 changed the login WebView page from the 0.2
 
 ## WebView material preference (2026-10-17)
 
-Added a persisted advanced WebView material preference, defaulting to ordinary rendering. WebScreen and VerificationScreen use the setting to enable or disable the liquid toolbar backdrop; the login screen remains on the ordinary v0.2.6 structure as the crash-safe path.
+网页高级材质默认关闭，使用 `advanced_webview_material` 同时读取和保存，重建 AppSettings 后保留用户选择。WebViewMaterialSettingsUiTest 使用隔离偏好验证默认关闭、开启后重建仍开启、关闭后重建仍关闭及其他设置不变；修复前真机已复现重建后错误回到关闭。
+
+网页高级材质只影响原生顶部栏与按钮；WebView 仍位于工具栏下方，玻璃背后是主题背景，网页自身不变成透明玻璃。纯色背景下模糊和折射的可见差异较小，视觉判断必须同时核对页面是否实际接入开关。继续遵守[顶部材质](../feature/2026-10-16-page-toolbar-material.md)的有界网页视口约束，避免为放大效果遮挡网页首行或改写网页内容。
 

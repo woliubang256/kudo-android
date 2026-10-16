@@ -27,6 +27,7 @@ class AppSettings(context: Context) {
         prefs.getBoolean("show_scroll_to_top", true),
         prefs.getBoolean("compact_pinned_topics", true),
         ExternalLinkMode.entries.firstOrNull { it.name == prefs.getString("external_link_mode", "") } ?: ExternalLinkMode.SYSTEM,
+        prefs.getBoolean("advanced_webview_material", false),
     ))
     val display = _display.asStateFlow()
     fun update(value: DisplaySettings) {
