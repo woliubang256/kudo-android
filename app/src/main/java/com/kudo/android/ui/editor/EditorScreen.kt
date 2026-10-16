@@ -82,13 +82,12 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
     }
     val publishText = if (editing) { if (sending) "保存中…" else "保存" } else if (sending) "发布中…" else "发布"
     Box(Modifier.then(if (reply) Modifier.fillMaxWidth() else Modifier.fillMaxSize()).background(MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.then(if (reply) Modifier.fillMaxWidth().heightIn(max = 300.dp) else Modifier.fillMaxSize().imePadding())
-            .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
-            .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup().testTag("editor-form")) {
+        val header: @Composable () -> Unit = {
             if (!reply) {
-                Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 56.dp).padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CommunityIconButton(Icons.Rounded.Close, "关闭编辑器", back, enabled = !sending)
-                    Text(if (editing) { if (editingReply) "编辑回复" else "编辑话题" } else "发布话题", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TopBarIconButton(Icons.Rounded.Close, "关闭编辑器", back, enabled = enabled)
+                    Text(if (editing) { if (editingReply) "编辑回复" else "编辑话题" } else "发布话题", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                     CommunityButton(publishText, publish, enabled = canPublish, compact = true)
                 }
                 if (!editing) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag("editor-destinations"), verticalAlignment = Alignment.CenterVertically) {
@@ -107,8 +106,13 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                 }
                 HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
             }
+        }
+        val form: @Composable (PaddingValues) -> Unit = { padding ->
+        Column(Modifier.then(if (reply) Modifier.fillMaxWidth().heightIn(max = 300.dp) else Modifier.fillMaxSize())
+            .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
+            .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup().testTag("editor-form")) {
             Column(Modifier.weight(1f, fill = !reply).then(if (!reply) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                .padding(horizontal = 20.dp)) {
+                .padding(top = padding.calculateTopPadding()).padding(horizontal = 20.dp)) {
                 if (!reply && (!editing || !editingReply)) {
                     CommunityTextField(draft.title, { edit(draft.copy(title = it)) }, Modifier.fillMaxWidth().padding(vertical = 20.dp).testTag("editor-title"),
                         placeholder = "标题", enabled = enabled, maxLines = 3,
@@ -154,6 +158,11 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                 if (reply) CommunityButton(publishText, publish, enabled = canPublish, compact = true)
             }
         }
+        }
+        if (reply) form(PaddingValues())
+        else MaterialPageScaffold(header = header, modifier = Modifier.imePadding()
+            .then(if (modalShowing) Modifier.clearAndSetSemantics {} else Modifier)
+            .focusProperties { onEnter = { if (modalShowing) cancelFocusChange() } }.focusGroup(), content = form)
         if (!reply && !editing) CommunitySheet(categorySheet, "类别", { categorySheet.targetState = false },
             containerColor = MaterialTheme.colorScheme.background) {
             if (categories.isEmpty()) {

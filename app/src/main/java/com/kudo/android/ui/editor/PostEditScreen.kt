@@ -30,10 +30,11 @@ fun PostEditScreen(vm: PostEditViewModel, glass: GlassMode, uploadImage: suspend
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop).then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)) {
             val source = vm.source
             val draft = vm.draft
-            if (source == null || draft == null || vm.loading) Column(Modifier.fillMaxSize()) {
-                PageTopBar("编辑内容", back)
-                if (vm.loading) LoadingRow()
-                else vm.error?.let { ErrorState(it, vm::load, login) }
+            if (source == null || draft == null || vm.loading) MaterialPageScaffold(header = { PageTopBar("编辑内容", back) }) { padding ->
+                Column(Modifier.fillMaxSize().padding(padding)) {
+                    if (vm.loading) LoadingRow()
+                    else vm.error?.let { ErrorState(it, vm::load, login) }
+                }
             } else EditorForm(Draft(title = draft.title, raw = draft.raw), emptyList(),
                 edit = { vm.edit(draft.copy(title = it.title, raw = it.raw)) }, publish = vm::save,
                 pickImage = { picker.launch("image/*") }, back = back,
