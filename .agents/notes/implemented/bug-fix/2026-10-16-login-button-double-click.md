@@ -23,3 +23,9 @@ Status: implemented
 
 Version comparison showed that 0.2.7 changed the login WebView page from the 0.2.6 plain Column and PageTopBar structure to MaterialPageScaffold with TopBarTextButton. Because reports describe an immediate crash when tapping login, the login WebView page now uses the 0.2.6 non-liquid structure while retaining renderer-exit handling. Other native pages keep their current material until this regression is verified.
 
+
+
+## WebView material preference (2026-10-17)
+
+Added a persisted advanced WebView material preference, defaulting to ordinary rendering. WebScreen and VerificationScreen use the setting to enable or disable the liquid toolbar backdrop; the login screen remains on the ordinary v0.2.6 structure as the crash-safe path.
+
