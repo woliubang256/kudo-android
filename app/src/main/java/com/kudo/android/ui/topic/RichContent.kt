@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kudo.android.data.AvatarMetadataCache
 import com.kudo.android.ui.components.AvatarImage
 import com.kudo.android.ui.components.ImageAspectBadge
+import com.kudo.android.ui.components.showKudoToast
 import com.kudo.android.ui.components.CommunityLoadingIndicator
 import com.kudo.android.ui.components.LocalAvatarMetadata
 import com.kudo.android.ui.components.mediaUrl
@@ -764,17 +765,13 @@ private fun calloutAccent(type: ArticleCalloutType): Color = when (type) {
 @Composable
 private fun CodeBlock(code: String) {
     val context = LocalContext.current
-    var copied by remember(code) { mutableStateOf(false) }
-    LaunchedEffect(copied) { if (copied) { kotlinx.coroutines.delay(1500); copied = false } }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
-        Row(Modifier.align(Alignment.End).clip(CircleShape).clickable(role = Role.Button) {
+        Box(Modifier.align(Alignment.End).size(40.dp).clip(CircleShape).clickable(role = Role.Button) {
             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                 .setPrimaryClip(ClipData.newPlainText("代码", code))
-            copied = true
-        }.semantics { contentDescription = "复制代码" }.padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            showKudoToast(context, "已复制")
+        }.semantics { contentDescription = "复制代码" }, contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.ContentCopy, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (copied) "已复制" else "复制", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         SelectionContainer {
             Text(code, Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 13.dp, end = 13.dp, bottom = 13.dp),
