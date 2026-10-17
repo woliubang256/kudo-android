@@ -8,11 +8,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -82,13 +85,17 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
     val tab = tabs[pager.currentPage]
     var allCategories by rememberSaveable(state.accountId) { mutableStateOf(false) }
     var allTags by rememberSaveable(state.accountId) { mutableStateOf(false) }
+    var tagQuery by rememberSaveable(state.accountId) { mutableStateOf("") }
     val sidebarCategoriesScroll = key(state.accountId) { rememberLazyListState() }
     val allCategoriesScroll = key(state.accountId) { rememberLazyListState() }
     val sidebarTagsScroll = key(state.accountId) { rememberLazyGridState() }
     val allTagsScroll = key(state.accountId) { rememberLazyGridState() }
     val directory = state.directory
     val expanded = if (tab == "categories") allCategories else allTags
-    fun collapse() { if (tab == "categories") allCategories = false else allTags = false }
+    fun collapse() {
+        if (tab == "categories") allCategories = false
+        else { allTags = false; tagQuery = "" }
+    }
     BackHandler(expanded, ::collapse)
     LaunchedEffect(state.accountId, pager.settledPage, allTags, directory?.showTags) {
         if (pager.settledPage == 1 && allTags && directory?.showTags == true) loadTags()
@@ -128,7 +135,8 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
                                 DirectoryMoreRow("所有类别") { allCategories = true }
                             }), contentTopPadding = toolbarPadding, active = active, select = openCategory)
                     } else {
-                        val groups = if (allTags) state.tagGroups.orEmpty() else listOf(DirectoryTagGroup("", directory?.tags.orEmpty()))
+                        val groups = if (allTags) filterDirectoryTagGroups(state.tagGroups.orEmpty(), tagQuery)
+                        else listOf(DirectoryTagGroup("", directory?.tags.orEmpty()))
                         val scroll = if (allTags) allTagsScroll else sidebarTagsScroll
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                             val minimum = minOf(100.dp * LocalDensity.current.fontScale.coerceAtLeast(1f), (maxWidth - 34.dp) / 2)
@@ -145,7 +153,11 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
                                 }
                                 if (!state.loading && !state.tagsLoading && state.error == null && (!allTags || state.tagsError == null) && groups.all { it.tags.isEmpty() }) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
-                                        Text(if (directory?.showTags == false) "当前未显示侧栏标签" else "暂无标签",
+                                        Text(when {
+                                            tagQuery.isNotBlank() -> "没有匹配的标签"
+                                            directory?.showTags == false -> "当前未显示侧栏标签"
+                                            else -> "暂无标签"
+                                        },
                                             Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
@@ -176,9 +188,33 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
             if (expanded) Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回侧栏目录", ::collapse, backdrop = backdrop)
-                Text(if (tab == "categories") "所有类别" else "所有标签", style = MaterialTheme.typography.titleMedium)
+                if (tab == "categories") Text("所有类别", style = MaterialTheme.typography.titleMedium)
+                else {
+                    Text("所有标签", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Row(Modifier.widthIn(min = 124.dp, max = 180.dp).height(40.dp).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Search, "搜索标签", Modifier.padding(start = 10.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                        CommunityTextField(tagQuery, { tagQuery = it }, Modifier.weight(1f).padding(horizontal = 7.dp, vertical = 7.dp)
+                            .testTag("directory-tag-search"), placeholder = "搜索标签", singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium)
+                        if (tagQuery.isNotEmpty()) Box(Modifier.size(32.dp).clip(CircleShape)
+                            .clickable(role = Role.Button) { tagQuery = "" }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Close, "清空标签搜索", Modifier.size(18.dp))
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+internal fun filterDirectoryTagGroups(groups: List<DirectoryTagGroup>, query: String): List<DirectoryTagGroup> {
+    val normalized = query.trim()
+    if (normalized.isEmpty()) return groups
+    return groups.mapNotNull { group ->
+        group.copy(tags = group.tags.filter { it.tag.name.contains(normalized, ignoreCase = true) })
+            .takeIf { it.tags.isNotEmpty() }
     }
 }
 

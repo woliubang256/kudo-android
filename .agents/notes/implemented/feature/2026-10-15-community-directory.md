@@ -20,6 +20,8 @@ CommunityDirectoryViewModel 按账号代次取消并隔离目录与全部标签�
 
 底栏分类和首页类别入口共享目录 ViewModel。CommunityDirectoryScreen 顶部复用首页 FeedTabBar 的紧凑标签与渐变指示器，并在 Backdrop 层中按用户选择的 GlassMode 呈现液态、模糊或半透明材质；类别保留原生卡片，标签用 LazyVerticalGrid 自适应宫格；最小列宽随字号放大，同时保证280dp窄窗口仍可显示两列。普通手机三列，宽窗口增加列数，标签名称最多两行。所有类别和所有标签作为独立模式，分别保存侧栏与完整目录的四份滚动状态；Tab、模式随导航保存，账号切换时重置。返回键先退出完整目录模式，下拉刷新复用相应请求。私信专用标签进入账号的私信标签网页，普通标签打开现有原生标签流。
 
+“所有标签”模式的搜索框只对已经加载的分组做本地、不区分大小写的名称过滤，保留分组和服务器顺序；清空或退出完整目录恢复原列表，不新增网络请求。
+
 ## Related decisions
 
 已检索目录、侧栏、标签和分类配置。[分类图标](../../implemented/feature/2026-10-08-category-web-icons.md)部分重叠，保留图标、卡片和安全区，新增 Tab 取代“无顶部区域”；[主题展示](../../implemented/feature/2026-10-09-topic-presentation.md)与[公开主页数据](../../implemented/architecture/2026-10-10-public-profile-data.md)部分重叠，完整分类目录不受侧栏筛选影响；[分类详情](../../implemented/feature/2026-10-10-category-detail-header.md)仅复用元数据，不改列表头。没有完全吸收或过时提案。
@@ -31,6 +33,7 @@ CommunityDirectoryViewModel 按账号代次取消并隔离目录与全部标签�
 - 直接读取 /site.json 的类别与 top_tags：请求和解析最少，但前者是完整权限目录，后者是热门标签，不能代表网页侧栏的个人选择。
 - 把侧栏选择写入 Member 并复用 AccountViewModel.categories：账号刷新时可顺手获得配置，但会把筛选目录与其他功能所需的完整分类元数据混为一体；目录使用独立快照和状态。
 - 标签逐行展示可完整容纳长名称，但用户明确要求宫格；宫格单元允许两行名称，随宽度与字号调整列数。
+- 对完整标签目录增加服务端搜索会引入额外请求和加载状态，也无法保证当前分组顺序；使用标题栏本地过滤已加载结果。
 
 ## Testing
 
@@ -42,6 +45,8 @@ CommunityDirectoryViewModelTest 验证在途合并、缓存过期、主动刷新
 
 CommunityDirectoryUiTest 覆盖侧栏成员筛选、标签三列与服务器顺序、分组与独立失败重试、侧栏和完整目录进入详情后的 Tab/模式/位置恢复，以及深色280dp/130%字号和宽窗口增加列数；新增用例验证目录顶部的 Backdrop 容器、Tab 选择和深色液态模式。CategoriesUiTest 保留卡片、图标、状态栏安全区与错误入口的回归。首轮界面测试因顶部 Tab 同样可滚动，通用 hasScrollAction 定位器匹配两个节点；列表添加唯一 testTag 后，返回位置用例通过。此前 HomePagerUiTest、TagFeedUiTest、CategoryFeedUiTest 共10项通过，后续只重跑受改动影响的目录与类别测试。
 
+新增用例验证完整标签页按名称本地过滤、保留匹配分组，并可清空恢复。
+
 最终12项定向JVM测试及合计17项相关真机用例通过。日志 artifacts/community-directory-state-tests.txt、community-directory-ui-final-device.txt（4项目录+2项旧类别）、community-directory-final-device.txt（新增完整目录返回场景后5项目录）及首轮 community-directory-ui-device.txt（含10项列表相关回归）。最终 assembleDebug、assembleDebugAndroidTest、lintDebug 成功，Lint为0 errors / 46 warnings，目录源码无警告；日志 community-directory-final-build.txt。已目视浅色三列、深色窄屏大字两列与宽窗口五列截图 directory-tags-light.png / directory-tags-dark-narrow-large.png / directory-tags-wide-large.png，点击后的单元灰底为涟漪状态。签名与真机已安装开发版一致，使用 adb install -r 覆盖安装，保持0.2.5 / 2006及账号数据，测试包单独 install -r -t 后 am instrument，不使用自动卸载任务。
 
 线上只读 CommunityDirectoryLiveTest 默认跳过，显式 directoryLiveReadOnlyProbe=true 才读取当前会话和快照。RMX2202 / Android13 的探针及真实分类页均触发 Cloudflare 网页验证；应用内正常验证页要求人工验证，未自动绕过或声称线上目录校验成功。探针失败日志为 artifacts/community-directory-live-device.txt，真实页面记录为 directory-real-categories.json / directory-real-verification.json；成功探针只保存名称证据，不保存账号 HTML。
@@ -49,3 +54,5 @@ CommunityDirectoryUiTest 覆盖侧栏成员筛选、标签三列与服务器顺�
 ## Consequences
 
 类别与标签现在能反映网页侧栏的个人显示项及服务器顺序，完整元数据不受侧栏筛选影响。网页未来新增主题变换器或自定义排序协议时需同步适配；未收录图标继续使用现有通用图标。/latest 读取体积比 JSON 元数据大，限制为目录进入或过期刷新，切 Tab 不重复读取。Cloudflare 验证未通过时展示现有验证入口，真实账号的最终目录核对仍需在设备上完成验证。
+
+完整标签搜索不改变目录缓存和网络协议；查询为空时直接复用原分组，退出后清空查询状态。

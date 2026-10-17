@@ -144,6 +144,21 @@ class CommunityDirectoryUiTest {
         compose.onNodeWithText("类别0").assertIsDisplayed()
     }
 
+    @Test fun allTagsFilterLocallyAndKeepMatchingServerGroups() {
+        val groups = listOf(DirectoryTagGroup("精选标签", tags), DirectoryTagGroup("其他标签", listOf(DirectoryTag(TopicTag("开发")))))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            CommunityDirectoryScreen(state().copy(tagGroups = groups), {}, {}, {}, {}, {}, {})
+        } }
+        compose.onNodeWithText("标签").performClick()
+        compose.onNodeWithText("所有标签").performClick()
+        compose.onNodeWithTag("directory-tag-search").performTextInput("公告")
+        compose.onNodeWithTag("directory-tag-公告").assertIsDisplayed()
+        compose.onNodeWithText("精选标签").assertIsDisplayed()
+        compose.onNodeWithTag("directory-tag-人工智能").assertDoesNotExist()
+        compose.onNodeWithContentDescription("清空标签搜索").performClick()
+        compose.onNodeWithTag("directory-tag-人工智能").assertIsDisplayed()
+    }
+
     @Test fun categoryAndTagDetailsReturnToTheSameTabModeAndScrollPosition() {
         lateinit var nav: NavHostController
         val long = state().copy(directory = state().directory!!.copy(categories = categories,
