@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +39,8 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @Composable
-internal fun BadgeScreen(user: Member, repository: CommunityRepository, back: () -> Unit, login: () -> Unit, website: (String) -> Unit) {
+internal fun BadgeScreen(user: Member, repository: CommunityRepository, back: () -> Unit, login: () -> Unit,
+    website: (String) -> Unit, initialBadgeId: Int? = null) {
     var badges by remember(user.id, user.username) { mutableStateOf(emptyList<UserBadge>()) }
     var loading by remember(user.id, user.username) { mutableStateOf(true) }
     var error by remember(user.id, user.username) { mutableStateOf<Throwable?>(null) }
@@ -49,14 +51,25 @@ internal fun BadgeScreen(user: Member, repository: CommunityRepository, back: ()
         catch (e: CancellationException) { throw e } catch (e: Exception) { error = e }
         finally { loading = false }
     }
-    key(user.id, user.username) { BadgePage(badges, loading, error, { refresh++ }, back, login, website) }
+    key(user.id, user.username) { BadgePage(badges, loading, error, { refresh++ }, back, login, website, initialBadgeId) }
 }
 
 @Composable
 internal fun BadgePage(badges: List<UserBadge>, loading: Boolean = false, error: Throwable? = null,
-    refresh: () -> Unit = {}, back: () -> Unit = {}, login: () -> Unit = {}, website: (String) -> Unit = {}) {
+    refresh: () -> Unit = {}, back: () -> Unit = {}, login: () -> Unit = {}, website: (String) -> Unit = {},
+    initialBadgeId: Int? = null) {
     var selected by remember { mutableStateOf<UserBadge?>(null) }
     val sheet = remember { MutableTransitionState(false) }
+    var initialBadgeHandled by rememberSaveable(initialBadgeId) { mutableStateOf(false) }
+    LaunchedEffect(initialBadgeId, badges, loading, error) {
+        if (initialBadgeId != null && initialBadgeId > 0 && !initialBadgeHandled && !loading && error == null) {
+            initialBadgeHandled = true
+            badges.firstOrNull { it.id == initialBadgeId }?.let { badge ->
+                selected = badge
+                sheet.targetState = true
+            }
+        }
+    }
     val showing = sheet.currentState || sheet.targetState
     val scroll = rememberLazyGridState()
     val backdrop = rememberLayerBackdrop()

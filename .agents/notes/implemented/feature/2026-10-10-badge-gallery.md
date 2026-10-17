@@ -18,6 +18,10 @@ Status: implemented
 
 点击打开现有贴边、可拖动关闭的CommunitySheet，显示徽章、获得状态、授予时间/次数、服务端详细说明与获得条件，并保留查看官网入口。说明缺失时明确显示暂无说明，不推测门槛。普通账号列表与待审核、聊天、邀请行为不变。
 
+应用内消息列表的授予徽章通知（notification_type=12）保留正数badge_id，通过独立回调进入既有account-records/BADGES原生页面。页面在目录与个人授予记录成功加载后按ID打开同一详情面板；加载失败不消费定位意图，重试成功后仍打开。一次页面进入只自动处理一次，关闭面板、重组和配置恢复不重复弹出；重新点击通知进入新页面可再次打开。缺失、无效或目录中不存在的ID仅显示徽章页，不按名称猜测或误开第一项。点击通知仍按原逻辑标读，返回回到消息列表。
+
+定位参数是原生路由的可选查询参数，不修改网页链接分流、WebView重定向或系统通知载荷；普通个人中心入口不携带定位意图。
+
 ## Existing note audit
 
 检索徽章、账号菜单和弹窗。[账号与草稿](../../implemented/feature/2026-10-07-account-and-composer.md)的“仅列已获得”呈现被部分取代，个人授予关联与账号隔离继续成立；[个人中心](../../implemented/feature/2026-10-10-member-account-dashboard.md)的入口保持；[酷安式表单](../../implemented/feature/2026-10-10-coolapk-forms.md)继续约束弹窗交互。无完全吸收或过时提案。
@@ -27,6 +31,8 @@ Status: implemented
 - 直接使用目录has_badge只需一次请求，但它反映当前会话，缺少指定用户的授予时间与次数，不能代替个人记录。
 - 网页整页展示能复用官网所有功能，但无法满足用户要求的紧凑宫格与原生详情弹窗。
 - 每项仅用通用奖章最简单，但丢失网站各徽章Logo；使用已有字体图标来源与官方徽章图片。
+- 拦截所有/badges网页链接可以复用现有URL字段，但会把WebView内浏览也改成原生跳转，越过网页继续浏览的边界；仅消息列表按通知类型与badge_id分流。
+- 为通知新增专用徽章路由可以减少既有路由的参数修改，但会维护两个相同页面入口；复用account-records的可选参数，保留个人中心原路径。
 
 ## Testing
 
@@ -42,6 +48,10 @@ RMX2202 / Android13的BadgeGalleryUiTest共4项全过（artifacts/badge-gallery-
 
 宽窄切换首次检查将TextLayoutResult保留的排版可用宽度误判为截断（paragraph=624、Text.width=294，但实际字形right=294且截图完整）。改为核对单行、全部字符、无省略和实际字形边界后通过，不放宽可见性或修改产品文字尺寸。
 
+徽章通知定向改动先由AccountNoticesTest复现badge_id丢失，再由离线消息夹具复现点击走帖子/网页及原生页面没有自动详情。13项相关JVM测试（AccountNoticesTest、BadgeDataTest、NotificationProtocolTest）通过；RMX2202 / Android13上15项真机测试（BadgeGalleryUiTest、MemberAccountUiTest、NotificationUiTest）通过。覆盖按ID准确定位、消息标读一次、缺失/无效/未知ID不误开、加载失败与状态恢复后的重试、关闭后重组和状态恢复不重弹、返回消息后再次点击仍打开、个人中心无参数入口及非徽章通知不变。结果见artifacts/badge-notice-green-build.txt和artifacts/badge-notice-green-device.txt；已核对badge-notification-details.png。测试网络全用离线夹具，不修改真实通知；核对签名后以原版本2021 / 0.2.10-dev覆盖安装，保留真机数据。
+
 ## Consequences
 
 宫格能同时浏览已获得与未获得徽章，详情打开不再请求网络。首次加载需要目录与个人授予两个只读请求。服务端不公开的获得条件无法补出；未来新增图标可能暂时显示通用奖章，官网仍可查看原始详情。
+
+通知定位复用已加载目录，不额外请求单个徽章；服务端未提供ID或徽章已不可见时只能进入徽章页，不能保证弹出对应详情。本次不改变系统通知的点击目标或网页浏览行为。

@@ -212,7 +212,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                     1 -> CommunityDirectoryHost(directory, account.user?.id, account.sessionReady, ::login,
                                         { nav.navigate("category/${it.id}") }, ::openTag, ::openWebPage)
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
-                                        { nav.navigate("personal/${AccountDestination.MESSAGES.name}") })
+                                        { nav.navigate("personal/${AccountDestination.MESSAGES.name}") },
+                                        badges = { badgeId -> nav.navigate("account-records/${AccountDestination.BADGES.name}?badge=${badgeId ?: 0}") })
                                     4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") },
                                         destination = { destination ->
                                             when (destination) {
@@ -289,12 +290,15 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             TrustScreen(member, app.connect, { nav.popBackStack() }, { openWebPage("https://connect.linux.do/") })
                         } ?: MaterialPagePlaceholder("等级要求", { nav.popBackStack() }) { EmptyState("登录后查看等级", "查看当前账号的等级条件与进度。", actionLabel = "登录", action = ::login) }
                     }
-                    composable("account-records/{destination}") { entry ->
+                    composable("account-records/{destination}?badge={badge}", arguments = listOf(
+                        navArgument("badge") { type = NavType.IntType; defaultValue = 0 }
+                    )) { entry ->
                         val member = account.user
                         val destination = AccountDestination.entries.firstOrNull { it.name == entry.arguments?.getString("destination") }
                         if (member != null && destination != null) key(member.id, destination) {
                             AccountRecordsScreen(destination, member, app.repository, app.settings, { nav.popBackStack() }, ::login,
-                                ::openWebPage, ::topic, { id -> nav.navigate("chat/$id") }, ::editor) { text ->
+                                ::openWebPage, ::topic, { id -> nav.navigate("chat/$id") }, ::editor,
+                                initialBadgeId = entry.arguments?.getInt("badge")?.takeIf { it > 0 }) { text ->
                                 (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
                                     .setPrimaryClip(android.content.ClipData.newPlainText("邀请链接", text))
                                 showMessage("已复制邀请链接")

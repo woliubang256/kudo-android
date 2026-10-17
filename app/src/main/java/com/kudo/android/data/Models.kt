@@ -85,7 +85,7 @@ data class TopicDetail(
 }
 data class Notice(val id: Int, val title: String, val description: String, val topicId: Int?, val postNumber: Int?, val read: Boolean, val time: String,
     val type: Int = 0, val actor: Member? = null, val url: String = "", val isSolved: Boolean = false,
-    val chatChannelId: Int? = null, val chatMessageId: Int? = null)
+    val chatChannelId: Int? = null, val chatMessageId: Int? = null, val badgeId: Int? = null)
 data class SavedTopic(val id: Int, val topicId: Int, val title: String, val excerpt: String, val postNumber: Int?)
 data class PublishResult(val topicId: Int?, val queued: Boolean)
 
@@ -255,7 +255,8 @@ object DiscourseParser {
             if (solved && username.isBlank()) "话题已解决" else "$username $kind".trim(),
             item.positiveInt("topic_id"), item.positiveInt("post_number"), item.optBoolean("read"), item.text("created_at"),
             type, actor, data.text("url").ifBlank { data.text("link") }.ifBlank { data.positiveInt("badge_id")?.let { "https://linux.do/badges/$it" }.orEmpty() }, solved,
-            data.positiveInt("chat_channel_id"), data.positiveInt("chat_message_id"))
+            data.positiveInt("chat_channel_id"), data.positiveInt("chat_message_id"),
+            if (type == 12) data.positiveInt("badge_id") else null)
     }
 }
 

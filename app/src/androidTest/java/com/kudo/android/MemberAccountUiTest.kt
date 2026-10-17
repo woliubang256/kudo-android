@@ -14,6 +14,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.account.*
@@ -45,6 +49,8 @@ class MemberAccountUiTest {
                 "/u/fixture/summary.json" -> """{"user_summary":{"days_visited":825,"posts_read_count":357012,"likes_received":4000,"post_count":3102}}"""
                 "/session/csrf" -> """{"csrf":"offline-csrf"}"""
                 "/notifications/mark-read" -> "{}"
+                "/badges.json" -> """{"badges":[{"id":1,"name":"欢迎","icon":"heart","badge_type_id":3},{"id":3,"name":"编辑者","icon":"pencil","badge_type_id":2,"long_description":"<p>编辑帖子即可获得。</p>"}]}"""
+                "/user-badges/fixture.json" -> """{"user_badges":[{"id":91,"badge_id":3,"granted_at":"2026-10-01T00:00:00Z"}]}"""
                 "/notifications" -> noticesFixture ?: if (request.url.queryParameter("offset") == "30")
                     """{"notifications":[{"id":31,"notification_type":25,"data":{"title":"后页回应","display_username":"fixture"}}],"total_rows_notifications":31}"""
                     else """{"notifications":[${(1..30).joinToString(",") { """{"id":$it,"notification_type":2,"data":{"title":"回复夹具$it","display_username":"fixture"}}""" }}],"total_rows_notifications":31,"load_more_notifications":"/notifications?offset=30&limit=30"}"""
@@ -59,6 +65,82 @@ class MemberAccountUiTest {
         }, "https://member.test/".toHttpUrl(), http = http))
     }
     @After fun release() { vm?.viewModelScope?.cancel(); http.dispatcher.executorService.shutdown() }
+
+    @Test fun badgeNoticeNavigatesThroughAccountRecordsAndCanOpenAgainAfterReturning() {
+        noticesFixture = """{"notifications":[{"id":201,"notification_type":12,"read":false,"data":{"badge_id":3,"badge_name":"编辑者徽章通知"}}],"total_rows_notifications":1}"""
+        vm = AccountViewModel(repository, {}, {})
+        val account = vm!!
+        val settings = AppSettings(InstrumentationRegistry.getInstrumentation().context)
+        lateinit var nav: NavHostController
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            nav = rememberNavController()
+            NavHost(nav, "notices") {
+                composable("notices") {
+                    NotificationsScreen(account, {}, { _, _ -> error("Badge opened a topic") },
+                        website = { error("Badge opened a web page") },
+                        badges = { nav.navigate("account-records/BADGES?badge=${it ?: 0}") })
+                }
+                composable("account-records/{destination}?badge={badge}", arguments = listOf(
+                    navArgument("badge") { type = NavType.IntType; defaultValue = 0 }
+                )) { entry ->
+                    account.user?.let { member ->
+                        AccountRecordsScreen(AccountDestination.valueOf(entry.arguments!!.getString("destination")!!),
+                            member, repository, settings, { nav.popBackStack() }, {}, {}, { _, _ -> }, {}, { _, _ -> },
+                            initialBadgeId = entry.arguments?.getInt("badge")?.takeIf { it > 0 }) {}
+                    }
+                }
+            }
+        } }
+        compose.waitUntil(5000) { account.noticesLoaded }
+        repeat(2) {
+            compose.onNodeWithText("编辑者徽章通知").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("银色徽章").assertIsDisplayed()
+            compose.onNodeWithText("编辑帖子即可获得。").assertIsDisplayed()
+            compose.onNodeWithText("获得时间：2026-10-01").assertIsDisplayed()
+            compose.onNodeWithTag("sheet-drag-handle").performTouchInput { swipeDown(endY = height + 600f, durationMillis = 500) }
+            compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+            compose.onNodeWithText("我的徽章").assertIsDisplayed()
+            compose.runOnIdle { nav.popBackStack() }
+            compose.onNodeWithText("编辑者徽章通知").assertIsDisplayed()
+        }
+        compose.waitUntil(5000) { account.notices.single().read }
+        compose.runOnIdle { assertEquals(1, writes.get()); nav.navigate("account-records/BADGES") }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("badge-3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("我的徽章").assertIsDisplayed()
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+    }
+
+    @Test fun badgeNoticesOpenNativeBadgesBeforeTopicOrWebAndKeepMarkReadBehavior() {
+        noticesFixture = """{"notifications":[
+            {"id":201,"notification_type":12,"topic_id":88,"read":false,"data":{"badge_id":3,"badge_name":"指定徽章通知","url":"/badges/3"}},
+            {"id":202,"notification_type":12,"read":false,"data":{"badge_name":"缺少ID的徽章通知","url":"/badges"}},
+            {"id":203,"notification_type":2,"topic_id":99,"post_number":4,"read":false,"data":{"badge_id":3,"title":"普通回复不走徽章"}},
+            {"id":204,"notification_type":14,"read":false,"data":{"title":"普通网页通知","url":"/guidelines"}}
+        ],"total_rows_notifications":4}"""
+        vm = AccountViewModel(repository, {}, {})
+        val account = vm!!
+        val badges = mutableListOf<Int?>()
+        val topics = mutableListOf<Pair<Int, Int?>>()
+        val websites = mutableListOf<String>()
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            NotificationsScreen(account, {}, { topic, post -> topics += topic to post }, website = websites::add, badges = badges::add)
+        } }
+        compose.waitUntil(5000) { account.noticesLoaded }
+        compose.onNodeWithText("指定徽章通知").performClick()
+        compose.waitUntil(5000) { account.notices.first().read }
+        compose.onNodeWithTag("notice-unread-201", useUnmergedTree = true).assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(3), badges); assertTrue(topics.isEmpty()); assertTrue(websites.isEmpty()); assertEquals(1, writes.get()) }
+        compose.onNodeWithText("缺少ID的徽章通知").performClick()
+        compose.waitUntil(5000) { account.notices[1].read }
+        compose.runOnIdle { assertEquals(listOf(3, null), badges); assertTrue(websites.isEmpty()) }
+        compose.onNodeWithText("普通回复不走徽章").performClick()
+        compose.waitUntil(5000) { account.notices[2].read }
+        compose.runOnIdle { assertEquals(listOf(99 to 4), topics); assertEquals(listOf(3, null), badges) }
+        compose.onNodeWithText("普通网页通知").performClick()
+        compose.waitUntil(5000) { account.notices.all { it.read } }
+        compose.runOnIdle { assertEquals(listOf("https://linux.do/guidelines"), websites); assertEquals(4, writes.get()) }
+    }
 
     @Test fun memberUsesRealStatisticsAndCompactWorkingEntrancesWithoutDuplicateHeaderActions() {
         val destinations = mutableListOf<AccountDestination>()

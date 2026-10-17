@@ -45,7 +45,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, open: (Int, Int?) -> Unit,
-    website: (String) -> Unit, privateMessages: () -> Unit) {
+    website: (String) -> Unit, privateMessages: () -> Unit, badges: (Int?) -> Unit) {
     val pager = rememberPagerState(pageCount = { NoticeGroup.entries.size })
     val scope = rememberCoroutineScope()
     val settings = LocalDisplaySettings.current
@@ -96,6 +96,7 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                         .clickable {
                             vm.markRead(notice.id)
                             when {
+                                notice.type == 12 -> badges(notice.badgeId)
                                 notice.topicId != null -> open(notice.topicId, notice.postNumber)
                                 notice.url.isNotBlank() -> website(if (notice.url.startsWith("/")) "https://linux.do${notice.url}" else notice.url)
                                 else -> {

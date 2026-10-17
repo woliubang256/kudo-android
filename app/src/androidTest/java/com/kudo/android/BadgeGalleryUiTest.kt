@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -59,6 +60,50 @@ class BadgeGalleryUiTest {
         SingletonImageLoader.setUnsafe(loader)
     }
     @After fun restore() { SingletonImageLoader.setUnsafe(previous); loader.shutdown() }
+
+    @Test fun initialBadgeWaitsForSuccessfulRetryAndDoesNotReopenAfterDismissalOrRestoration() {
+        var loading by mutableStateOf(true)
+        var error by mutableStateOf<Throwable?>(null)
+        var catalog by mutableStateOf(badges)
+        var retries = 0
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { KudoTheme(DisplaySettings()) {
+            BadgePage(catalog, loading, error, refresh = { retries++; loading = true; error = null }, initialBadgeId = 3)
+        } }
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        compose.runOnIdle { loading = false; error = IllegalStateException("徽章加载失败夹具") }
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("重新加载").performClick()
+        compose.runOnIdle { assertEquals(1, retries) }
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        compose.runOnIdle { loading = false }
+        compose.onNodeWithText("银色徽章").assertIsDisplayed()
+        compose.onNodeWithText("获得时间：2026-10-01").assertIsDisplayed()
+        capture("badge-notification-details.png")
+        compose.onNodeWithTag("sheet-drag-handle").performTouchInput { swipeDown(endY = height + 600f, durationMillis = 500) }
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        compose.runOnIdle { catalog = badges.map { it.copy(count = it.count + 1) } }
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        compose.onNodeWithTag("badge-2").performClick()
+        compose.onNodeWithText("未获得").assertIsDisplayed()
+    }
+
+    @Test fun missingInvalidAndUnknownInitialBadgesNeverOpenAnotherBadge() {
+        var initialBadgeId by mutableStateOf<Int?>(null)
+        var catalog by mutableStateOf(badges)
+        compose.setContent { KudoTheme(DisplaySettings()) { BadgePage(catalog, initialBadgeId = initialBadgeId) } }
+        for (badgeId in listOf(null, 0, -1, 999)) {
+            compose.runOnIdle { initialBadgeId = badgeId }
+            compose.onNodeWithText("我的徽章").assertIsDisplayed()
+            compose.onNodeWithTag("badge-1").assertIsDisplayed()
+            compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        }
+        compose.runOnIdle { catalog = badges + badges.first().copy(id = 999) }
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+    }
 
     @Test fun phoneGridHasThreeColumnsAndLockedPictureLogosAreGray() {
         compose.setContent {

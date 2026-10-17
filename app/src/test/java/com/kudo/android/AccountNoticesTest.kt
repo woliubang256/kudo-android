@@ -8,6 +8,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AccountNoticesTest {
+    @Test fun badgeNotificationsRetainOnlyValidBadgeIdsWithoutLosingOtherTargets() {
+        val notices = DiscourseParser.notices(JSONObject("""{"notifications":[
+            {"id":1,"notification_type":12,"topic_id":42,"post_number":3,"data":{"badge_id":7,"badge_name":"首次引用","url":"/badges/7/quote"}},
+            {"id":2,"notification_type":12,"data":{"badge_id":0}},
+            {"id":3,"notification_type":12,"data":{"badge_id":-1}},
+            {"id":4,"notification_type":12,"data":{"badge_id":"invalid"}},
+            {"id":5,"notification_type":12,"data":{"badge_id":null}},
+            {"id":6,"notification_type":12,"data":{}},
+            {"id":7,"notification_type":2,"topic_id":99,"data":{"badge_id":7,"title":"普通回复"}}
+        ]}"""))
+        assertEquals(7, notices.first().badgeId)
+        assertEquals("首次引用", notices.first().title)
+        assertEquals("/badges/7/quote", notices.first().url)
+        assertEquals(42, notices.first().topicId)
+        assertEquals(3, notices.first().postNumber)
+        assertTrue(notices.drop(1).all { it.badgeId == null })
+        assertEquals(99, notices.last().topicId)
+    }
+
     @Test fun solvedNotificationUsesTheRealTopicTitleInsteadOfTheTranslationKey() {
         val notice = DiscourseParser.notices(JSONObject("""{"notifications":[{"id":685498710,"notification_type":14,"topic_id":3003776,"post_number":34,"read":true,"fancy_title":"新来的前端女同事，怎么深入交流？","data":{"message":"solved.topic_solved_notification","display_username":"3023599024","topic_title":"新来的前端女同事，怎么深入交流？","title":"solved.notification.topic_solved_title"}}]}""")).single()
         assertEquals("新来的前端女同事，怎么深入交流？", notice.title)

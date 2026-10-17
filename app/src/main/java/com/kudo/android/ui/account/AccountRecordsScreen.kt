@@ -25,9 +25,10 @@ import org.json.JSONObject
 @Composable
 internal fun AccountRecordsScreen(destination: AccountDestination, user: Member, repository: CommunityRepository,
     settings: AppSettings, back: () -> Unit, login: () -> Unit, website: (String) -> Unit,
-    topic: (Int, Int?) -> Unit, channel: (Int) -> Unit, edit: (Int?, Int?) -> Unit, copy: (String) -> Unit) {
+    topic: (Int, Int?) -> Unit, channel: (Int) -> Unit, edit: (Int?, Int?) -> Unit,
+    initialBadgeId: Int? = null, copy: (String) -> Unit) {
     if (destination == AccountDestination.BADGES) {
-        BadgeScreen(user, repository, back, login, website)
+        BadgeScreen(user, repository, back, login, website, initialBadgeId)
         return
     }
     var records by remember(user.id, destination) { mutableStateOf<List<AccountRecord>>(emptyList()) }

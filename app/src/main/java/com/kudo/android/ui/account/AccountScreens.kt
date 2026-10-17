@@ -157,12 +157,12 @@ fun MenuRow(icon: ImageVector, title: String, subtitle: String, click: () -> Uni
 
 @Composable
 fun NotificationsScreen(vm: AccountViewModel, login: () -> Unit, open: (Int, Int?) -> Unit,
-    website: (String) -> Unit = {}, privateMessages: () -> Unit = {}) {
+    website: (String) -> Unit = {}, privateMessages: () -> Unit = {}, badges: (Int?) -> Unit = {}) {
     if (vm.user == null) {
         GuestNotificationsScreen(login)
         return
     }
-    key(vm.user?.id) { MemberNotificationsScreen(vm, login, open, website, privateMessages) }
+    key(vm.user?.id) { MemberNotificationsScreen(vm, login, open, website, privateMessages, badges) }
 }
 
 @Composable
