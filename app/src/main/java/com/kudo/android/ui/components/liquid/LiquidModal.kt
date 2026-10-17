@@ -23,6 +23,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalContentColor
@@ -148,7 +149,7 @@ internal fun LiquidModal(
 @Composable
 internal fun LiquidModalAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false) {
     if (LocalSheetActions.current) {
-        Box(modifier.background(if (primary) LogoYellow else Color.Transparent)
+        Box(modifier.clip(CircleShape).background(if (primary) LogoYellow else Color.Transparent)
             .clickable(role = Role.Button, onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
             Text(text, style = MaterialTheme.typography.bodyMedium, color = if (primary) Ink else LocalContentColor.current)
         }

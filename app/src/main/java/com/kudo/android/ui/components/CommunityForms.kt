@@ -5,7 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,14 +30,14 @@ internal fun CommunityIconButton(icon: ImageVector, description: String, action:
         TopBarIconButton(icon, description, action, modifier, enabled)
         return
     }
-    Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
+    Box(modifier.size(48.dp).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
         Icon(icon, description, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .6f else .25f))
     }
 }
 
 @Composable
 internal fun CommunityButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, compact: Boolean = false,
-    shape: Shape = RoundedCornerShape(4.dp)) {
+    shape: Shape = CircleShape) {
     if (LocalToolbarActions.current) {
         TopBarTextButton(text, onClick, modifier, enabled)
         return
