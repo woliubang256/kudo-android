@@ -377,6 +377,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         LaunchedEffect(nonce) { if (nonce != 0L) vm.refresh() }
                         LaunchedEffect(vm) { vm.events.collect { showMessage(it) } }
                         var replyTarget by rememberSaveable(account.user?.id) { mutableStateOf<Int?>(null) }
+                        var replyQuote by rememberSaveable(account.user?.id) { mutableStateOf<String?>(null) }
                         val replyVisibility = remember(account.user?.id) { MutableTransitionState(replyTarget != null) }
                         val keyboard = LocalSoftwareKeyboardController.current
                         val replyShowing = replyVisibility.currentState || replyVisibility.targetState
@@ -387,19 +388,24 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         Box(Modifier.fillMaxSize()) {
                         Box(Modifier.fillMaxSize().layerBackdrop(replyBackdrop).then(if (replyShowing) Modifier.clearAndSetSemantics {} else Modifier)
                             .focusProperties { onEnter = { if (replyShowing) cancelFocusChange() } }.focusGroup()) {
-                        TopicScreen(state, display.glass, { nav.popBackStack() }, vm::refresh, vm::more, ::login, { authenticated { vm.like(it) } }, { authenticated { vm.bookmark(it) } }, { post -> authenticated { replyTarget = post?.number ?: 0; replyVisibility.targetState = true } }, ::user, {}, ::openLink,
+                        TopicScreen(state, display.glass, { nav.popBackStack() }, vm::refresh, vm::more, ::login, { authenticated { vm.like(it) } }, { authenticated { vm.bookmark(it) } }, { post -> authenticated { replyQuote = null; replyTarget = post?.number ?: 0; replyVisibility.targetState = true } }, ::user, {}, ::openLink,
                             { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, "${state.detail?.title.orEmpty()}\nhttps://linux.do/t/$id") }, "分享话题")) },
                             follow = { authenticated { vm.follow() } }, react = { post, reaction -> authenticated { vm.react(post, reaction) } }, openBrowser = ::openBrowser, loadReplies = vm::loadReplies, resolveContext = vm::resolveContext,
                             readingEnabled = !replyShowing, onReadingBatch = { readingSync.submit(state.viewerId, it) }, onPostsRead = vm::markRead,
                             loadBoostRules = vm::loadBoostRules, boost = vm::boost, jumpTo = vm::jumpTo, previous = vm::previous,
                             vote = { post, name, options -> authenticated { vm.vote(post, name, options) } },
                             openCategory = { categoryId -> if (categoryId > 0) nav.navigate("category/$categoryId") { launchSingleTop = true } },
-                            openTag = ::openTag)
+                            openTag = ::openTag, quoteReply = { post, markdown -> authenticated {
+                                replyQuote = markdown; replyTarget = post.number; replyVisibility.targetState = true
+                            } })
                         }
                         val currentUser = account.user
                         val target = replyTarget
                         if (currentUser != null && target != null) {
                             val editorVm = model("reply-${currentUser.id}-$id-$target") { EditorViewModel(app, currentUser.id, id, target.takeIf { it > 0 }, categoryId = state.detail?.categoryId) }
+                            LaunchedEffect(editorVm, replyQuote) {
+                                replyQuote?.let { editorVm.edit(editorVm.draft.copy(raw = appendPostQuote(editorVm.draft.raw, it))); replyQuote = null }
+                            }
                             LaunchedEffect(editorVm) { editorVm.published.collect { result ->
                                 keyboard?.hide(); replyVisibility.targetState = false
                                 vm.refresh(); refreshEpoch++

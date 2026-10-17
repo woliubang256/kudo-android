@@ -123,7 +123,7 @@ internal fun SpoilerArticleText(article: InlineArticle, contentKey: String, tag:
                 else if (layout != null) clipPath(spoilerPath(layout, hidden), ClipOp.Difference) { this@drawWithContent.drawContent() }
             }, inlineContent = inline, style = style.copy(textIndent = textIndent), color = color, onTextLayout = { layout = it })
         }
-        if (hidden.isEmpty()) SelectionContainer { body() } else body()
+        if (hidden.isEmpty()) SelectionContainer(LocalPostQuoteSelection.current) { body() } else body()
         if (hidden.isNotEmpty()) {
             if (blurSupported) {
                 // Keep inline emoji annotations but remove links from this visual-only layer.

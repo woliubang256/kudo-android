@@ -82,6 +82,24 @@ class EditorLifecycleUiTest {
         assertEquals("其他分类草稿", app.settings.draft("${userId}_new_98").raw)
     }
 
+    @Test fun quoteAppendPersistsWithoutOverwritingOtherReplyDraftsOrPublishing() {
+        val vm = editor()
+        val post = Post(80, 8, Member(6, "quote_user", "引用作者", ""), "", "", 0, false, null, null, true)
+        val quote = postQuoteMarkdown(700, post, "选中第一行\n选中第二行")
+        instrumentation.runOnMainSync {
+            app.settings.saveDraft("${userId}_700_9", Draft(raw = "另一楼层的草稿"))
+            vm.edit(Draft(raw = "已有草稿"))
+            vm.edit(vm.draft.copy(raw = appendPostQuote(vm.draft.raw, quote)))
+        }
+        val restored = editor()
+        instrumentation.runOnMainSync {
+            assertEquals("已有草稿\n\n$quote\n\n", restored.draft.raw)
+            assertEquals("另一楼层的草稿", app.settings.draft("${userId}_700_9").raw)
+            assertEquals(8, restored.replyTo)
+            assertFalse(vm.sending)
+        }
+    }
+
     @Test fun successfulReplyClearsBothStoredAndLiveDraftBeforeTheSameSheetReopens() = runBlocking {
         val vm = editor()
         instrumentation.runOnMainSync { vm.edit(Draft(raw = "这是达到网站最低字数要求的回复内容")); vm.publish() }

@@ -41,7 +41,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
-fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: () -> Unit, more: () -> Unit, login: () -> Unit, like: (Post) -> Unit, bookmark: (Post) -> Unit, reply: (Post?) -> Unit, user: (String) -> Unit, image: (String) -> Unit, openLink: (String) -> Unit, share: () -> Unit, follow: () -> Unit = {}, react: (Post, String) -> Unit = { _, _ -> }, openBrowser: (String) -> Unit = openLink, loadReplies: (Post, Boolean) -> Unit = { _, _ -> }, resolveContext: () -> Unit = {}, readingEnabled: Boolean = true, onReadingBatch: (TopicReadingBatch) -> Unit = {}, onPostsRead: (Set<Int>) -> Unit = {}, loadBoostRules: () -> Unit = {}, boost: (Post, String, () -> Unit) -> Unit = { _, _, _ -> }, jumpTo: (Int) -> Unit = {}, vote: (Post, String, List<String>) -> Unit = { _, _, _ -> }, openCategory: (Int) -> Unit = {}, openTag: (TopicTag) -> Unit = {}, previous: () -> Unit = {}) {
+fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: () -> Unit, more: () -> Unit, login: () -> Unit, like: (Post) -> Unit, bookmark: (Post) -> Unit, reply: (Post?) -> Unit, user: (String) -> Unit, image: (String) -> Unit, openLink: (String) -> Unit, share: () -> Unit, follow: () -> Unit = {}, react: (Post, String) -> Unit = { _, _ -> }, openBrowser: (String) -> Unit = openLink, loadReplies: (Post, Boolean) -> Unit = { _, _ -> }, resolveContext: () -> Unit = {}, readingEnabled: Boolean = true, onReadingBatch: (TopicReadingBatch) -> Unit = {}, onPostsRead: (Set<Int>) -> Unit = {}, loadBoostRules: () -> Unit = {}, boost: (Post, String, () -> Unit) -> Unit = { _, _, _ -> }, jumpTo: (Int) -> Unit = {}, vote: (Post, String, List<String>) -> Unit = { _, _, _ -> }, openCategory: (Int) -> Unit = {}, openTag: (TopicTag) -> Unit = {}, previous: () -> Unit = {}, quoteReply: ((Post, String) -> Unit)? = null) {
     val backdrop = rememberLayerBackdrop()
     val modalBackdrop = rememberLayerBackdrop()
     val visibility = remember { MutableTransitionState(false) }
@@ -85,6 +85,9 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
     fun dismiss() { visibility.targetState = false }
     fun choose(post: Post) { reactionPostId = post.id; visibility.targetState = true }
     fun replyTo(post: Post?) { threadVisibility.targetState = false; visibility.targetState = false; reply(post) }
+    val quotedReply: ((Post, String) -> Unit)? = quoteReply?.let { action -> { post, markdown ->
+        threadVisibility.targetState = false; visibility.targetState = false; action(post, markdown)
+    } }
     val detail = state.detail
     val presentation = LocalTopicPresentation.current
     LaunchedEffect(detail?.id, state.loading) {
@@ -276,7 +279,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                                     revealOriginal, revealOriginal = { revealOriginal = true }, boost = ::openBoost, vote = vote, login = login,
                                     onHeading = if (post.number == 1 && tocEntries.isNotEmpty()) { heading, requester ->
                                         if (heading.level == 2 || heading.level == 3) headingAnchors[heading.path] = requester
-                                    } else null)
+                                    } else null, quote = quotedReply)
                                 if (post.number == 1) TopicSolutionsSummary(detail, posts, !showing, ::navigatePost)
                                 if (post.number > 1 && !post.isSystemAction && thread != null) ReplyPreview(thread, state.replyLoads[post.id], state.hasMoreReplies(post), !showing) {
                                     if (it == null) openThread(post) else navigatePost(it)
@@ -332,7 +335,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                         itemsIndexed(thread.replies, key = { _, post -> post.id }) { index, post ->
                             if (index > 0) HorizontalDivider()
                             ThreadPreviewPost(post, threadEnabled, image, openLink, ::navigatePost,
-                                replyAuthorLabel(post, thread.root.number, threadPosts), state, like, ::replyTo, ::choose)
+                                replyAuthorLabel(post, thread.root.number, threadPosts), state, like, ::replyTo, ::choose, quote = quotedReply)
                         }
                         val load = state.replyLoads[thread.root.id]
                         if (load?.loading == true) item { LoadingRow() }

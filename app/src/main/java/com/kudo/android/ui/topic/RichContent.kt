@@ -773,7 +773,7 @@ private fun CodeBlock(code: String) {
         }.semantics { contentDescription = "复制代码" }, contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.ContentCopy, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        SelectionContainer {
+        SelectionContainer(LocalPostQuoteSelection.current) {
             Text(code, Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 13.dp, end = 13.dp, bottom = 13.dp),
                 fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
         }
