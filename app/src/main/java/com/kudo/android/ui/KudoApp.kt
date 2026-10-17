@@ -213,7 +213,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                         { nav.navigate("category/${it.id}") }, ::openTag, ::openWebPage)
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
                                         { nav.navigate("personal/${AccountDestination.MESSAGES.name}") },
-                                        badges = { badgeId -> nav.navigate("account-records/${AccountDestination.BADGES.name}?badge=${badgeId ?: 0}") })
+                                        badges = { badgeId -> nav.navigate("account-records/${AccountDestination.BADGES.name}?badge=${badgeId ?: 0}") }, profile = ::user)
                                     4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") },
                                         destination = { destination ->
                                             when (destination) {

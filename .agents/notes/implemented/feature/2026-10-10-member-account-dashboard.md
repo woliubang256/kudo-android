@@ -24,6 +24,10 @@ Status: implemented
 
 [解决通知](../bug-fix/2026-10-10-solved-notifications.md)通过custom类型的专用message识别，显示真实主题标题和蓝色勾选；未读黄点仍独立显示，其他custom事件不误判为解决通知。
 
+关注通知按discourse-follow的following类型800识别，主行显示关注者用户名，说明为“已开始关注你”，头像旁以关注标识区别普通动态。账号来自data.display_username，缺失时仅接受顶层acting_user_username；不使用original_username、通知URL或当前会话账号猜测关注者。点击仍标读，但优先通过独立回调进入该账号的既有原生个人主页；缺少账号或目标等于当前用户时不跳转，也不回退自己的网页主页。801/802是关注用户发帖/回复事件，不套用新关注语义；其他通知、徽章入口、分页及分组不变。
+
+字段依据为discourse/discourse-follow的plugin.rb、lib/follow/updater.rb与assets/javascripts/discourse/initializers/follow-initializer.js：800的display_username是follower，网页适配器同样以该字段构建userPath。只改应用内消息点击，不拦截WebView内链接，不扩大系统通知点击载荷。
+
 回复包含提及、引用和群组提及；赞包含合并点赞和 reactions；论坛私信不混用聊天通知。完整通知分页读取 total_rows_notifications 与 load_more_notifications，权限过滤后当前页为空也推进。空组最多自动扫描3页，之后提供继续加载；尚有游标时不显示全量为空。消息标签支持左右滑动，私信组提供原生收件箱入口。
 
 ## Related decisions
@@ -33,6 +37,9 @@ Status: implemented
 检索个人中心、通知、背景、草稿、FluxDO 和 Connect。[账号与草稿](../../implemented/feature/2026-10-07-account-and-composer.md)、[用户背景](../../implemented/feature/2026-10-10-user-decoration.md)、[访客界面](../../implemented/feature/2026-10-10-guest-account-layout.md)部分重叠并保留其会话、签名和访客边界；标题图替代“我的”资料卡背景的用途，其余背景语义继续成立。[数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)继续约束分页与会话。没有完全吸收或过时的提案。
 
 ## Alternatives considered
+
+- 沿用通知URL能避免新增原生回调，但当前故障即表现为进入被关注者自己的网页主页，且URL不保证表达关注者身份；按明确的800类型和关注者字段跳转原生主页。
+- 用original_username或当前登录账号兜底可以保证总有可点击目标，但无法证明它们是关注者，可能重现跳自己主页的问题；缺少可确认的关注者时保持消息页，不猜测目标。
 
 - 复用单列表并在每次切换话题类型或信箱时清空重读，状态最少且读取最新，但横滑会反复请求并失去阅读位置；以页键缓存已成功内容与游标，只取消在途读取，刷新仍由当前页显式触发。
 
@@ -59,6 +66,10 @@ Status: implemented
 - 真实消息接口验收遇到站点429限流，正确展示重试状态；未点击通知或全部已读。四组交互和跨页结果使用离线夹具验证，不能据此声称真实通知端到端验收完成。
 
 ## Consequences
+
+关注通知先由AccountNoticesTest的2项新增用例复现通用文案与错误账号回退，再由MemberAccountUiTest的2项新增真机用例复现走网页而非原生主页、缺失账号误走自己的URL。修复后22项相关JVM测试（AccountNoticesTest、NotificationProtocolTest、UserProfileDataTest）与17项RMX2202 / Android13真机测试（MemberAccountUiTest、NotificationUiTest、BadgeGalleryUiTest）通过，日志为artifacts/follow-notice-green-build.txt和artifacts/follow-notice-green-device.txt。覆盖关注者用户名和标识、进入真实UserScreen组件、工具栏返回、重复点击仅标读一次、缺失/同账号不跳转，以及801/802、解决通知和徽章通知回归。已查看following-notice-corrected.png与following-notice-native-profile.png；网络与写操作使用离线夹具，没有标读真实通知。同签名、原版本2021 / 0.2.10-dev覆盖安装，保留真机数据。
+
+关注者缺失或目标为当前账号时仍可标读，但不生成跳转，避免错误打开自己的资料；这也意味着异常通知不能保证有可打开的个人主页。后续插件改变类型或账号字段时必须重新核对角色，不能靠URL或会话补出关注者。该修复不额外请求关注关系或改变网页浏览规则。
 
 个人内容和通知具有紧凑原生入口，资料加载失败不冒充零，账号切换不混用。代价是维护多种Discourse接口与Connect HTML契约；页面或认证变化需要网页恢复入口。聊天内容前台每20秒刷新，离开或后台停止；消息提醒与读取同步由[运行通知](2026-10-10-runtime-local-notifications.md)接管，聊天按实际可见位置上报已读。线程和附件管理等完整功能保留应用内网页。聊天和邀请权限由服务器决定，站点限流时必须等待后重试。发帖、私信、聊天发送、邀请和真实草稿删除均未对真实账号执行，这些使用夹具验证。
 

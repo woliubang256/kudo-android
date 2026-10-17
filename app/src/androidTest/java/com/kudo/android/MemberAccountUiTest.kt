@@ -47,6 +47,10 @@ class MemberAccountUiTest {
                 "/session/current.json" -> """{"current_user":{"id":42,"username":"fixture","name":"资料测试","trust_level":3}}"""
                 "/u/fixture.json" -> """{"user":{"id":42,"username":"fixture","name":"资料测试","trust_level":3}}"""
                 "/u/fixture/summary.json" -> """{"user_summary":{"days_visited":825,"posts_read_count":357012,"likes_received":4000,"post_count":3102}}"""
+                "/u/hg3317593.json" -> """{"user":{"id":73,"username":"hg3317593","name":"关注者资料夹具","trust_level":2}}"""
+                "/u/hg3317593/card.json" -> """{"user":{}}"""
+                "/u/hg3317593/summary.json" -> """{"user_summary":{}}"""
+                "/site.json" -> """{"categories":[]}"""
                 "/session/csrf" -> """{"csrf":"offline-csrf"}"""
                 "/notifications/mark-read" -> "{}"
                 "/badges.json" -> """{"badges":[{"id":1,"name":"欢迎","icon":"heart","badge_type_id":3},{"id":3,"name":"编辑者","icon":"pencil","badge_type_id":2,"long_description":"<p>编辑帖子即可获得。</p>"}]}"""
@@ -65,6 +69,80 @@ class MemberAccountUiTest {
         }, "https://member.test/".toHttpUrl(), http = http))
     }
     @After fun release() { vm?.viewModelScope?.cancel(); http.dispatcher.executorService.shutdown() }
+
+    @Test fun followingNoticeOpensTheFollowersNativeProfileAndReturnsWithoutMarkingReadTwice() {
+        noticesFixture = """{"notifications":[{"id":301,"notification_type":800,"read":false,"data":{"display_username":"hg3317593","original_username":"fixture","url":"/u/fixture"}}],"total_rows_notifications":1}"""
+        vm = AccountViewModel(repository, {}, {})
+        val account = vm!!
+        val websites = mutableListOf<String>()
+        lateinit var nav: NavHostController
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            nav = rememberNavController()
+            NavHost(nav, "notices") {
+                composable("notices") {
+                    NotificationsScreen(account, {}, { _, _ -> error("Follower notice opened a topic") }, website = websites::add,
+                        profile = { nav.navigate("user/${android.net.Uri.encode(it)}") })
+                }
+                composable("user/{username}") { entry ->
+                    UserScreen(entry.arguments!!.getString("username")!!, repository, { nav.popBackStack() }, {}, websites::add,
+                        viewerId = account.user?.id)
+                }
+            }
+        } }
+        compose.waitUntil(5000) { account.noticesLoaded }
+        compose.onNodeWithText("hg3317593").assertIsDisplayed()
+        compose.onNodeWithText("已开始关注你").assertIsDisplayed()
+        compose.onNodeWithText("有新的动态", substring = true).assertDoesNotExist()
+        repeat(2) {
+            compose.onNodeWithText("hg3317593").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("关注者资料夹具").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("public-user-page").assertIsDisplayed()
+            compose.onNode(hasText("关注者资料夹具") and hasAnyAncestor(hasTestTag("public-profile-header"))).assertIsDisplayed()
+            compose.onNodeWithText("资料测试").assertDoesNotExist()
+            compose.runOnIdle { assertEquals("hg3317593", nav.currentBackStackEntry?.arguments?.getString("username")); assertTrue(websites.isEmpty()) }
+            if (it == 0) capture("following-notice-native-profile.png", "public-user-page")
+            compose.onNodeWithContentDescription("返回").performClick()
+            compose.onNodeWithText("hg3317593").assertIsDisplayed()
+        }
+        compose.waitUntil(5000) { account.notices.single().read }
+        compose.onNodeWithTag("notice-unread-301", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("notice-following-301", useUnmergedTree = true).assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, writes.get()) }
+        capture("following-notice-corrected.png", "member-notifications")
+    }
+
+    @Test fun followingNoticesNeverGuessMissingOrSelfTargetsAndRelatedPostsKeepTheirTargets() {
+        noticesFixture = """{"notifications":[
+            {"id":301,"notification_type":800,"data":{"original_username":"fixture","url":"/u/fixture"}},
+            {"id":302,"notification_type":800,"data":{"display_username":"FiXtUrE","url":"/u/fixture"}},
+            {"id":303,"notification_type":801,"topic_id":88,"post_number":1,"data":{"display_username":"skyrock","title":"关注用户发帖夹具"}},
+            {"id":304,"notification_type":802,"topic_id":99,"post_number":4,"data":{"display_username":"qq1244","title":"关注用户回复夹具"}},
+            {"id":305,"notification_type":14,"data":{"display_username":"hg3317593","title":"普通用户动态夹具","url":"/guidelines"}}
+        ],"total_rows_notifications":5}"""
+        vm = AccountViewModel(repository, {}, {})
+        val account = vm!!
+        val profiles = mutableListOf<String>()
+        val websites = mutableListOf<String>()
+        val topics = mutableListOf<Pair<Int, Int?>>()
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            NotificationsScreen(account, {}, { topic, post -> topics += topic to post }, website = websites::add, profile = profiles::add)
+        } }
+        compose.waitUntil(5000) { account.noticesLoaded }
+        compose.onNodeWithText("新的关注者").performClick()
+        compose.onNodeWithText("FiXtUrE").performClick()
+        compose.waitUntil(5000) { account.notices.take(2).all { it.read } }
+        compose.runOnIdle { assertTrue(profiles.isEmpty()); assertTrue(websites.isEmpty()); assertTrue(topics.isEmpty()); assertEquals(2, writes.get()) }
+        compose.onNodeWithText("关注用户发帖夹具").performClick()
+        compose.onNodeWithText("关注用户回复夹具").performClick()
+        compose.onNodeWithText("普通用户动态夹具").performClick()
+        compose.waitUntil(5000) { account.notices.all { it.read } }
+        compose.runOnIdle {
+            assertTrue(profiles.isEmpty())
+            assertEquals(listOf(88 to 1, 99 to 4), topics)
+            assertEquals(listOf("https://linux.do/guidelines"), websites)
+            assertEquals(5, writes.get())
+        }
+    }
 
     @Test fun badgeNoticeNavigatesThroughAccountRecordsAndCanOpenAgainAfterReturning() {
         noticesFixture = """{"notifications":[{"id":201,"notification_type":12,"read":false,"data":{"badge_id":3,"badge_name":"编辑者徽章通知"}}],"total_rows_notifications":1}"""

@@ -8,6 +8,43 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AccountNoticesTest {
+    @Test fun followingNoticeShowsTheFollowerInsteadOfAGenericEventOrTheRecipientsUrl() {
+        val notice = DiscourseParser.notices(JSONObject("""{"notifications":[{
+            "id":301,"notification_type":800,"read":false,"acting_user_id":73,"acting_user_avatar_template":"/avatar/{size}.png",
+            "data":{"display_username":"hg3317593","original_username":"fixture","title":"notifications.titles.following","url":"/u/fixture"}
+        }]}""")).single()
+        assertEquals("hg3317593", notice.title)
+        assertEquals("已开始关注你", notice.description)
+        assertEquals("hg3317593", notice.actor?.username)
+        assertEquals(73, notice.actor?.id)
+        assertEquals("/avatar/{size}.png", notice.actor?.avatar)
+        assertEquals("/u/fixture", notice.url)
+        assertFalse(notice.read)
+        assertFalse(notice.isSolved)
+    }
+
+    @Test fun followingNoticeUsesOnlyConfirmedActorFieldsAndDoesNotGuessFromTheRecipient() {
+        val notices = DiscourseParser.notices(JSONObject("""{"notifications":[
+            {"id":301,"notification_type":800,"data":{"display_username":"2294057731"}},
+            {"id":302,"notification_type":800,"acting_user_username":"huahau","data":{"display_username":"  ","original_username":"fixture"}},
+            {"id":303,"notification_type":800,"data":{"original_username":"fixture","url":"/u/fixture"}},
+            {"id":304,"notification_type":800,"data":{}},
+            {"id":305,"notification_type":801,"topic_id":5,"data":{"display_username":"skyrock","title":"关注用户的新话题"}},
+            {"id":306,"notification_type":802,"topic_id":6,"post_number":2,"data":{"display_username":"qq1244","title":"关注用户的新回复"}},
+            {"id":307,"notification_type":14,"data":{"display_username":"hg3317593","title":"普通插件事件"}}
+        ]}"""))
+        assertEquals(listOf("2294057731", "huahau", "新的关注者", "新的关注者"), notices.take(4).map { it.title })
+        assertTrue(notices.take(4).all { it.description == "已开始关注你" })
+        assertNull(notices[2].actor)
+        assertNull(notices[3].actor)
+        assertEquals("关注用户的新话题", notices[4].title)
+        assertEquals(5, notices[4].topicId)
+        assertEquals("关注用户的新回复", notices[5].title)
+        assertEquals(6, notices[5].topicId)
+        assertEquals(2, notices[5].postNumber)
+        assertEquals("hg3317593 有新的动态", notices[6].description)
+    }
+
     @Test fun badgeNotificationsRetainOnlyValidBadgeIdsWithoutLosingOtherTargets() {
         val notices = DiscourseParser.notices(JSONObject("""{"notifications":[
             {"id":1,"notification_type":12,"topic_id":42,"post_number":3,"data":{"badge_id":7,"badge_name":"首次引用","url":"/badges/7/quote"}},

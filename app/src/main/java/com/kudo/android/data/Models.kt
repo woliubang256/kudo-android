@@ -245,14 +245,16 @@ object DiscourseParser {
             1, 15 -> "提到了你"; 2 -> "回复了你"; 3 -> "引用了你"; 4 -> "编辑了帖子"
             5, 19 -> "赞了你的帖子"; 6 -> "发来私信"; 7 -> "邀请你加入私信"; 9, 17 -> "发布了新话题"
             11 -> "链接了你的帖子"; 12 -> "授予了你徽章"; 13 -> "邀请你参与话题"; 20 -> "你的内容已通过审核"
-            24 -> "收藏提醒"; 25 -> "回应了你的帖子"; 29, 30 -> "有新的聊天消息"; else -> "有新的动态"
+            24 -> "收藏提醒"; 25 -> "回应了你的帖子"; 29, 30 -> "有新的聊天消息"; 800 -> "已开始关注你"; else -> "有新的动态"
         }
-        val username = data.text("display_username").ifBlank { data.text("original_username") }.ifBlank { item.text("acting_user_username") }
+        val username = if (type == 800) data.text("display_username").trim().ifBlank { item.text("acting_user_username").trim() }
+            else data.text("display_username").ifBlank { data.text("original_username") }.ifBlank { item.text("acting_user_username") }
         val actor = username.takeIf(String::isNotBlank)?.let { Member(item.optInt("acting_user_id"), it, data.text("display_name"), item.text("acting_user_avatar_template")) }
-        val title = if (solved) plainText(data.text("topic_title")).ifBlank { plainText(item.text("fancy_title")) }.ifBlank { "话题已解决" }
+        val title = if (type == 800) username.ifBlank { "新的关注者" }
+            else if (solved) plainText(data.text("topic_title")).ifBlank { plainText(item.text("fancy_title")) }.ifBlank { "话题已解决" }
             else plainText(data.text("title").ifBlank { data.text("topic_title") }.ifBlank { data.text("badge_name") }).ifBlank { kind }
         Notice(item.getInt("id"), title,
-            if (solved && username.isBlank()) "话题已解决" else "$username $kind".trim(),
+            if (type == 800) kind else if (solved && username.isBlank()) "话题已解决" else "$username $kind".trim(),
             item.positiveInt("topic_id"), item.positiveInt("post_number"), item.optBoolean("read"), item.text("created_at"),
             type, actor, data.text("url").ifBlank { data.text("link") }.ifBlank { data.positiveInt("badge_id")?.let { "https://linux.do/badges/$it" }.orEmpty() }, solved,
             data.positiveInt("chat_channel_id"), data.positiveInt("chat_message_id"),

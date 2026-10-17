@@ -45,7 +45,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, open: (Int, Int?) -> Unit,
-    website: (String) -> Unit, privateMessages: () -> Unit, badges: (Int?) -> Unit) {
+    website: (String) -> Unit, privateMessages: () -> Unit, badges: (Int?) -> Unit, profile: (String) -> Unit) {
     val pager = rememberPagerState(pageCount = { NoticeGroup.entries.size })
     val scope = rememberCoroutineScope()
     val settings = LocalDisplaySettings.current
@@ -97,6 +97,9 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                             vm.markRead(notice.id)
                             when {
                                 notice.type == 12 -> badges(notice.badgeId)
+                                notice.type == 800 -> notice.actor?.username?.takeIf {
+                                    it.isNotBlank() && !it.equals(vm.user?.username, ignoreCase = true)
+                                }?.let(profile)
                                 notice.topicId != null -> open(notice.topicId, notice.postNumber)
                                 notice.url.isNotBlank() -> website(if (notice.url.startsWith("/")) "https://linux.do${notice.url}" else notice.url)
                                 else -> {
@@ -111,12 +114,21 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                                 Modifier.align(Alignment.BottomEnd).size(16.dp)
                                     .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(3.dp))
                                     .testTag("notice-solved-${notice.id}"), tint = Color(0xFF3B82F6))
+                            if (notice.type == 800) Icon(Icons.Rounded.PersonAdd, "新的关注者",
+                                Modifier.align(Alignment.BottomEnd).size(16.dp)
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(3.dp))
+                                    .testTag("notice-following-${notice.id}"), tint = Color(0xFF3B82F6))
                             if (!notice.read) Box(Modifier.align(Alignment.TopEnd).size(7.dp).background(LogoYellow, RoundedCornerShape(50))
                                 .testTag("notice-unread-${notice.id}"))
                         }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(notice.description, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(notice.title, fontSize = 14.sp, lineHeight = 21.sp)
+                            if (notice.type == 800) {
+                                Text(notice.title, fontSize = 14.sp, lineHeight = 21.sp)
+                                Text(notice.description, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else {
+                                Text(notice.description, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(notice.title, fontSize = 14.sp, lineHeight = 21.sp)
+                            }
                             if (notice.time.isNotBlank()) Text(relativeTime(notice.time), fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
