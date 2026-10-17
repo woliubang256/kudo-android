@@ -35,6 +35,7 @@ import kotlin.math.roundToInt
 
 internal val LocalSheetActions = staticCompositionLocalOf { false }
 internal val LocalSheetBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+internal val LocalSheetInputBlocked = staticCompositionLocalOf { false }
 
 /** Same-window sheet: children scroll first; downward overflow moves the panel. */
 @Composable
@@ -58,6 +59,7 @@ internal fun CommunitySheet(
     val currentDismiss by rememberUpdatedState(dismiss)
     val canDismiss by rememberUpdatedState(dismissEnabled && visibility.targetState)
     val light = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    val inputBlocked = LocalSheetInputBlocked.current
     val canBlur = backdrop != null && glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
     val canRefract = backdrop != null && glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
     val panelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -118,7 +120,7 @@ internal fun CommunitySheet(
                 }) else Modifier.background(containerColor))
                 .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = if (backdrop != null) .16f else .08f), panelShape)
                 .nestedScroll(nestedScroll).focusRequester(focus)
-                .focusProperties { onExit = { if (visibility.targetState) cancelFocusChange() } }.focusGroup()
+                .focusProperties { onExit = { if (visibility.targetState && !inputBlocked) cancelFocusChange() } }.focusGroup()
                 .pointerInput(Unit) { detectTapGestures(onTap = {}) }
                 .semantics { dialog(); paneTitle = title }.testTag("liquid-action-sheet")) {
                 Box(Modifier.fillMaxWidth().height(32.dp).testTag("sheet-drag-handle")

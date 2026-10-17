@@ -23,6 +23,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.account.PrivateMessageScreen
+import com.kudo.android.ui.editor.EditorToolBackdropHost
 import com.kudo.android.ui.theme.KudoTheme
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -107,9 +108,9 @@ class PrivateMessageToolbarUiTest {
         settings.saveDraft(draftKey, Draft("私信标题", raw, recipients = "author"))
         compose.setContent {
             CompositionLocalProvider(LocalActivityResultRegistryOwner provides registryOwner) {
-                KudoTheme(DisplaySettings(theme = if (dark) ThemeMode.DARK else ThemeMode.LIGHT, fontScale = if (dark) 1.3f else 1f)) {
+                KudoTheme(DisplaySettings(theme = if (dark) ThemeMode.DARK else ThemeMode.LIGHT, fontScale = if (dark) 1.3f else 1f)) { EditorToolBackdropHost {
                     PrivateMessageScreen(member, repository, settings, { backs++ }, { error("The fixture must not send a private message") }, recipient = "author")
-                }
+                } }
             }
         }
         compose.waitUntil(5000) { requests.contains("GET /latest") }
@@ -139,7 +140,7 @@ class PrivateMessageToolbarUiTest {
         tool("插入链接")
         compose.onNodeWithTag("editor-link-url").performTextInput("linux.do")
         compose.onNodeWithText("插入", substring = false).performClick()
-        compose.waitUntil(5000) { settings.draft(draftKey).raw == "前[中文](https://linux.do)后" }
+        compose.runOnIdle { assertEquals("前[中文](https://linux.do)后", settings.draft(draftKey).raw) }
         tool("列表")
         compose.onNodeWithText("任务列表").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithText("任务列表").fetchSemanticsNodes().isEmpty() }

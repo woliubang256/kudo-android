@@ -12,17 +12,56 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kudo.android.ui.components.*
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
+
+private class EditorToolRequest(val dismiss: () -> Unit, val render: @Composable (Backdrop, MutableTransitionState<Boolean>) -> Unit) {
+    val visibility = MutableTransitionState(false).apply { targetState = true }
+}
+
+private class EditorToolHostState {
+    var request by mutableStateOf<EditorToolRequest?>(null)
+}
+
+private val LocalEditorToolHost = staticCompositionLocalOf<EditorToolHostState?> { null }
+
+@Composable
+internal fun EditorToolBackdropHost(content: @Composable () -> Unit) {
+    val host = remember { EditorToolHostState() }
+    val request = host.request
+    val backdrop = if (request != null) rememberLayerBackdrop() else null
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(if (backdrop != null)
+            Modifier.layerBackdrop(backdrop).testTag("editor-tool-backdrop-source").clearAndSetSemantics {} else Modifier)
+            .focusProperties { onEnter = { if (host.request != null) cancelFocusChange() } }.focusGroup()) {
+            CompositionLocalProvider(LocalEditorToolHost provides host, LocalSheetInputBlocked provides (request != null), content = content)
+        }
+        if (request != null && backdrop != null) {
+            val visibility = request.visibility
+            LaunchedEffect(visibility.isIdle, visibility.currentState, visibility.targetState) {
+                if (visibility.isIdle && !visibility.currentState && !visibility.targetState && host.request === request) {
+                    host.request = null
+                    request.dismiss()
+                }
+            }
+            request.render(backdrop, visibility)
+        }
+    }
+}
 
 @Composable
 internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Unit, pickImage: () -> Unit,
@@ -62,8 +101,16 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
         tool(Icons.Rounded.Add, "更多格式") { open("more") }
     }
     menu?.let { panel ->
-        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; "emoji" -> "表情"; else -> "更多格式" }, { menu = null }, showTitle = panel != "emoji") { close ->
-            fun choose(transform: (TextFieldValue) -> TextFieldValue) { apply(transform); close() }
+        var target by remember(panel) { mutableStateOf(value) }
+        target = target.syncMarkdown(value.text)
+        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; "emoji" -> "表情"; else -> "更多格式" }, {
+            if (enabled) change(target.syncMarkdown(value.text))
+            menu = null; focus()
+        }, showTitle = panel != "emoji") { close ->
+            fun choose(transform: (TextFieldValue) -> TextFieldValue) {
+                if (enabled) { target = transform(target); change(target) }
+                close()
+            }
             when (panel) {
                 "size" -> {
                     listOf("标题 1" to MarkdownLines.H1, "标题 2" to MarkdownLines.H2, "标题 3" to MarkdownLines.H3,
@@ -74,7 +121,7 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
                 }
                 "list" -> listOf("项目符号列表" to MarkdownLines.BULLET, "编号列表" to MarkdownLines.NUMBERED,
                     "任务列表" to MarkdownLines.TASK).forEach { (label, command) -> EditorToolOption(label) { choose { it.lineMarkdown(command) } } }
-                "link" -> EditorLinkForm(value.text.substring(value.selection.min, value.selection.max)) { label, url -> choose { it.linkMarkdown(label, url) } }
+                "link" -> EditorLinkForm(target.text.substring(target.selection.min, target.selection.max)) { label, url -> choose { it.linkMarkdown(label, url) } }
                 "emoji" -> EditorEmojis { emoji -> choose { it.replaceMarkdown(emoji) } }
                 else -> {
                     EditorToolOption("行内代码") { choose { it.wrapMarkdown("`", placeholder = "代码") } }
@@ -101,6 +148,27 @@ internal fun TextFieldValue.insertTemplate(template: String): TextFieldValue =
 /** A full-window host keeps tool sheets above the compact reply sheet and its IME. */
 @Composable
 internal fun EditorToolSheet(title: String, dismiss: () -> Unit, showTitle: Boolean = true, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
+    val host = LocalEditorToolHost.current
+    if (host != null) {
+        val currentTitle by rememberUpdatedState(title)
+        val currentShowTitle by rememberUpdatedState(showTitle)
+        val currentDismiss by rememberUpdatedState(dismiss)
+        val currentContent by rememberUpdatedState(content)
+        val locals by rememberUpdatedState(currentCompositionLocalContext)
+        val request = remember(host) { EditorToolRequest({ currentDismiss() }) { backdrop, visibility ->
+            CompositionLocalProvider(locals) {
+                CompositionLocalProvider(LocalSheetInputBlocked provides false) {
+                    CommunitySheet(visibility, currentTitle, { visibility.targetState = false }, showTitle = currentShowTitle,
+                        backdrop = backdrop) { currentContent { visibility.targetState = false } }
+                }
+            }
+        } }
+        DisposableEffect(host, request) {
+            host.request = request
+            onDispose { if (host.request === request) host.request = null }
+        }
+        return
+    }
     val visibility = remember { MutableTransitionState(false).apply { targetState = true } }
     LaunchedEffect(visibility.isIdle, visibility.currentState) {
         if (visibility.isIdle && !visibility.currentState && !visibility.targetState) dismiss()

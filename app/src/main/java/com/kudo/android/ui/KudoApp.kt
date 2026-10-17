@@ -84,6 +84,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
     val display by app.settings.display.collectAsStateWithLifecycle()
     var darkStatusIcons by remember { mutableStateOf<Boolean?>(null) }
     KudoTheme(display, darkStatusIcons) {
+        EditorToolBackdropHost {
         VerificationHost(app.client, app.userAgent, advancedMaterial = display.advancedWebViewMaterial) {
         ArticleFootnoteHost {
         QuickScrollToTopHost {
@@ -503,6 +504,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }
             }
             }
+        }
         }
         }
         }

@@ -76,30 +76,53 @@ class EditorToolbarUiTest {
     @Test fun compactReplyCanOpenLinkAndListSheetsWithFixedPublishButton() {
         var draft by mutableStateOf(Draft(raw = "这是一个满足最低字数的回复正文，用来验证工具栏。"))
         val visibility = MutableTransitionState(false)
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { KudoTheme(DisplaySettings()) { EditorToolBackdropHost {
             Box(Modifier.fillMaxSize()) { ReplyEditorSheet(visibility, false, { visibility.targetState = false }) {
                 EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, reply = true, replyRules = ReplyRules(16, 64000))
             } }
-        } }
+        } } }
         compose.runOnIdle { visibility.targetState = true }
         compose.onNodeWithTag("editor-body").performTextInputSelection(TextRange(0, 2))
         tool("插入链接")
         compose.onNodeWithTag("editor-link-url").performTextInput("linux.do")
         compose.onNodeWithText("插入", substring = false).performClick()
-        compose.waitUntil(5000) { draft.raw.startsWith("[这是](https://linux.do)") }
+        compose.runOnIdle { assertTrue("Unexpected link insertion: ${draft.raw}", draft.raw.startsWith("[这是](https://linux.do)")) }
         compose.onNodeWithText("发布", substring = false).assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithTag("editor-body").assertIsFocused()
         tool("列表")
         compose.onNodeWithText("任务列表").performClick()
         compose.waitUntil(5000) { draft.raw.startsWith("- [ ] ") }
         compose.waitUntil(5000) { compose.onAllNodesWithText("任务列表").fetchSemanticsNodes().isEmpty() }
         compose.waitForIdle()
+        compose.onNodeWithTag("editor-body").assertIsFocused()
         capture("editor-form", "editor-reply-toolbar.png")
+    }
+
+    @Test fun toolKeepsSelectionAcrossFocusChangesAndIncomingTextAndCancel() {
+        var draft by mutableStateOf(Draft(raw = "前中文后"))
+        compose.setContent { KudoTheme(DisplaySettings()) { EditorToolBackdropHost {
+            EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
+        } } }
+        compose.onNodeWithTag("editor-body").performTextInputSelection(TextRange(1, 3))
+        tool("插入链接")
+        compose.onNodeWithTag("editor-link-url").performTextInput("linux.do")
+        compose.runOnIdle { draft = draft.copy(raw = "新增前中文后") }
+        compose.onNodeWithText("插入", substring = false).performClick()
+        compose.runOnIdle { assertEquals("新增前[中文](https://linux.do)后", draft.raw) }
+        compose.onNodeWithTag("editor-body").assertIsFocused()
+        compose.runOnIdle { draft = draft.copy(raw = "前中文后") }
+        compose.onNodeWithTag("editor-body").performTextInputSelection(TextRange(1, 3))
+        tool("插入链接")
+        compose.onNodeWithTag("editor-link-url").performTextInput("example.org")
+        compose.onNodeWithTag("modal-scrim").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithTag("editor-body").assertIsFocused().assertTextEquals("前中文后")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(1, 3)))
     }
     @Test fun editingUsesEmojisAndMoreTemplatesInDarkLargeText() {
         var draft by mutableStateOf(Draft(raw = "原始文字"))
-        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f)) {
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f)) { EditorToolBackdropHost {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
-        } }
+        } } }
         tool("表情")
         assertEmojiSearchHeader()
         capture("editor-emoji-search", "editor-emoji-search-dark-large.png")
@@ -115,9 +138,9 @@ class EditorToolbarUiTest {
     }
     @Test fun emojiPickerMirrorsWebsiteGroupsSearchAndRecentUse() {
         var draft by mutableStateOf(Draft(raw = ""))
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { KudoTheme(DisplaySettings()) { EditorToolBackdropHost {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
-        } }
+        } } }
         tool("表情")
         assertEmojiSearchHeader()
         capture("editor-emoji-search", "editor-emoji-search-light.png")
@@ -192,9 +215,9 @@ class EditorToolbarUiTest {
 
     @Test fun emojiGroupsSwipeWithTheirIconTabsAndLeaveSearchWithoutInserting() {
         var draft by mutableStateOf(Draft(raw = ""))
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { KudoTheme(DisplaySettings()) { EditorToolBackdropHost {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
-        } }
+        } } }
         tool("表情")
         compose.onNodeWithTag("editor-emoji-tab-recent").performClick()
         compose.onNodeWithTag("editor-emoji-pager").performTouchInput { swipeLeft(durationMillis = 600) }
