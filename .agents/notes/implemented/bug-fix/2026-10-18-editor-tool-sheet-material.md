@@ -14,7 +14,7 @@ Status: implemented
 
 工具打开时单独保存目标 TextFieldValue；工具输入框导致正文失焦时，不以折叠后的正文选区覆盖目标。异步正文更新通过 syncMarkdown 重定位目标选区，插入命令对最新目标操作；关闭或取消后恢复目标选区和正文焦点，保留最新正文。调用者退出时同步移除请求和采样层，不让工具脱离所属编辑器。
 
-表情、链接、文本大小、列表和更多格式继续共用 CommunitySheet 的材质参数与兼容路径。表情搜索与网格保持无底色，未选中分类透明，选中分类使用 LogoYellow。缺少专用宿主的独立工具组件保留原不透明回退。
+表情、链接、文本大小、列表和更多格式继续共用 CommunitySheet 的材质参数与兼容路径。表情搜索与网格保持无底色，未选中分类透明，选中分类使用主题 onSurface 的 10% 半透明中性底色，保留星标与表情原色，避免黄色底色淹没“最近使用”的黄色星标。缺少专用宿主的独立工具组件保留原不透明回退。
 
 ## Existing note audit
 
@@ -36,7 +36,9 @@ Status: implemented
 - :app:assembleDebug、:app:assembleDebugAndroidTest、:app:lintDebug 通过，Lint 为 0 错误、53 警告及 1 hint，不修改无关项。日志为 artifacts/editor-tool-material-final-build.txt。
 - 通过 adb shell am instrument 运行 EditorToolMaterialUiTest、EditorToolbarUiTest、PrivateMessageToolbarUiTest、CommunityFormsUiTest 和 SheetGestureUiTest，30 项全部通过，耗时 57.316 秒；日志为 artifacts/editor-tool-material-final-device.txt。
 - 材质用例覆盖浅深色与三种材质的动态红蓝透色、同窗口坐标和条纹边界模糊、把手/搜索/分类/网格空白表面一致、按需采样与重复关闭。通过真实 layoutInfo 祖先链确认面板不在来源层内，不依赖已清除的背景子语义。编辑回归覆盖回复/私信工具、异步正文重定位、取消恢复选区与焦点、调用者组合上下文更新及退出清理。
-- 已目视检查 artifacts/editor-emoji-unified-light.png 与 editor-emoji-unified-dark.png，分类与网格背景一致、选中态为黄色，键盘避让正常。截图使用紫色背景与本地回退表情目录夹具，不代表真实账号完整目录的人工验收；坐标及模糊另由条纹像素测试验证。检查本轮 crash buffer 未见 App 崩溃。
+- 已目视检查初次材质验收的 artifacts/editor-emoji-unified-light.png 与 editor-emoji-unified-dark.png，未选分类与网格背景一致，键盘避让正常。截图使用紫色背景与本地回退表情目录夹具，不代表真实账号完整目录的人工验收；坐标及模糊另由条纹像素测试验证。检查本轮 crash buffer 未见 App 崩溃。
+- 表情分类中性选中态先在原黄底实现上复现失败（artifacts/emoji-neutral-red-device.txt），再通过 EditorToolbarUiTest 与 EditorToolMaterialUiTest 共 15 项真机回归，耗时 36.125 秒（artifacts/emoji-neutral-green-device.txt）。像素断言覆盖浅深色及中性/彩色背景，分别检查最近使用与首个分组的 10% 中性叠色、未选项透明、选中语义；原玻璃采样、搜索、分组滑动、插入与选区行为继续通过。
+- 已目视核对 artifacts/emoji-neutral-light-recent.png、emoji-neutral-dark-recent.png 与 emoji-neutral-dark-group.png，黄色星标和表情原色可辨，选中背景为中性灰。截图来自独立表情组件及回退目录夹具，不作为完整 Action Sheet 安全区或真实账号目录的验收证据。
 
 ## Consequences
 

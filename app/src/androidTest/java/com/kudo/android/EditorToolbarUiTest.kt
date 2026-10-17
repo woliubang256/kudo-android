@@ -7,11 +7,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -23,7 +24,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.editor.*
 import com.kudo.android.ui.theme.KudoTheme
-import com.kudo.android.ui.theme.LogoYellow
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -192,24 +192,41 @@ class EditorToolbarUiTest {
         compose.onNodeWithTag("editor-emoji-tab-0").assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
     }
 
-    @Test fun emojiTabsInheritBackgroundAndKeepBrandSelectionInBothThemes() {
+    @Test fun emojiTabsInheritBackgroundAndKeepNeutralSelectionInBothThemes() {
         var theme by mutableStateOf(ThemeMode.LIGHT)
-        val background = Color(0xFF6A3B8D)
+        var background by mutableStateOf(Color(0xFF6A3B8D))
+        var surface = Color.Unspecified
+        var selection = Color.Unspecified
         compose.setContent { KudoTheme(DisplaySettings(theme = theme)) {
+            surface = MaterialTheme.colorScheme.surface
+            selection = MaterialTheme.colorScheme.onSurface.copy(alpha = .10f)
             Column(Modifier.fillMaxSize().background(background)) { EditorEmojis {} }
         } }
         fun assertBackground(tag: String, expected: Color) {
             val pixels = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
-            assertEquals("$theme/$tag must not paint a separate surface", expected.toArgb(), pixels[pixels.width / 2, 3].toArgb())
+            val actual = pixels[pixels.width / 2, 3]
+            assertEquals("$theme/$tag red must preserve the neutral overlay or transparent state", expected.red, actual.red, .005f)
+            assertEquals("$theme/$tag green must preserve the neutral overlay or transparent state", expected.green, actual.green, .005f)
+            assertEquals("$theme/$tag blue must preserve the neutral overlay or transparent state", expected.blue, actual.blue, .005f)
         }
         for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
             compose.runOnIdle { theme = mode }
-            compose.onNodeWithTag("editor-emoji-tab-recent").performSemanticsAction(SemanticsActions.OnClick) { it() }
-            assertBackground("editor-emoji-tab-0", background)
-            assertBackground("editor-emoji-tab-recent", LogoYellow)
-            compose.onNodeWithTag("editor-emoji-tab-0").performSemanticsAction(SemanticsActions.OnClick) { it() }
-            assertBackground("editor-emoji-tab-recent", background)
-            assertBackground("editor-emoji-tab-0", LogoYellow)
+            compose.waitForIdle()
+            for (base in listOf(Color(0xFF6A3B8D), surface)) {
+                compose.runOnIdle { background = base }
+                compose.onNodeWithTag("editor-emoji-tab-recent").performSemanticsAction(SemanticsActions.OnClick) { it() }
+                compose.onNodeWithTag("editor-emoji-tab-recent").assertIsSelected()
+                compose.onNodeWithTag("editor-emoji-tab-0").assertIsNotSelected()
+                assertBackground("editor-emoji-tab-0", base)
+                assertBackground("editor-emoji-tab-recent", selection.compositeOver(base))
+                if (base == surface) capture("editor-emoji-groups", "emoji-neutral-${mode.name.lowercase()}-recent.png")
+                compose.onNodeWithTag("editor-emoji-tab-0").performSemanticsAction(SemanticsActions.OnClick) { it() }
+                compose.onNodeWithTag("editor-emoji-tab-recent").assertIsNotSelected()
+                compose.onNodeWithTag("editor-emoji-tab-0").assertIsSelected()
+                assertBackground("editor-emoji-tab-recent", base)
+                assertBackground("editor-emoji-tab-0", selection.compositeOver(base))
+                if (base == surface) capture("editor-emoji-groups", "emoji-neutral-${mode.name.lowercase()}-group.png")
+            }
         }
     }
 

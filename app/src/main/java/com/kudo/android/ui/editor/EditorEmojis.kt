@@ -37,7 +37,6 @@ import com.kudo.android.data.SiteEmojiGroup
 import com.kudo.android.ui.components.CommunityTextField
 import com.kudo.android.ui.components.LocalAvatarMetadata
 import com.kudo.android.ui.components.showKudoToast
-import com.kudo.android.ui.theme.LogoYellow
 import com.kudo.android.ui.topic.SiteEmoji as SiteEmojiView
 
 private val fallbackEditorEmojis = listOf(
@@ -159,7 +158,7 @@ private fun EmojiGroupTab(
     val context = LocalContext.current
     val bring = remember { BringIntoViewRequester() }
     LaunchedEffect(selected) { if (selected) bring.bringIntoView() }
-    val background = if (selected) LogoYellow else Color.Transparent
+    val background = if (selected) MaterialTheme.colorScheme.onSurface.copy(alpha = .10f) else Color.Transparent
     Box(
         Modifier
             .testTag(testTag)
