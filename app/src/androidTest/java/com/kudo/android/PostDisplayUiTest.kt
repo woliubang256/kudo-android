@@ -82,6 +82,33 @@ class PostDisplayUiTest {
         capture("post-system-action.png")
     }
 
+    @Test fun summaryUsesTheServerCountAndHeartStillShortTapsAndLongPresses() {
+        var likes = 0
+        var choices = 0
+        var opened = 0
+        val reacted = post.copy(likes = 40, reactionCount = 100, reactionsAvailable = true,
+            reactions = listOf(PostReaction("heart", 40), PostReaction("laughing", 30), PostReaction("+1", 20), PostReaction("clap", 10)))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            CompositionLocalProvider(LocalReactionHistory provides { opened++ }) {
+                TopicPost(reacted, detail.copy(validReactions = listOf("heart", "laughing")), TopicState(detail, false), true,
+                    { likes++ }, {}, {}, {}, {}, {}, { choices++ })
+            }
+        } }
+        compose.onNodeWithTag("post-reaction-summary-2").assert(hasText("100"))
+        compose.onNodeWithTag("post-reaction-2-heart", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("post-reaction-2-laughing", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("post-reaction-2-+1", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("post-reaction-2-clap", useUnmergedTree = true).assertDoesNotExist()
+        val summary = compose.onNodeWithTag("post-reaction-summary-2").fetchSemanticsNode().boundsInRoot
+        val heart = compose.onNodeWithContentDescription("回应此楼层").fetchSemanticsNode().boundsInRoot
+        assertTrue("汇总在互动行左侧，点赞保留在右侧", summary.right <= heart.left)
+        capture("post-reaction-row.png")
+        compose.onNodeWithContentDescription("回应此楼层").assert(hasText("100").not()).performClick()
+        compose.onNodeWithContentDescription("回应此楼层").performTouchInput { longClick(durationMillis = 650) }
+        compose.onNodeWithTag("post-reaction-summary-2").performClick()
+        compose.runOnIdle { assertEquals(1, likes); assertEquals(1, choices); assertEquals(1, opened) }
+    }
+
     private fun capture(name: String) {
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), name)

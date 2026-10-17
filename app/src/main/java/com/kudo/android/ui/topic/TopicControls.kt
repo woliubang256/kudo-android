@@ -125,11 +125,6 @@ internal fun TopicReactionButton(
         if (reaction != null && reaction != "heart") SiteEmoji(reaction, Modifier.size(size))
         else Icon(if (reaction == "heart") Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, null,
             Modifier.size(size), tint = if (reaction == "heart") LikeRed else inactiveColor)
-        if (!bottom) {
-            Spacer(Modifier.width(5.dp))
-            Text(post?.reactionCount?.toString().orEmpty(), style = MaterialTheme.typography.labelLarge,
-                color = if (reaction == null) inactiveColor else LocalContentColor.current)
-        }
     }
 }
 

@@ -82,7 +82,7 @@ class NestedReplyActionsUiTest {
             if (expected || actual) foreground++
             if (expected != actual) different++
         }
-        assertTrue("弹窗应复用原楼层的爱心图标与计数，允许位置取整的抗锯齿差异：$different/$foreground",
+        assertTrue("弹窗应复用原楼层的爱心图标，允许位置取整的抗锯齿差异：$different/$foreground",
             foreground > 0 && different < foreground * .2f)
     }
 
@@ -122,13 +122,16 @@ class NestedReplyActionsUiTest {
             state = state.copy(busy = emptySet(), detail = detail.copy(posts = posts.map { if (it.id == updated.id) updated else it }))
         }
         compose.onNodeWithTag("thread-like-4").assertIsEnabled()
-        compose.onNode(hasText("27") and hasAnyAncestor(hasTestTag("thread-like-4")), useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("thread-like-4").assert(hasText("27").not())
+        compose.onNode(hasTestTag("post-reaction-summary-4") and hasAnyAncestor(hasTestTag("thread-posts")))
+            .assert(hasText("27")).assertIsDisplayed()
         compose.onNodeWithTag("thread-like-4").performClick()
         compose.runOnIdle { assertEquals(2, likes.size); assertEquals("heart", likes.last().activeReaction) }
         compose.runOnIdle { state = state.copy(busy = emptySet()) }
         compose.onNodeWithTag("thread-jump-4").performClick()
         compose.onNodeWithTag("thread-posts").assertDoesNotExist()
-        compose.onNode(hasText("27") and hasAnyAncestor(hasTestTag("post-4")), useUnmergedTree = true).assertIsDisplayed()
+        compose.onNode(hasTestTag("post-reaction-summary-4") and hasAnyAncestor(hasTestTag("post-4")))
+            .assert(hasText("27")).assertIsDisplayed()
     }
 
     @Test fun replyClosesDiscussionAndUsesTheSelectedChildOrOriginalComment() {

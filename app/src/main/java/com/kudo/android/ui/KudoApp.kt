@@ -168,6 +168,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                 }
                 parseArticle(first?.cooked ?: error("暂时无法读取主帖图片")).articleImages()
             }, openLink = ::openLink, accountKey = account.user?.id) {
+            val historyEntry by nav.currentBackStackEntryAsState()
+            TopicReactionHistoryHost(account.user?.id, historyEntry?.id, display.glass, app.repository::reactionHistory, ::user) {
             TopicActionsHost(app.repository, account.user, display.glass, ::login,
                 ignored = { id, username -> account.recordIgnore(id, username, true); refreshEpoch++ },
                 message = { showMessage(it) }, editPost = { id, post ->
@@ -501,6 +503,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         }
                     }
                 }
+            }
             }
             }
             }

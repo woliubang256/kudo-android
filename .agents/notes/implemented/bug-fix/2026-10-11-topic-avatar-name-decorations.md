@@ -48,6 +48,6 @@ Debug 与 AndroidTest 构建通过，日志 artifacts/topic-avatar-placement-fix
 
 The fixed toolbar author row no longer adds a second weighted spacer after the nickname and remaining decorations. The nickname keeps `weight(fill = false)`, so medium names receive the available width while the existing single-line ellipsis still protects genuinely long names. `TopicDetailUiTest.mediumNicknameIsNotEllipsizedByTrailingAuthorSpacer` reproduces the old truncation and passes after the layout fix.
 
-The same trailing spacer was removed from the reply author row. `TopicDetailUiTest.replyNicknameIsNotEllipsizedByTrailingAuthorSpacer` covers the reply layout independently. 作者栏的昵称宽度规则不改变互动行。
+The same trailing spacer was removed from the reply author row. `TopicDetailUiTest.replyNicknameIsNotEllipsizedByTrailingAuthorSpacer` covers the reply layout independently. 互动行现在由[回应汇总](../feature/2026-10-18-reaction-history.md)接管左侧留白，作者栏的昵称宽度规则不变。
 
 资质和自定义状态的远程图片仍可能不可用，继续使用现有占位与语义。详情解析已将头像元数据标记完整，不为本次去重新增用户卡片请求；未知图标不凭空生成。位置用确定性夹具和真机语义树验证，不能用夹具代替实际远端图片的可用性结论。

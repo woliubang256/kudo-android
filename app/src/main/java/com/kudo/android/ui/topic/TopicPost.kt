@@ -96,7 +96,7 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
             }
             UserSignature(post, openLink)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.weight(1f))
+                Box(Modifier.weight(1f)) { TopicReactionSummary(post, enabled && !state.loading) }
                 val actions = LocalTopicActions.current
                 TopicReactionButton(post, enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canReact),
                     choose = if (post.reactionsAvailable && detail.validReactions.isNotEmpty()) ({ choose(post) }) else null,
@@ -312,12 +312,13 @@ internal fun ThreadPreviewPost(post: Post, enabled: Boolean, image: (String) -> 
             }
             if (hidden) Text("内容已忽略", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             else RichContent(post.cooked, image, openLink, galleryKey = "thread-preview-${post.id}")
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).padding(end = 4.dp).testTag("thread-metadata-${post.number}")) {
+            Box(Modifier.fillMaxWidth().testTag("thread-metadata-${post.number}")) {
                     val historyActions = LocalTopicActions.current
                     TopicAuthorMetadata(post.updatedAt, null, post.edited,
                         history = if (enabled && post.hasEditHistory) ({ state.detail?.let { historyActions.history(it.id, post) } }) else null)
-                }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { if (!hidden) TopicReactionSummary(post, enabled && !state.loading) }
                 if (!hidden) {
                     val actions = LocalTopicActions.current
                     if (post.editableBy(state.viewerId)) IconButton(onClick = { state.detail?.let { actions.edit(it.id, post) } },
