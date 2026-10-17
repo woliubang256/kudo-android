@@ -56,6 +56,33 @@ class ReactionHistoryUiTest {
         compose.runOnIdle { assertEquals(listOf("bob"), visited); assertEquals(1, reads) }
     }
 
+    @Test fun sheetSwipesBetweenReactionTypes() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicReactionHistoryHost(1, "topic", GlassMode.TRANSLUCENT, { _, _ -> history }, {}) {
+                val open = LocalReactionHistory.current
+                TextButton(onClick = { open(post) }) { Text("打开历史") }
+            }
+        } }
+        compose.onNodeWithText("打开历史").performClick()
+        val pager = compose.onNodeWithTag("reaction-history-pager")
+        pager.performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithTag("reaction-history-filter-heart").assertIsSelected()
+        compose.onNodeWithTag("reaction-history-user-alice").assertIsDisplayed()
+        compose.onNodeWithTag("reaction-history-user-bob").assertIsNotDisplayed()
+        pager.performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithTag("reaction-history-filter-laughing").assertIsSelected()
+        compose.onNodeWithTag("reaction-history-user-bob").assertIsDisplayed()
+        compose.onNodeWithTag("reaction-history-user-alice").assertIsNotDisplayed()
+        pager.performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithTag("reaction-history-filter-heart").assertIsSelected()
+        compose.onNodeWithTag("reaction-history-user-alice").assertIsDisplayed()
+        compose.onNodeWithTag("reaction-history-user-bob").assertIsNotDisplayed()
+        pager.performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithTag("reaction-history-filter-all").assertIsSelected()
+        compose.onNodeWithTag("reaction-history-user-alice").assertIsDisplayed()
+        compose.onNodeWithTag("reaction-history-user-bob").assertIsDisplayed()
+    }
+
     @Test fun sheetShowsLoadingRetryAndCanBeDraggedClosed() {
         val release = CompletableDeferred<Unit>()
         var requests = 0

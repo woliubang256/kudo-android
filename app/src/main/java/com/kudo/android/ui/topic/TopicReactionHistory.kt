@@ -8,6 +8,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -29,6 +31,7 @@ import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 internal val LocalReactionHistory = staticCompositionLocalOf<(Post) -> Unit> { {} }
 
@@ -66,6 +69,19 @@ internal fun TopicReactionHistoryHost(accountKey: Any?, screenKey: Any?, glass: 
 internal fun ColumnScope.TopicReactionHistoryContent(state: ReactionHistoryState, select: (String?) -> Unit,
     more: () -> Unit, retry: () -> Unit, user: (String) -> Unit, enabled: Boolean) {
     val history = state.history
+    val pages = remember(history) { listOf<String?>(null) + history?.groups.orEmpty().map { it.reaction } }
+    val pager = rememberPagerState(pageCount = { pages.size })
+    val currentPages by rememberUpdatedState(pages)
+    val currentSelect by rememberUpdatedState(select)
+    val selectedPage = pages.indexOf(state.reaction).coerceAtLeast(0)
+    LaunchedEffect(pager) {
+        snapshotFlow { pager.currentPage to pager.isScrollInProgress }.distinctUntilChanged().collect { (index, scrolling) ->
+            if (!scrolling && index in currentPages.indices) currentSelect(currentPages[index])
+        }
+    }
+    LaunchedEffect(selectedPage, pages) {
+        if (pager.currentPage != selectedPage && !pager.isScrollInProgress) pager.animateScrollToPage(selectedPage)
+    }
     if (history != null && history.groups.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
         .testTag("reaction-history-filters"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         ReactionHistoryFilter(null, "全部 ${history.total}", state.reaction == null, enabled) { select(null) }
@@ -73,12 +89,27 @@ internal fun ColumnScope.TopicReactionHistoryContent(state: ReactionHistoryState
             ReactionHistoryFilter(group.reaction, group.count.toString(), state.reaction == group.reaction, enabled) { select(group.reaction) }
         }
     }
-    val users = history?.users(state.reaction).orEmpty()
-    LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 440.dp).testTag("reaction-history-users"),
-        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    if (pages.size > 1) {
+        HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 440.dp)
+            .testTag("reaction-history-pager"), key = { pages[it] ?: "all" }) { index ->
+            ReactionHistoryUsersPage(history, pages[index], state, Modifier.fillMaxSize(), more, retry, user, enabled,
+                pager.settledPage == index)
+        }
+    } else {
+        ReactionHistoryUsersPage(history, null, state, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 440.dp),
+            more, retry, user, enabled, true)
+    }
+}
+
+@Composable
+private fun ReactionHistoryUsersPage(history: ReactionHistory?, reaction: String?, state: ReactionHistoryState,
+    modifier: Modifier, more: () -> Unit, retry: () -> Unit, user: (String) -> Unit, enabled: Boolean, active: Boolean) {
+    val users = history?.users(reaction).orEmpty()
+    val userTagSuffix = if (active) "" else "-${reaction ?: "all"}"
+    LazyColumn(modifier.testTag("reaction-history-users$userTagSuffix"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(users.take(state.visibleCount), key = { it.member.username.lowercase(java.util.Locale.ROOT) }) { entry ->
             Row(Modifier.fillMaxWidth().clip(CircleShape).clickable(enabled = enabled, role = Role.Button) { user(entry.member.username) }
-                .testTag("reaction-history-user-${entry.member.username}").padding(vertical = 8.dp, horizontal = 4.dp),
+                .testTag("reaction-history-user-${entry.member.username}$userTagSuffix").padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Avatar(entry.member, 36.dp, presentation = AvatarPresentation.PLAIN)
                 Column(Modifier.weight(1f)) {
@@ -91,20 +122,20 @@ internal fun ColumnScope.TopicReactionHistoryContent(state: ReactionHistoryState
                 SiteEmoji(entry.reaction, Modifier.size(22.dp))
             }
         }
-        if (state.loading) item { LoadingRow() }
-        if (state.error != null) item {
+        if (active && state.loading) item { LoadingRow() }
+        if (active && state.error != null) item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(state.error.message ?: "暂时无法读取回应历史", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 TextButton(onClick = retry, enabled = enabled && !state.loading, modifier = Modifier.testTag("reaction-history-retry")) { Text("重试") }
             }
         }
-        if (history != null && !state.loading && state.error == null) {
+        if (active && history != null && !state.loading && state.error == null) {
             if (users.isEmpty()) item { Text("暂无可显示的记录", Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.bodyMedium) }
             if (state.visibleCount < users.size || history.nextPage != null) item {
                 TextButton(onClick = more, enabled = enabled, modifier = Modifier.fillMaxWidth().testTag("reaction-history-more")) { Text("加载更多") }
             }
-            val partial = if (state.reaction == null) history.partial
-                else history.nextPage == null && history.groups.any { it.reaction == state.reaction && it.count > it.users.size }
+            val partial = if (reaction == null) history.partial
+                else history.nextPage == null && history.groups.any { it.reaction == reaction && it.count > it.users.size }
             if (partial) item {
                 Text("站点仅返回部分记录，人数以站点统计为准。", Modifier.padding(vertical = 10.dp).testTag("reaction-history-partial"),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

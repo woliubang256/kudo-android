@@ -12,6 +12,8 @@ Status: implemented
 
 历史只读请求 `/discourse-reactions/posts/{id}/reactions-users.json`，读取 `reaction_users` 分组、各类真实总数及用户。面板不显示视觉标题，仍保留“点赞与回应”的无障碍面板语义。多种回应时，“全部”及各类型筛选以单行横向滑动展示，不换行挤占名单；单种或空历史不显示分类栏。加载、空态与失败重试保持不变，用户行可进入公开主页。筛选不写入回应。请求随帖子、账号和关闭取消，迟到结果不能覆盖新面板。
 
+多种回应的用户名单使用独立横向分页，页面顺序与顶部分类一致（全部及各回应类型）。顶部点击和分页 settled 状态双向同步；单类型、空历史与加载阶段继续使用单页名单，不启用无意义的切页。
+
 上游控制器 `MAX_USERS_COUNT=26`，实际每类最多返回 27 位，且不接受分页游标；不能通过反复请求相同接口伪造分页。面板每批展开 40 条已返回名单，并在数量大于可用名单时明确显示站点仅返回部分记录。无 reactions 插件的普通点赞使用 `/post_action_users.json?id={postId}&post_action_type_id=2&page={page}&limit=50`，读取 `post_action_users` 与 `total_rows_post_action_users`，按真实页码继续加载；不将插件权限错误回退成空名单。
 
 历史由独立 `TopicReactionHistoryHost` 承载，以账号和导航条目隔离控制器；关闭或离开取消读请求，并同时检查取消状态与请求代次。用户名可在没有数字 ID 时作为名单去重键；隐去身份的核心记录不生成用户主页。打开历史阻断底层阅读上报，不改变点赞、长按选择或 Boost 写操作。
@@ -43,7 +45,7 @@ Status: implemented
 
 图标间距调整后的 `PostDisplayUiTest` 四项真机用例通过，额外检查前三种图标边界互不重叠、间距紧凑且纵向居中一致，并保留服务端总数及点赞短按、长按行为断言。已查看 `artifacts/reaction-summary-spaced.png` 确认汇总位置与间距；夹具中的表情占位不用于证明远端图片加载。构建记录为 `artifacts/reaction-summary-layout-build.txt`，真机记录为 `artifacts/reaction-summary-layout-device.txt`。
 
-相关 43 项 JVM 单测通过，包含历史解析、没有数字 ID 的名单、核心真实分页、权限错误和取消隔离。8 项新增真机用例通过，涵盖本篇及配套作者/系统记录调整；构建和 lint 通过。已查看 `artifacts/post-reaction-row.png`、`artifacts/reaction-history-light.png`、`artifacts/reaction-history-narrow.png`，汇总位于左侧、计数为服务器 100 而非前三类 90，浅色面板和深色窄屏布局可读。窄屏截图中的图片加载占位不作为远端图标可用性的判断依据。
+相关 43 项 JVM 单测通过，包含历史解析、没有数字 ID 的名单、核心真实分页、权限错误和取消隔离。本次 `ReactionHistoryUiTest` 7 项真机用例全部通过，新增用例覆盖分类横滑后的选中状态与名单切换，以及连续向右滑回“全部”；构建和 lint 通过。已查看 `artifacts/post-reaction-row.png`、`artifacts/reaction-history-light.png`、`artifacts/reaction-history-narrow.png`，汇总位于左侧、计数为服务器 100 而非前三类 90，浅色面板和深色窄屏布局可读。窄屏截图中的图片加载占位不作为远端图标可用性的判断依据。
 
 楼中楼旧用例将计数断言从点赞按钮迁到独立汇总，并同时检查点赞按钮没有该数字；不降低对重复提交锁定、楼层一致更新和关闭面板后原楼层状态的要求。最终 18 项针对性真机测试全部通过（8 项新增加 10 项楼中楼回归），记录于 `artifacts/post-display-targeted-final-device.txt`。广回归保留首页头像回顶可见性失败记录，不修改无关滚动逻辑。
 
