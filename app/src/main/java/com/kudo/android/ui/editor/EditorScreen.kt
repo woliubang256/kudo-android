@@ -85,7 +85,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
         if (reply) { withFrameNanos { }; bodyFocus.requestFocus(); keyboard?.show() }
     }
     val publishText = if (editing) { if (sending) "保存中…" else "保存" } else if (sending) "发布中…" else "发布"
-    Box(Modifier.then(if (reply) Modifier.fillMaxWidth() else Modifier.fillMaxSize()).background(MaterialTheme.colorScheme.surface)) {
+    Box(if (reply) Modifier.fillMaxWidth() else Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         val header: @Composable () -> Unit = {
             if (!reply) {
                 Row(Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,

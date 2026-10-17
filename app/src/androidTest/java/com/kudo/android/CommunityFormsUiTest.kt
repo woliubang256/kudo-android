@@ -5,12 +5,17 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -36,6 +41,14 @@ class CommunityFormsUiTest {
             compose.activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
     }
+
+    @Test fun lightReplyEditorInheritsItsSheetBackground() = assertEditorBackground(ThemeMode.LIGHT, reply = true)
+
+    @Test fun darkReplyEditorInheritsItsSheetBackground() = assertEditorBackground(ThemeMode.DARK, reply = true)
+
+    @Test fun lightFullScreenEditorKeepsItsOpaquePageBackground() = assertEditorBackground(ThemeMode.LIGHT, reply = false)
+
+    @Test fun darkFullScreenEditorKeepsItsOpaquePageBackground() = assertEditorBackground(ThemeMode.DARK, reply = false)
 
     @Test fun replyHintUsesTargetNicknameAndUsernameFallbackWithoutChangingDraft() {
         val topicAuthor = Member(1, "topic_user", "主题昵称", "")
@@ -136,6 +149,29 @@ class CommunityFormsUiTest {
         compose.onNodeWithText("提交举报").assertIsEnabled().performClick()
         compose.runOnIdle { assertEquals(1, submissions) }
         capture("coolapk-report-dark-large.png")
+    }
+
+    private fun assertEditorBackground(theme: ThemeMode, reply: Boolean) {
+        val hostColor = Color(0xFF6A3B8D)
+        var expected = Color.Unspecified
+        var draft by mutableStateOf(Draft())
+        compose.setContent { KudoTheme(DisplaySettings(theme = theme)) {
+            val pageColor = MaterialTheme.colorScheme.background
+            SideEffect { expected = if (reply) hostColor else pageColor }
+            Box(Modifier.fillMaxSize().background(hostColor)) {
+                EditorForm(draft, categories, { draft = it }, {}, {}, {}, reply = reply,
+                    replyRules = ReplyRules(16, 64000))
+            }
+        } }
+        val form = compose.onNodeWithTag("editor-form")
+        val formBounds = form.fetchSemanticsNode().boundsInRoot
+        val bodyBounds = compose.onNodeWithTag("editor-body").fetchSemanticsNode().boundsInRoot
+        val pixels = form.captureToImage().toPixelMap()
+        val samples = listOf((bodyBounds.top - formBounds.top + 2).toInt(),
+            (bodyBounds.center.y - formBounds.top).toInt(), pixels.height - 3)
+        for (sampleY in samples) {
+            assertEquals("$theme reply=$reply background at y=$sampleY", expected.toArgb(), pixels[2, sampleY].toArgb())
+        }
     }
 
     private fun capture(name: String) {
