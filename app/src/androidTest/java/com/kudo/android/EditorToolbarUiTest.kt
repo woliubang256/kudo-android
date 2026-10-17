@@ -96,6 +96,8 @@ class EditorToolbarUiTest {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
         } }
         tool("表情")
+        assertEmojiSearchHeader()
+        capture("editor-emoji-search", "editor-emoji-search-dark-large.png")
         compose.onNodeWithContentDescription(":smile:").performClick()
         compose.waitUntil(5000) { draft.raw.endsWith(":smile:") }
         tool("更多格式")
@@ -112,6 +114,8 @@ class EditorToolbarUiTest {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, editing = true, editingReply = true)
         } }
         tool("表情")
+        assertEmojiSearchHeader()
+        capture("editor-emoji-search", "editor-emoji-search-light.png")
         compose.onNodeWithTag("editor-emoji-groups").assertIsDisplayed()
         compose.onNodeWithText("最近使用").assertDoesNotExist()
         compose.onNodeWithTag("editor-emoji-search").performTextInput("smile")
@@ -122,6 +126,18 @@ class EditorToolbarUiTest {
         tool("表情")
         compose.onNodeWithText("最近使用").assertDoesNotExist()
         compose.onNodeWithContentDescription(":smile:").assertIsDisplayed()
+    }
+
+    private fun assertEmojiSearchHeader() {
+        compose.onNodeWithText("表情", substring = false).assertDoesNotExist()
+        compose.onNodeWithTag("liquid-action-sheet").assert(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "表情"))
+        val icon = compose.onNodeWithTag("editor-emoji-search-icon", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val search = compose.onNodeWithTag("editor-emoji-search").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val handle = compose.onNodeWithTag("sheet-drag-handle").fetchSemanticsNode().boundsInRoot
+        val density = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+        assertTrue("搜索图标应位于输入框左侧", icon.right < search.left)
+        assertEquals("搜索图标应与输入框垂直居中", search.center.y, icon.center.y, 1f)
+        assertTrue("移除标题后搜索框应紧跟拖动横条", search.top - handle.bottom <= 16f * density)
     }
 
     @Test fun emojiGroupTabsUseIconsInsteadOfTextLabels() {

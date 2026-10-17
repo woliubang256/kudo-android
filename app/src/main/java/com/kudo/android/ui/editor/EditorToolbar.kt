@@ -62,7 +62,7 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
         tool(Icons.Rounded.Add, "更多格式") { open("more") }
     }
     menu?.let { panel ->
-        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; "emoji" -> "表情"; else -> "更多格式" }, { menu = null }) { close ->
+        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; "emoji" -> "表情"; else -> "更多格式" }, { menu = null }, showTitle = panel != "emoji") { close ->
             fun choose(transform: (TextFieldValue) -> TextFieldValue) { apply(transform); close() }
             when (panel) {
                 "size" -> {
@@ -100,14 +100,14 @@ internal fun TextFieldValue.insertTemplate(template: String): TextFieldValue =
 
 /** A full-window host keeps tool sheets above the compact reply sheet and its IME. */
 @Composable
-internal fun EditorToolSheet(title: String, dismiss: () -> Unit, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
+internal fun EditorToolSheet(title: String, dismiss: () -> Unit, showTitle: Boolean = true, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
     val visibility = remember { MutableTransitionState(false).apply { targetState = true } }
     LaunchedEffect(visibility.isIdle, visibility.currentState) {
         if (visibility.isIdle && !visibility.currentState && !visibility.targetState) dismiss()
     }
     Dialog({ visibility.targetState = false }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize()) {
-            CommunitySheet(visibility, title, { visibility.targetState = false }, showTitle = true, backdrop = null) { content { visibility.targetState = false } }
+            CommunitySheet(visibility, title, { visibility.targetState = false }, showTitle = showTitle, backdrop = null) { content { visibility.targetState = false } }
         }
     }
 }

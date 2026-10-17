@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Mood
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -104,7 +105,11 @@ internal fun EditorEmojis(insert: (String) -> Unit) {
         settings.rememberEmoji(item.name); recent = settings.recentEmojis(); insert(":${item.name}:")
     }
 
-    CommunityTextField(search, { search = it }, Modifier.fillMaxWidth().testTag("editor-emoji-search"), placeholder = "搜索表情", singleLine = true)
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(Icons.Rounded.Search, null, Modifier.size(20.dp).testTag("editor-emoji-search-icon"), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        CommunityTextField(search, { search = it }, Modifier.weight(1f).testTag("editor-emoji-search"), placeholder = "搜索表情", singleLine = true)
+    }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("editor-emoji-groups"), verticalAlignment = Alignment.CenterVertically) {
         EmojiGroupTab(
             label = "最近使用",
