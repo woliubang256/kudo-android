@@ -5,10 +5,14 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -19,6 +23,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.editor.*
 import com.kudo.android.ui.theme.KudoTheme
+import com.kudo.android.ui.theme.LogoYellow
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
@@ -162,6 +167,27 @@ class EditorToolbarUiTest {
             useUnmergedTree = true,
         ).assertDoesNotExist()
         compose.onNodeWithTag("editor-emoji-tab-0").assert(SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+    }
+
+    @Test fun emojiTabsInheritBackgroundAndKeepBrandSelectionInBothThemes() {
+        var theme by mutableStateOf(ThemeMode.LIGHT)
+        val background = Color(0xFF6A3B8D)
+        compose.setContent { KudoTheme(DisplaySettings(theme = theme)) {
+            Column(Modifier.fillMaxSize().background(background)) { EditorEmojis {} }
+        } }
+        fun assertBackground(tag: String, expected: Color) {
+            val pixels = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
+            assertEquals("$theme/$tag must not paint a separate surface", expected.toArgb(), pixels[pixels.width / 2, 3].toArgb())
+        }
+        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            compose.runOnIdle { theme = mode }
+            compose.onNodeWithTag("editor-emoji-tab-recent").performSemanticsAction(SemanticsActions.OnClick) { it() }
+            assertBackground("editor-emoji-tab-0", background)
+            assertBackground("editor-emoji-tab-recent", LogoYellow)
+            compose.onNodeWithTag("editor-emoji-tab-0").performSemanticsAction(SemanticsActions.OnClick) { it() }
+            assertBackground("editor-emoji-tab-recent", background)
+            assertBackground("editor-emoji-tab-0", LogoYellow)
+        }
     }
 
     @Test fun emojiGroupsSwipeWithTheirIconTabsAndLeaveSearchWithoutInserting() {
