@@ -202,7 +202,7 @@ fun BookmarksScreen(vm: AccountViewModel, back: () -> Unit, login: () -> Unit, o
                 if (vm.savedLoading) item { LoadingRow() }
                 items(vm.saved, key = { it.id }) { topic ->
                     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { open(topic.topicId, topic.postNumber) }.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(topic.title, style = MaterialTheme.typography.titleMedium)
+                        TopicTitleText(topic.title, style = MaterialTheme.typography.titleMedium)
                         if (topic.excerpt.isNotBlank()) Text(topic.excerpt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

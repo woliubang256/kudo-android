@@ -128,7 +128,7 @@ internal fun ProfileEntryRow(entry: ProfileEntry, open: (String) -> Unit) {
         .testTag("profile-entry-${entry.key}").padding(horizontal = 14.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(entry.title, Modifier.fillMaxWidth(), fontSize = 15.sp, lineHeight = 23.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                TopicTitleText(entry.title, Modifier.fillMaxWidth(), fontSize = 15.sp, lineHeight = 23.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (entry.tags.isNotEmpty()) TopicTags(entry.tags)
                 if (entry.excerpt.isNotBlank()) Text(entry.excerpt, fontSize = 13.sp, lineHeight = 20.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)

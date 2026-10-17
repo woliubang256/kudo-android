@@ -239,7 +239,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                     if (detail != null) {
                         if (!originalIgnored || revealOriginal) item("title") {
                             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(detail.title, style = MaterialTheme.typography.headlineSmall)
+                                TopicTitleText(detail.title, style = MaterialTheme.typography.headlineSmall)
                                 val category = LocalTopicPresentation.current.categories.firstOrNull { it.id == detail.categoryId }
                                 if (category != null || detail.tags.isNotEmpty()) {
                                     FlowRow(Modifier.testTag("topic-detail-metadata"),

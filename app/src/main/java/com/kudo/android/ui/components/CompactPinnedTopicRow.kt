@@ -34,7 +34,7 @@ internal fun CompactPinnedTopicRow(topic: Topic, category: Category?, onClick: (
         Icon(Icons.Rounded.PushPin, "置顶", Modifier.size(15.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Icon(CategoryIcons.get(resolved?.icon.orEmpty()), resolved?.let { "分类图标：${it.name}" } ?: "分类图标",
             Modifier.size(15.dp), tint = categoryColor)
-        Text(topic.title, Modifier.weight(1f).testTag("topic-pinned-title-${topic.id}"),
+        TopicTitleText(topic.title, Modifier.weight(1f).testTag("topic-pinned-title-${topic.id}"),
             style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (topic.unseen) Box(Modifier.size(7.dp).background(blue, CircleShape)
             .testTag("topic-pinned-unseen-${topic.id}").semantics { contentDescription = "未看过的话题" })

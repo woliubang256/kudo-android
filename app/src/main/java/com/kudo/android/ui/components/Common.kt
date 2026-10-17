@@ -159,7 +159,7 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
             if (topic.pinned) Icon(Icons.Rounded.PushPin, "置顶", Modifier.size(17.dp), MaterialTheme.colorScheme.primary)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(topic.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            TopicTitleText(topic.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
             TopicUnreadBadge(topic)
         }
         if (topic.excerpt.isNotBlank()) Text(topic.excerpt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)

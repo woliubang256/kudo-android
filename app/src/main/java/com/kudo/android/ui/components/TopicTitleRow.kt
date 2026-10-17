@@ -34,7 +34,7 @@ fun TopicTitleRow(topic: Topic, category: Category?, onClick: () -> Unit, onUser
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (topic.pinned) Icon(Icons.Rounded.PushPin, "置顶", Modifier.padding(top = 3.dp).size(15.dp), MaterialTheme.colorScheme.onSurfaceVariant)
                     if (topic.closed) Icon(Icons.Rounded.Lock, "已关闭", Modifier.padding(top = 3.dp).size(15.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(topic.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal,
+                    TopicTitleText(topic.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Normal,
                         maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Box(Modifier.padding(top = 4.dp)) { TopicUnreadBadge(topic) }
                 }
