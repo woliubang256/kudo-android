@@ -14,6 +14,8 @@ Status: implemented
 
 头像挂件不添加客户端主题色圆底和额外内边距，保留图片透明通道；仅当站点 `flair_bg_color` 明确配置颜色时绘制该底色。昵称装饰同时读取帖子 `user_title`、`badges_granted` 以及版主标记，徽章图标、图片和金银铜颜色由服务器定义，不能按等级猜测小芽等标志。帖子中的徽章是该楼层的授予信息，不能从全站徽章目录或用户全部历史徽章补造。元数据补齐只补用户级字段，不覆盖帖子已有徽章。
 
+昵称后的头衔和图标使用单行布局，继续限制装饰宽度以给昵称留空间；长头衔单行省略，后续图标超出区域时直接裁切，不换行、不横滑。标题栏与完整回复共享此规则，时间行和关注按钮不变；空间足够时仍显示全部有效装饰。
+
 ## Existing note audit
 
 - [头像展示](../../implemented/feature/2026-10-08-avatar-presentation.md)：部分重叠，PUBLIC 优先级、PLAIN 的 Boost 场景、状态到期及元数据缓存继续有效，补充详情使用相同头像规则。
@@ -29,6 +31,8 @@ Status: implemented
 - 删除全部昵称图标：不会重复头像挂件，但同时有资质和状态时会漏掉其余图标，保留未由头像展示的部分。
 
 ## Testing
+
+单行调整后的帖子展示 6 项与详情回归 16 项真机用例通过，记录于 `artifacts/author-single-line-device.txt`；覆盖窄屏 1.5 倍字号下装饰不增高、长头衔省略，以及空间足够时徽章完整显示。标题栏夹具补齐原帖时间后单独复验通过，记录于 `artifacts/author-single-line-time-device.txt`。已查看 `artifacts/topic-author-single-line.png` 与 `artifacts/post-header-single-line.png`，昵称、头衔和图标只占一行，时间仍单独位于下方，关注按钮可见；窄屏无法容纳的尾部装饰按要求裁切。验证范围为 RMX2202 / Android13，其他系统仍需验收。
 
 2026-10-18：相关 43 项 JVM 单测通过，包含新增头衔、授予徽章、常规/regular 字形、资料补齐不覆盖楼层徽章。`PostDisplayUiTest` 真机覆盖无底色挂件透出背景、站点显式底色保留，以及 320dp / 1.5 倍字体下头衔、版主、小芽和观察者同时可见；已查看 `artifacts/post-header-decorations.png`，徽章不覆盖昵称。截图使用受控用户资料，不代替远端图片可用性结论。
 

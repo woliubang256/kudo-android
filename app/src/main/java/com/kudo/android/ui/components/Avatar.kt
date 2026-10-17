@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -140,8 +141,8 @@ internal fun MemberNameDecorations(member: Member, modifier: Modifier = Modifier
     val decorations = memberNameDecorations(member, now)
     if (decorations.isEmpty() && member.title.isBlank() && !member.moderator && member.headerBadges.isEmpty()) return
     BoxWithConstraints {
-        FlowRow(modifier.widthIn(max = maxWidth * .55f).testTag("member-name-decorations-${member.id}"),
-            horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(modifier.widthIn(max = maxWidth * .55f).clipToBounds().testTag("member-name-decorations-${member.id}"),
+            horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
             if (member.title.isNotBlank()) Text(member.title, Modifier.align(Alignment.CenterVertically), maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

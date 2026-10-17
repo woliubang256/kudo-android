@@ -9,8 +9,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -45,7 +47,7 @@ class PostDisplayUiTest {
         assertTrue("保留站点明确配置的挂件底色", configured.green > .9f && configured.red < .1f && configured.blue < .1f)
     }
 
-    @Test fun nicknameKeepsGrantedGlyphsAndTitleOnANarrowLargeFontLayout() {
+    @Test fun nicknameClipsDecorationsToOneLineOnANarrowLargeFontLayout() {
         val decorated = member.copy(title = "社区开发者", moderator = true, headerBadges = listOf(
             PostHeaderBadge(4, "小芽", "初次参与", "seedling", "", 3),
             PostHeaderBadge(5, "观察者", "", "far-eye", "", 2)))
@@ -58,14 +60,57 @@ class PostDisplayUiTest {
         } }
         compose.onNodeWithText(member.displayName).assertIsDisplayed()
         compose.onNodeWithText("社区开发者").assertIsDisplayed()
+        val name = compose.onNodeWithText(member.displayName, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val decorations = compose.onNodeWithTag("member-name-decorations-${member.id}", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("社区开发者", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("昵称必须留有可读宽度", name.width > 20)
+        assertTrue("装饰不能挤到昵称上", decorations.left >= name.right)
+        assertTrue("装饰不能换行增高", decorations.height <= maxOf(name.height, title.height) + 1f)
+        capture("post-header-decorations.png")
+    }
+
+    @Test fun nicknameKeepsAllGrantedGlyphsWhenThereIsEnoughWidth() {
+        val decorated = member.copy(name = "Neo", title = "社区开发者", moderator = true, headerBadges = listOf(
+            PostHeaderBadge(4, "小芽", "初次参与", "seedling", "", 3),
+            PostHeaderBadge(5, "观察者", "", "far-eye", "", 2)))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            Row(Modifier.fillMaxWidth()) { MemberNameDecorations(decorated) }
+        } }
+        compose.onNodeWithText("社区开发者").assertIsDisplayed()
         compose.onNodeWithContentDescription("版主").assertIsDisplayed()
         compose.onNodeWithTag("post-header-badge-4", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("post-header-badge-5", useUnmergedTree = true).assertIsDisplayed()
-        val name = compose.onNodeWithText(member.displayName, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("社区开发者").fetchSemanticsNode().boundsInRoot
         val badge = compose.onNodeWithTag("post-header-badge-5", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        assertTrue("昵称必须留有可读宽度", name.width > 20)
-        assertTrue("装饰不能挤到昵称上", badge.left >= name.right)
-        capture("post-header-decorations.png")
+        assertEquals("头衔和徽章应保持单行居中", title.center.y, badge.center.y, 1f)
+    }
+
+    @Test fun longTitleAndBadgesDoNotIncreaseTheTopicTopBarHeight() {
+        var decorated by mutableStateOf(false)
+        val title = "岂曰无衣？这是一个很长的社区头衔"
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.5f)) {
+                val author = member.copy(name = "Neo", title = if (decorated) title else "", moderator = decorated,
+                    headerBadges = if (decorated) (1..6).map { PostHeaderBadge(it, "徽章$it", "", "seedling", "", 3) } else emptyList())
+                Box(Modifier.width(320.dp)) {
+                    TopicTopBar(TopicState(detail.copy(author = author, posts = listOf(post.copy(number = 1, author = author))),
+                        loading = false), true, {}, {}, {}, {})
+                }
+            }
+        } }
+        val before = compose.onNodeWithTag("topic-top-bar").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { decorated = true }
+        val after = compose.onNodeWithTag("topic-top-bar").fetchSemanticsNode().boundsInRoot
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(title, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals("装饰不应挤高作者栏和时间行", before.height, after.height, 1f)
+        assertEquals(1, layouts.single().lineCount)
+        assertTrue("放不下的头衔应截断", layouts.single().isLineEllipsized(0))
+        compose.onNodeWithText("Neo").assertIsDisplayed()
+        compose.onNodeWithText(relativeTime(post.createdAt), useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("topic-follow").assertIsDisplayed()
+        capture("topic-author-single-line.png")
     }
 
     @Test fun pinRecordsUseCompactRowsWithoutReplyActionsAndNormalSecondFloorStaysNormal() {
