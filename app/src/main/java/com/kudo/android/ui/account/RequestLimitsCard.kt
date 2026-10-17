@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -60,7 +61,7 @@ internal fun RequestLimitsCard(value: RequestLimits, update: (RequestLimits) -> 
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     (presets.map { it.first } + "自定义").forEachIndexed { index, label ->
                         val checked = selected == index
-                        Row(Modifier.clip(RoundedCornerShape(12.dp))
+                        Row(Modifier.clip(CircleShape)
                             .background(if (checked) LogoYellow else MaterialTheme.colorScheme.onSurface.copy(alpha = .055f))
                             .selectable(checked, enabled = enabled, role = Role.RadioButton) {
                                 if (index == 3) { customRequested = true; expanded = true }

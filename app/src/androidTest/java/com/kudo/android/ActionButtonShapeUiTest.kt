@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,10 +23,17 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import com.kudo.android.data.DisplaySettings
+import com.kudo.android.data.Member
 import com.kudo.android.data.ThemeMode
 import com.kudo.android.ui.components.CommunityButton
 import com.kudo.android.ui.components.CommunityIconButton
 import com.kudo.android.ui.components.LocalSheetActions
+import com.kudo.android.ui.components.TopBarIconButton
+import com.kudo.android.ui.components.TopBarTextButton
+import com.kudo.android.ui.account.RequestLimitsCard
+import com.kudo.android.ui.account.SettingsScreen
+import com.kudo.android.ui.feed.SearchChip
+import com.kudo.android.network.RequestLimits
 import com.kudo.android.ui.components.liquid.LiquidModalAction
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.theme.LogoYellow
@@ -106,12 +114,93 @@ class ActionButtonShapeUiTest {
         compose.runOnIdle { assertEquals(1, actions) }
     }
 
-    private fun assertCapsule(button: SemanticsNodeInteraction, fill: Color) {
+    @Test fun logoutButtonIsCapsuleInBothThemesAndLargeText() {
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
+        var surface = Color.Unspecified
+        var page = Color.Unspecified
+        compose.setContent { KudoTheme(settings) {
+            surface = MaterialTheme.colorScheme.surface
+            page = MaterialTheme.colorScheme.background
+            SettingsScreen(settings, {}, Member(1, "fixture", "按钮测试", ""), {}, {}, {})
+        } }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (scale in listOf(1f, 1.3f)) {
+            compose.runOnIdle { settings = settings.copy(theme = theme, fontScale = scale) }
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText("退出登录"))
+            val button = compose.onNodeWithText("退出登录")
+            button.assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            assertCapsule(button, surface, page)
+        }
+    }
+
+    @Test fun requestPresetsAreCapsulesWithoutChangingRadioSelection() {
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
+        var value by mutableStateOf(RequestLimits.Balanced)
+        var surface = Color.Unspecified
+        var neutral = Color.Unspecified
+        compose.setContent { KudoTheme(settings) {
+            surface = MaterialTheme.colorScheme.surface
+            neutral = MaterialTheme.colorScheme.onSurface.copy(alpha = .055f).compositeOver(surface)
+            Box(Modifier.fillMaxSize().background(background).padding(16.dp)) {
+                RequestLimitsCard(value, { value = it }, {})
+            }
+        } }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (scale in listOf(1f, 1.3f)) {
+            compose.runOnIdle { settings = settings.copy(theme = theme, fontScale = scale); value = RequestLimits.Balanced }
+            compose.onNodeWithTag("request-preset-1").assertIsSelected()
+            assertCapsule(compose.onNodeWithTag("request-preset-1"), LogoYellow, surface)
+            assertCapsule(compose.onNodeWithTag("request-preset-0"), neutral, surface)
+            compose.onNodeWithTag("request-preset-0").performSemanticsAction(SemanticsActions.OnClick) { it() }
+            compose.onNodeWithTag("request-preset-0").assertIsSelected()
+            compose.runOnIdle { assertEquals(RequestLimits.Gentle, value) }
+        }
+    }
+
+    @Test fun searchChipsAreCapsulesInBothSelectionStatesAndThemes() {
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
+        var selected by mutableStateOf(false)
+        var neutral = Color.Unspecified
+        compose.setContent { KudoTheme(settings) {
+            neutral = MaterialTheme.colorScheme.onSurface.copy(alpha = .05f).compositeOver(background)
+            Column(Modifier.fillMaxSize().background(background).padding(24.dp)) {
+                SearchChip("搜索范围", selected) { selected = !selected }
+            }
+        } }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (scale in listOf(1f, 1.3f)) {
+            compose.runOnIdle { settings = settings.copy(theme = theme, fontScale = scale); selected = false }
+            val button = compose.onNodeWithText("搜索范围").assertIsDisplayed()
+            assertCapsule(button, neutral)
+            button.performSemanticsAction(SemanticsActions.OnClick) { it() }
+            assertCapsule(button, LogoYellow)
+            compose.runOnIdle { assertTrue(selected) }
+        }
+    }
+
+    @Test fun toolbarTouchFeedbackMatchesItsRoundVisualButtons() {
+        val indication = Color(0xFF38BD9F)
+        var actions = 0
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            Column(Modifier.fillMaxSize().background(background).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                CompositionLocalProvider(LocalIndication provides SolidIndication(indication)) {
+                    TopBarIconButton(Icons.Rounded.Close, "顶栏关闭", { actions++ }, Modifier.testTag("toolbar-icon"))
+                    TopBarTextButton("保存", { actions++ }, Modifier.width(160.dp).testTag("toolbar-text"))
+                }
+            }
+        } }
+        for (tag in listOf("toolbar-icon", "toolbar-text")) {
+            val button = compose.onNodeWithTag(tag)
+            button.assertHeightIsEqualTo(48.dp).performTouchInput { down(center) }
+            assertCapsule(button, indication)
+            button.performTouchInput { up() }
+        }
+        compose.runOnIdle { assertEquals(2, actions) }
+    }
+
+    private fun assertCapsule(button: SemanticsNodeInteraction, fill: Color, outside: Color = background) {
         val pixels = button.captureToImage().toPixelMap()
         val inset = (pixels.height / 50).coerceAtLeast(2)
         for (horizontal in listOf(inset, pixels.width - inset - 1)) {
             for (vertical in listOf(pixels.height / 4, pixels.height * 3 / 4))
-                assertColor("capsule corner at $horizontal,$vertical", background, pixels[horizontal, vertical])
+                assertColor("capsule corner at $horizontal,$vertical", outside, pixels[horizontal, vertical])
             assertColor("capsule center edge at $horizontal", fill, pixels[horizontal, pixels.height / 2])
         }
         assertColor("capsule top edge", fill, pixels[pixels.width / 2, inset])

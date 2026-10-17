@@ -200,13 +200,13 @@ fun SearchScreen(
                             CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp).testTag("search-query"),
                                 placeholder = "搜索社区", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
-                            if (query.isNotEmpty()) Box(Modifier.size(32.dp).clickable(role = Role.Button) {
+                            if (query.isNotEmpty()) Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button) {
                                 query = ""; clear(); filtersOpen = false
                             }, contentAlignment = Alignment.Center) {
                                 Icon(Icons.Rounded.Close, "清空搜索", Modifier.size(20.dp))
                             }
                             Box(Modifier.width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .3f)))
-                            Text("搜索", Modifier.clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.height(40.dp).padding(horizontal = 12.dp, vertical = 10.dp).testTag("search-submit"),
+                            Text("搜索", Modifier.clip(CircleShape).clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.height(40.dp).padding(horizontal = 12.dp, vertical = 10.dp).testTag("search-submit"),
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                         }
 
@@ -217,7 +217,7 @@ fun SearchScreen(
                     if (state.kind == SearchKind.POSTS) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             SearchSort.available(state.accountId != null).forEach { sort ->
-                                Text(sort.label, Modifier.clickable(role = Role.Button) { focus.clearFocus(); keyboard?.hide(); changeSort(sort) }.semantics { selected = state.sort == sort }
+                                Text(sort.label, Modifier.clip(CircleShape).clickable(role = Role.Button) { focus.clearFocus(); keyboard?.hide(); changeSort(sort) }.semantics { selected = state.sort == sort }
                                     .testTag("search-sort-${sort.name}").padding(horizontal = 10.dp, vertical = 14.dp), style = MaterialTheme.typography.bodySmall,
                                     color = if (state.sort == sort) LogoYellow else MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = if (state.sort == sort) FontWeight.Bold else FontWeight.Normal)

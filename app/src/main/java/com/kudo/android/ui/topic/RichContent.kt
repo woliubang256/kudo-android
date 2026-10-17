@@ -8,6 +8,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -630,7 +631,7 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                             Icon(if (hidden) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess, null,
                                 Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        block.source?.let { source -> Box(Modifier.size(36.dp).clickable(role = Role.Button) { onLink(source) }
+                        block.source?.let { source -> Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) { onLink(source) }
                             .semantics { contentDescription = "跳转引用原帖" }, contentAlignment = Alignment.Center) {
                             Icon(Icons.Rounded.NorthEast, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         } }
@@ -766,7 +767,7 @@ private fun CodeBlock(code: String) {
     var copied by remember(code) { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { kotlinx.coroutines.delay(1500); copied = false } }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
-        Row(Modifier.align(Alignment.End).clickable(role = Role.Button) {
+        Row(Modifier.align(Alignment.End).clip(CircleShape).clickable(role = Role.Button) {
             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                 .setPrimaryClip(ClipData.newPlainText("代码", code))
             copied = true

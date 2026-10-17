@@ -78,7 +78,8 @@ internal fun TopBarIconButton(
     iconSize: Dp = 23.dp,
 ) {
     if (backdrop != null) {
-        Box(modifier.size(touchSize).clickable(enabled = enabled, role = Role.Button, onClick = action),
+        Box(modifier.size(touchSize).clickable(interactionSource = null, indication = null,
+            enabled = enabled, role = Role.Button, onClick = action),
             contentAlignment = Alignment.Center) {
             LiquidButton(action, backdrop, LocalDisplaySettings.current.glass, Modifier.size(visualSize),
                 enabled = enabled, contentColor = tint, contentPadding = PaddingValues(0.dp),
@@ -87,7 +88,7 @@ internal fun TopBarIconButton(
             }
         }
     } else {
-        Box(modifier.size(touchSize).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
+        Box(modifier.size(touchSize).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = action), contentAlignment = Alignment.Center) {
             Box(Modifier.size(visualSize).clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .85f)), contentAlignment = Alignment.Center) {
                 Icon(icon, description, Modifier.size(iconSize), tint = tint.copy(alpha = if (enabled) 1f else .38f))
@@ -107,7 +108,7 @@ internal fun TopBarTextButton(text: String, action: () -> Unit, modifier: Modifi
             }
         }
     } else {
-        Box(modifier.height(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = action),
+        Box(modifier.height(48.dp).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = action),
             contentAlignment = Alignment.Center) {
             Box(Modifier.height(40.dp).clip(CircleShape)
                 .background(LogoYellow.copy(alpha = if (enabled) 1f else .18f))

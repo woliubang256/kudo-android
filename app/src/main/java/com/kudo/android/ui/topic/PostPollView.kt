@@ -3,6 +3,7 @@ package com.kudo.android.ui.topic
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -82,6 +83,6 @@ internal fun PostPollView(poll: PostPoll, saved: List<String>, owner: Boolean, l
 
 @Composable
 private fun PollTextAction(label: String, enabled: Boolean, click: () -> Unit) {
-    Text(label, Modifier.clickable(enabled = enabled, role = Role.Button, onClick = click).padding(vertical = 8.dp),
+    Text(label, Modifier.clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = click).padding(vertical = 8.dp),
         color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
 }

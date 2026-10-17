@@ -2,11 +2,13 @@ package com.kudo.android.ui.account
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -117,7 +119,7 @@ internal fun UpdateDownloadActions(release: GitHubRelease, model: UpdateDownload
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     CommunityButton(if (preparing) "正在校验安装包…" else "安装更新", { model.download(release) },
                         Modifier.weight(1f), enabled = !preparing, shape = RoundedCornerShape(50))
-                    Text("重新下载", Modifier.clickable(enabled = !preparing, role = Role.Button) { model.restart(release) }
+                    Text("重新下载", Modifier.clip(CircleShape).clickable(enabled = !preparing, role = Role.Button) { model.restart(release) }
                         .padding(vertical = 14.dp, horizontal = 4.dp), style = MaterialTheme.typography.bodyMedium)
                 }
             }

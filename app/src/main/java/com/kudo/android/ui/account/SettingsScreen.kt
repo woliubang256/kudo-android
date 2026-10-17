@@ -11,6 +11,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -137,7 +138,7 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                 }
                 item { Text("外部链接不包含 linux.do 及其子域名。系统打开会使用浏览器或关联应用。", Modifier.padding(horizontal = 9.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
                 if (user != null) item {
-                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
+                    Box(Modifier.fillMaxWidth().clip(CircleShape).background(MaterialTheme.colorScheme.surface)
                         .clickable(enabled = !showing) { show("logout") }.heightIn(min = 48.dp)
                         .padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) { Text("退出登录", color = MaterialTheme.colorScheme.error) }
                 }

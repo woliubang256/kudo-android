@@ -2,6 +2,7 @@ package com.kudo.android.ui.feed
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -11,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
@@ -93,7 +95,7 @@ internal fun SearchFiltersPanel(
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .35f))
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("重置", Modifier.clickable(role = Role.Button) { change(SearchFilters()); validation = null }.padding(12.dp).testTag("search-filter-reset"), style = MaterialTheme.typography.bodyMedium)
+            Text("重置", Modifier.clip(CircleShape).clickable(role = Role.Button) { change(SearchFilters()); validation = null }.padding(12.dp).testTag("search-filter-reset"), style = MaterialTheme.typography.bodyMedium)
             CommunityButton("应用筛选", {
                 validation = draft.validationError()
                 if (validation == null) apply()
@@ -163,5 +165,5 @@ internal fun SearchChip(label: String, selected: Boolean, action: () -> Unit) {
 }
 
 @Composable
-private fun Modifier.clipChip(selected: Boolean): Modifier = this.background(
-    if (selected) LogoYellow else MaterialTheme.colorScheme.onSurface.copy(alpha = .05f), RoundedCornerShape(6.dp))
+private fun Modifier.clipChip(selected: Boolean): Modifier = this.clip(CircleShape).background(
+    if (selected) LogoYellow else MaterialTheme.colorScheme.onSurface.copy(alpha = .05f))

@@ -285,7 +285,7 @@ internal fun TopicReactionChoices(post: Post, choices: List<String>, enabled: Bo
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         choices.forEach { reaction ->
             val selected = post.activeReaction == reaction
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))
+            Box(Modifier.size(48.dp).clip(CircleShape)
                 .background(if (selected) LogoYellow.copy(alpha = 0.18f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
                 .clickable(enabled = enabled, role = Role.Button) { select(reaction) }
                 .semantics(mergeDescendants = true) {

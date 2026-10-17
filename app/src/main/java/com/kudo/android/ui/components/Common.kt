@@ -3,6 +3,7 @@ package com.kudo.android.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -83,7 +84,7 @@ fun ErrorState(error: Throwable, retry: () -> Unit, login: () -> Unit, back: (()
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             if (back != null) CommunityButton("返回上一页", back, compact = true)
-            Text("刷新登录状态", Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = login).padding(10.dp),
+            Text("刷新登录状态", Modifier.clip(CircleShape).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = login).padding(10.dp),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
