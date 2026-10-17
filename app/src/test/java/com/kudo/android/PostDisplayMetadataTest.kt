@@ -36,4 +36,25 @@ class PostDisplayMetadataTest {
         } finally { cache.close() }
     }
 
+    @Test fun systemActionsAreTypedAndDoNotDependOnFloorOrEmptyBody() {
+        val action = post(7, """, "post_type":3, "action_code":"pinned_globally.enabled", "action_code_who":"目标"""")
+        assertTrue(action.isSystemAction)
+        assertEquals("全站置顶了此话题", postActionDescription(action.actionCode))
+        assertEquals("目标", action.actionWho)
+        assertEquals("取消了此话题的全站置顶", postActionDescription("pinned_globally.disabled"))
+        assertFalse(post(2).isSystemAction)
+        assertFalse(post(3, """, "post_type":1, "action_code":"pinned.enabled"""").isSystemAction)
+        assertEquals("更新了话题设置", postActionDescription("future.action"))
+    }
+
+    @Test fun actionRecordsAreIndependentTimelineItemsNotReplyParents() {
+        val action = post(2, """, "post_type":3, "reply_to_post_number":88""")
+        val normal = post(3, """, "reply_to_post_number":2""")
+        val child = post(4, """, "reply_to_post_number":3""")
+        val threads = postThreads(listOf(post(1), action, normal, child))
+        assertTrue(missingReplyParents(listOf(action, normal, child)).isEmpty())
+        assertEquals(listOf(1, 2, 3), threads.map { it.root.number })
+        assertTrue(threads[1].replies.isEmpty())
+        assertEquals(listOf(4), threads[2].replies.map(Post::number))
+    }
 }

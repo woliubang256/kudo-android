@@ -4,7 +4,7 @@ data class PostThread(val root: Post, val replies: List<Post>)
 
 fun missingReplyParents(posts: List<Post>): List<Int> {
     val numbers = posts.map(Post::number).toSet()
-    return posts.mapNotNull { post -> post.replyTo?.takeIf { it > 1 && it < post.number && it !in numbers } }.distinct()
+    return posts.filterNot(Post::isSystemAction).mapNotNull { post -> post.replyTo?.takeIf { it > 1 && it < post.number && it !in numbers } }.distinct()
 }
 
 /** Only explicit, earlier parent floors belong to a thread. Quotes do not establish parents. */
@@ -14,8 +14,9 @@ fun postThreads(posts: List<Post>): List<PostThread> {
     fun root(post: Post): Post {
         var current = post
         while (true) {
+            if (current.isSystemAction) return current
             val target = current.replyTo?.takeIf { it > 1 && it < current.number } ?: return current
-            current = byNumber[target] ?: return current
+            current = byNumber[target]?.takeUnless(Post::isSystemAction) ?: return current
         }
     }
     return unique.groupBy { root(it).id }.values.map { group ->

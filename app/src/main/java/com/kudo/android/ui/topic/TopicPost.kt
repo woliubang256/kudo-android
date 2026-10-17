@@ -44,6 +44,10 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
     originalRevealed: Boolean = false, revealOriginal: () -> Unit = {}, boost: (Post) -> Unit = {},
     vote: (Post, String, List<String>) -> Unit = { _, _, _ -> }, login: () -> Unit = {},
     onHeading: ((ArticleHeading, BringIntoViewRequester) -> Unit)? = null) {
+    if (post.isSystemAction) {
+        TopicSystemAction(post, enabled && !state.loading, user)
+        return
+    }
     val ignoredUsers = LocalIgnoredUsers.current
     val historyActions = LocalTopicActions.current
     var revealed by remember(post.id, ignoredUsers) { mutableStateOf(false) }

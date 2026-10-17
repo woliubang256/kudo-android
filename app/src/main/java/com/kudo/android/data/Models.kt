@@ -57,11 +57,13 @@ data class Post(
     val polls: List<PostPoll> = emptyList(), val pollVotes: Map<String, List<String>> = emptyMap(),
     val isSolution: Boolean = false,
     val canEdit: Boolean = false,
+    val postType: Int = 1, val actionCode: String = "", val actionWho: String = "",
 ) {
     val activeReaction: String? get() = currentReaction?.id ?: "heart".takeIf { liked }
     val canReact: Boolean get() = if (activeReaction != null) currentReaction?.canUndo ?: canUndoLike else canLike
     val edited: Boolean get() = version > 1
     val hasEditHistory: Boolean get() = edited && canViewEditHistory
+    val isSystemAction: Boolean get() = postType == 3
     fun editableBy(viewerId: Int?): Boolean = viewerId != null && author.id == viewerId && canEdit
 }
 data class PostReaction(val id: String, val count: Int)
@@ -191,6 +193,8 @@ object DiscourseParser {
             json.has("reactions") || json.has("current_user_reaction"), action?.optBoolean("can_undo") ?: false,
             updatedAt = json.stringField("updated_at").ifBlank { json.text("created_at") }, version = json.positiveInt("version") ?: 1,
             canViewEditHistory = json.optBoolean("can_view_edit_history"),
+            postType = json.positiveInt("post_type") ?: 1, actionCode = json.stringField("action_code"),
+            actionWho = json.stringField("action_code_who"),
             availableFlags = json.optJSONArray("actions_summary").objects().filter { it.optBoolean("can_act") && it.optInt("id") != 2 }.mapNotNull { it.positiveInt("id") }.toSet(),
             signature = json.stringField("user_signature"), replyCount = json.optInt("reply_count").coerceAtLeast(0),
             read = json.opt("read") as? Boolean,

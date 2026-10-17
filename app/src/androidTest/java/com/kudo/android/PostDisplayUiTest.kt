@@ -68,6 +68,20 @@ class PostDisplayUiTest {
         capture("post-header-decorations.png")
     }
 
+    @Test fun pinRecordsUseCompactRowsWithoutReplyActionsAndNormalSecondFloorStaysNormal() {
+        val pin = post.copy(number = 7, postType = 3, actionCode = "pinned_globally.enabled", cooked = "")
+        compose.setContent { KudoTheme(DisplaySettings()) { Column {
+            TopicPost(pin, detail, TopicState(detail, false), true, {}, {}, {}, {}, {}, {}, {})
+            TopicPost(post, detail, TopicState(detail, false), true, {}, {}, {}, {}, {}, {}, {})
+        } } }
+        compose.onNodeWithTag("post-system-action-7").assertIsDisplayed()
+        compose.onNodeWithText("全站置顶了此话题").assertIsDisplayed()
+        compose.onNode(hasClickAction() and hasAnyAncestor(hasTestTag("post-system-action-7")) and hasContentDescription("回应此楼层")).assertDoesNotExist()
+        compose.onNodeWithText("普通二楼回复").assertIsDisplayed()
+        compose.onNodeWithTag("post-system-action-2").assertDoesNotExist()
+        capture("post-system-action.png")
+    }
+
     private fun capture(name: String) {
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), name)

@@ -269,7 +269,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                         items(posts, key = { it.id }) { post ->
                             val thread = threads.firstOrNull { it.root.id == post.id }
                             LaunchedEffect(post.id, state.contextLoading) {
-                                if (!state.contextLoading && post.number > 1 && thread != null) loadReplies(post, true)
+                                if (!state.contextLoading && post.number > 1 && !post.isSystemAction && thread != null) loadReplies(post, true)
                             }
                             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                                 TopicPost(post, detail, state, !showing, like, bookmark, ::replyTo, user, image, openLink, ::choose,
@@ -278,7 +278,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                                         if (heading.level == 2 || heading.level == 3) headingAnchors[heading.path] = requester
                                     } else null)
                                 if (post.number == 1) TopicSolutionsSummary(detail, posts, !showing, ::navigatePost)
-                                if (post.number > 1 && thread != null) ReplyPreview(thread, state.replyLoads[post.id], state.hasMoreReplies(post), !showing) {
+                                if (post.number > 1 && !post.isSystemAction && thread != null) ReplyPreview(thread, state.replyLoads[post.id], state.hasMoreReplies(post), !showing) {
                                     if (it == null) openThread(post) else navigatePost(it)
                                 }
                             }
