@@ -15,6 +15,7 @@ data class Member(
     val canIgnoreUsers: Boolean = false, val ignoredUsers: Set<String> = emptySet(),
     val profileBackground: String = "", val cardBackground: String = "",
     val unreadNotifications: Int = 0, val notificationChannelPosition: Long = -1L,
+    val title: String = "", val headerBadges: List<PostHeaderBadge> = emptyList(), val moderator: Boolean = false,
 ) {
     val displayName get() = name.ifBlank { username }
     val isSiteOwner get() = username.equals("neo", ignoreCase = true)
@@ -121,6 +122,9 @@ object DiscourseParser {
         json.stringField("profile_background_upload_url"), json.stringField("card_background_upload_url"),
         notificationCount(json) ?: 0,
         (json.opt("notification_channel_position") as? Number)?.toLong()?.coerceAtLeast(-1L) ?: -1L,
+        title = plainText(json.stringField(if (fromPost) "user_title" else "title")),
+        headerBadges = parsePostHeaderBadges(json.optJSONArray("badges_granted")),
+        moderator = json.optBoolean("moderator") || json.optBoolean("group_moderator"),
     )
 
     private fun userStatus(json: JSONObject?): UserStatus? {

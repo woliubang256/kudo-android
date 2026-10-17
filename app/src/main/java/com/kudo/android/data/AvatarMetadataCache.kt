@@ -48,7 +48,8 @@ class AvatarMetadataCache(
         job.ensureActive()
         return result?.let {
             member.copy(avatar = it.avatar.ifBlank { member.avatar }, animatedAvatar = it.animatedAvatar,
-                flair = it.flair, status = it.status, avatarDetailsLoaded = true)
+                flair = it.flair, status = it.status, avatarDetailsLoaded = true,
+                title = member.title.ifBlank { it.title }, moderator = member.moderator || it.moderator)
         } ?: member
     }
 

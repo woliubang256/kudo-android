@@ -127,7 +127,7 @@ fun Avatar(
 
 @Composable
 internal fun MemberNameDecorations(member: Member, modifier: Modifier = Modifier) {
-    if (member.flair == null && member.status == null) return
+    if (member.flair == null && member.status == null && member.title.isBlank() && !member.moderator && member.headerBadges.isEmpty()) return
     var now by remember(member.status) { mutableStateOf(Instant.now()) }
     LaunchedEffect(member.status) {
         now = Instant.now()
@@ -138,10 +138,18 @@ internal fun MemberNameDecorations(member: Member, modifier: Modifier = Modifier
         }
     }
     val decorations = memberNameDecorations(member, now)
-    if (decorations.isEmpty()) return
-    Row(modifier.testTag("member-name-decorations-${member.id}"), horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        decorations.forEach { AvatarBadge(member.displayName, it, 16.dp, true, Modifier) }
+    if (decorations.isEmpty() && member.title.isBlank() && !member.moderator && member.headerBadges.isEmpty()) return
+    BoxWithConstraints {
+        FlowRow(modifier.widthIn(max = maxWidth * .55f).testTag("member-name-decorations-${member.id}"),
+            horizontalArrangement = Arrangement.spacedBy(3.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (member.title.isNotBlank()) Text(member.title, Modifier.align(Alignment.CenterVertically), maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (member.moderator) Icon(CategoryIcons.get("shield-halved"), "版主", Modifier.size(16.dp).align(Alignment.CenterVertically),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            member.headerBadges.forEach { MemberHeaderBadge(it, Modifier.align(Alignment.CenterVertically)) }
+            decorations.forEach { AvatarBadge(member.displayName, it, 16.dp, true, Modifier.align(Alignment.CenterVertically)) }
+        }
     }
 }
 
@@ -158,8 +166,7 @@ private fun AvatarBadge(name: String, decoration: AvatarDecoration, size: Dp, an
         is AvatarDecoration.Status -> "${name}的状态：${decoration.value.description.ifBlank { "自定义状态" }}"
     }
     val pixels = with(LocalDensity.current) { size.roundToPx() }
-    Box(modifier.size(size).semantics { contentDescription = label }
-        .background(MaterialTheme.colorScheme.surface, CircleShape).padding(1.25.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.size(size).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
         when (decoration) {
             is AvatarDecoration.Status -> AvatarImage(emojiUrl?.let(::mediaUrl), pixels = pixels, animate = animate,
                 contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) {

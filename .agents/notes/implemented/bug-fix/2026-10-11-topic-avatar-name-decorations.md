@@ -12,6 +12,8 @@ Status: implemented
 
 共享纯函数 memberNameDecorations 以 avatarDecoration 的 PUBLIC 结果作为排除项，头像与昵称不各自猜测优先级。MemberNameDecorations 在状态到期后重新筛选，剩余列表为空则不创建图标行。两处作者栏一起使用 PUBLIC，避免头像和昵称只完成一半的状态。
 
+头像挂件不添加客户端主题色圆底和额外内边距，保留图片透明通道；仅当站点 `flair_bg_color` 明确配置颜色时绘制该底色。昵称装饰同时读取帖子 `user_title`、`badges_granted` 以及版主标记，徽章图标、图片和金银铜颜色由服务器定义，不能按等级猜测小芽等标志。帖子中的徽章是该楼层的授予信息，不能从全站徽章目录或用户全部历史徽章补造。元数据补齐只补用户级字段，不覆盖帖子已有徽章。
+
 ## Existing note audit
 
 - [头像展示](../../implemented/feature/2026-10-08-avatar-presentation.md)：部分重叠，PUBLIC 优先级、PLAIN 的 Boost 场景、状态到期及元数据缓存继续有效，补充详情使用相同头像规则。
@@ -28,6 +30,10 @@ Status: implemented
 
 ## Testing
 
+2026-10-18：相关 43 项 JVM 单测通过，包含新增头衔、授予徽章、常规/regular 字形、资料补齐不覆盖楼层徽章。`PostDisplayUiTest` 真机覆盖无底色挂件透出背景、站点显式底色保留，以及 320dp / 1.5 倍字体下头衔、版主、小芽和观察者同时可见；已查看 `artifacts/post-header-decorations.png`，徽章不覆盖昵称。截图使用受控用户资料，不代替远端图片可用性结论。
+
+广回归中的 `AvatarUiTest.collapsingTheHomeHeaderStopsItsAnimationUntilItIsVisibleAgain` 在下滑回顶后的头像可见性断言失败，单独重跑也失败，记录于 `artifacts/post-display-avatar-isolated.txt`；该场景没有挂件和昵称装饰，本轮未修改首页滚动逻辑，也不把全量回归报告为通过。
+
 旧版真机位置复现运行的5项用例均失败，日志 artifacts/topic-avatar-placement-repro-device-20261011.txt；楼主、回复及账号/公开内容用例明确显示挂件没有头像祖先节点。复现不仅检查数量，还检查头像祖先、右下角几何位置及昵称后图标的位置。
 
 AvatarPresentationTest 的5项单元测试通过，覆盖资质与状态同时存在、单一资质、单一状态、无装饰及到期边界，日志 artifacts/topic-avatar-filter-unit-20261011.txt。
@@ -42,6 +48,6 @@ Debug 与 AndroidTest 构建通过，日志 artifacts/topic-avatar-placement-fix
 
 The fixed toolbar author row no longer adds a second weighted spacer after the nickname and remaining decorations. The nickname keeps `weight(fill = false)`, so medium names receive the available width while the existing single-line ellipsis still protects genuinely long names. `TopicDetailUiTest.mediumNicknameIsNotEllipsizedByTrailingAuthorSpacer` reproduces the old truncation and passes after the layout fix.
 
-The same trailing spacer was removed from the reply author row. `TopicDetailUiTest.replyNicknameIsNotEllipsizedByTrailingAuthorSpacer` covers the reply layout independently; the action-row spacer remains unchanged because it still aligns post actions.
+The same trailing spacer was removed from the reply author row. `TopicDetailUiTest.replyNicknameIsNotEllipsizedByTrailingAuthorSpacer` covers the reply layout independently. 作者栏的昵称宽度规则不改变互动行。
 
 资质和自定义状态的远程图片仍可能不可用，继续使用现有占位与语义。详情解析已将头像元数据标记完整，不为本次去重新增用户卡片请求；未知图标不凭空生成。位置用确定性夹具和真机语义树验证，不能用夹具代替实际远端图片的可用性结论。
