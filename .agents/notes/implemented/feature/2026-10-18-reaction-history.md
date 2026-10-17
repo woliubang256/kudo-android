@@ -8,7 +8,7 @@ Status: implemented
 
 ## Decision
 
-正文互动行左侧显示按数量降序的前三种回应与服务端总人数；没有回应时隐藏汇总。右侧点赞按钮移除数字，保留短按切换和长按选择，Boost 与回应继续独立。点击汇总打开同窗口液态 Action Sheet，使用现有遮罩和下滑关闭手势，不创建 WebView。
+正文互动行左侧显示按数量降序的前三种回应与服务端总人数；图标以 2dp 间距并排，不重叠遮挡，没有回应时隐藏汇总。右侧点赞按钮移除数字，保留短按切换和长按选择，Boost 与回应继续独立。点击汇总打开同窗口液态 Action Sheet，使用现有遮罩和下滑关闭手势，不创建 WebView。
 
 历史只读请求 `/discourse-reactions/posts/{id}/reactions-users.json`，读取 `reaction_users` 分组、各类真实总数及用户。提供“全部”及各类型筛选、加载、空态与失败重试，用户行可进入公开主页。筛选不写入回应。请求随帖子、账号和关闭取消，迟到结果不能覆盖新面板。
 
@@ -35,6 +35,8 @@ Status: implemented
 站点可能限制历史可见范围，不能声称名单完整；图片失败沿用既有表情占位。用户撤销或新增回应后重新打开需读取最新列表。
 
 ## Testing
+
+图标间距调整后的 `PostDisplayUiTest` 四项真机用例通过，额外检查前三种图标边界互不重叠、间距紧凑且纵向居中一致，并保留服务端总数及点赞短按、长按行为断言。已查看 `artifacts/reaction-summary-spaced.png` 确认汇总位置与间距；夹具中的表情占位不用于证明远端图片加载。构建记录为 `artifacts/reaction-summary-layout-build.txt`，真机记录为 `artifacts/reaction-summary-layout-device.txt`。
 
 相关 43 项 JVM 单测通过，包含历史解析、没有数字 ID 的名单、核心真实分页、权限错误和取消隔离。8 项新增真机用例通过，涵盖本篇及配套作者/系统记录调整；构建和 lint 通过。已查看 `artifacts/post-reaction-row.png`、`artifacts/reaction-history-light.png`、`artifacts/reaction-history-narrow.png`，汇总位于左侧、计数为服务器 100 而非前三类 90，浅色面板和深色窄屏布局可读。窄屏截图中的图片加载占位不作为远端图标可用性的判断依据。
 

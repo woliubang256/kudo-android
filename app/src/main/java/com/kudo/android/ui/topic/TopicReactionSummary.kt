@@ -30,9 +30,9 @@ internal fun TopicReactionSummary(post: Post, enabled: Boolean, modifier: Modifi
         .semantics(mergeDescendants = true) { contentDescription = "查看第 ${post.number} 楼的点赞与回应历史，共 ${post.reactionCount} 人" }
         .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.width(18.dp + 12.dp * (popular.size - 1)).height(18.dp)) {
-            popular.forEachIndexed { index, reaction ->
-                SiteEmoji(reaction.id, Modifier.offset(x = 12.dp * index).size(18.dp).testTag("post-reaction-${post.number}-${reaction.id}"))
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            popular.forEach { reaction ->
+                SiteEmoji(reaction.id, Modifier.size(18.dp).testTag("post-reaction-${post.number}-${reaction.id}"))
             }
         }
         BasicText(post.reactionCount.toString(), Modifier.weight(1f, fill = false),

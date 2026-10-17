@@ -99,6 +99,14 @@ class PostDisplayUiTest {
         compose.onNodeWithTag("post-reaction-2-laughing", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("post-reaction-2-+1", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("post-reaction-2-clap", useUnmergedTree = true).assertDoesNotExist()
+        val icons = listOf("heart", "laughing", "+1").map {
+            compose.onNodeWithTag("post-reaction-2-$it", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        }
+        icons.zipWithNext().forEach { (previous, next) ->
+            assertTrue("回应图标不能重叠", next.left > previous.right)
+            assertTrue("回应图标应紧凑排列", next.left - previous.right <= previous.width / 4)
+            assertEquals("回应图标应在同一行", previous.center.y, next.center.y, 1f)
+        }
         val summary = compose.onNodeWithTag("post-reaction-summary-2").fetchSemanticsNode().boundsInRoot
         val heart = compose.onNodeWithContentDescription("回应此楼层").fetchSemanticsNode().boundsInRoot
         assertTrue("汇总在互动行左侧，点赞保留在右侧", summary.right <= heart.left)
