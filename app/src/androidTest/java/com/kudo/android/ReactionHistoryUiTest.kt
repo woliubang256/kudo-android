@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
@@ -40,6 +41,8 @@ class ReactionHistoryUiTest {
             }
         } }
         compose.onNodeWithText("打开历史").performClick()
+        compose.onNodeWithText("点赞与回应").assertDoesNotExist()
+        compose.onNodeWithTag("liquid-action-sheet").assert(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "点赞与回应"))
         compose.onNodeWithTag("reaction-history-filter-all").assert(hasText("全部 100"))
         compose.onNodeWithTag("reaction-history-user-alice").assertIsDisplayed()
         compose.onNodeWithTag("reaction-history-user-bob").assertIsDisplayed()
@@ -96,11 +99,44 @@ class ReactionHistoryUiTest {
         compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
     }
 
-    @Test fun filtersWrapOnNarrowLargeFontScreens() {
+    @Test fun singleReactionHidesFiltersButKeepsTheUserList() {
+        val single = ReactionHistory(listOf(history.groups.first().copy(count = 1)))
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicReactionHistoryHost(1, "topic", GlassMode.TRANSLUCENT, { _, _ -> single }, {}) {
+                val open = LocalReactionHistory.current
+                TextButton(onClick = { open(post) }) { Text("打开历史") }
+            }
+        } }
+        compose.onNodeWithText("打开历史").performClick()
+        compose.onNodeWithTag("liquid-action-sheet").assertIsDisplayed()
+        compose.onNodeWithText("点赞与回应").assertDoesNotExist()
+        compose.onNodeWithTag("reaction-history-filters").assertDoesNotExist()
+        compose.onNodeWithTag("reaction-history-filter-all").assertDoesNotExist()
+        compose.onNodeWithTag("reaction-history-user-alice").assertIsDisplayed()
+        capture("reaction-history-single.png")
+    }
+
+    @Test fun emptyHistoryHidesFiltersButKeepsTheEmptyState() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicReactionHistoryHost(1, "topic", GlassMode.TRANSLUCENT, { _, _ -> ReactionHistory(emptyList()) }, {}) {
+                val open = LocalReactionHistory.current
+                TextButton(onClick = { open(post) }) { Text("打开历史") }
+            }
+        } }
+        compose.onNodeWithText("打开历史").performClick()
+        compose.onNodeWithText("点赞与回应").assertDoesNotExist()
+        compose.onNodeWithTag("reaction-history-filters").assertDoesNotExist()
+        compose.onNodeWithText("暂无可显示的记录").assertIsDisplayed()
+    }
+
+    @Test fun filtersScrollInOneRowOnNarrowLargeFontScreens() {
+        val many = history.copy(groups = history.groups + listOf("+1", "clap", "eyes", "tada", "hugs").mapIndexed { index, reaction ->
+            ReactionHistoryGroup(reaction, 1, listOf(ReactionHistoryUser(Member(0, "user$index", "用户$index", ""), reaction)))
+        })
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK)) {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.5f)) {
                 Box(Modifier.width(320.dp).fillMaxHeight()) {
-                    TopicReactionHistoryHost(1, "topic", GlassMode.TRANSLUCENT, { _, _ -> history }, {}) {
+                    TopicReactionHistoryHost(1, "topic", GlassMode.TRANSLUCENT, { _, _ -> many }, {}) {
                         val open = LocalReactionHistory.current
                         TextButton(onClick = { open(post) }) { Text("打开历史") }
                     }
@@ -109,8 +145,21 @@ class ReactionHistoryUiTest {
         } }
         compose.onNodeWithText("打开历史").performClick()
         compose.onNodeWithTag("reaction-history-filter-all").assertIsDisplayed()
-        compose.onNodeWithTag("reaction-history-filter-laughing").assertIsDisplayed()
         compose.onNodeWithTag("reaction-history-user-alice").assertIsDisplayed()
+        compose.onNodeWithTag("reaction-history-filter-hugs").assertIsNotDisplayed()
+        val filters = compose.onNodeWithTag("reaction-history-filters")
+        val initial = compose.onNodeWithTag("reaction-history-filter-all").fetchSemanticsNode().boundsInRoot
+        filters.performTouchInput { swipeLeft() }
+        val scrolled = filters.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()
+        assertTrue("分类应支持横向手势滚动", scrolled > 0f)
+        compose.onNodeWithTag("reaction-history-filter-hugs").performScrollTo().assertIsDisplayed()
+        val last = compose.onNodeWithTag("reaction-history-filter-hugs").fetchSemanticsNode().boundsInRoot
+        assertEquals("分类不能换行", initial.top, last.top, 1f)
+        assertEquals("分类应保持同一行高度", initial.height, last.height, 1f)
+        compose.onNodeWithTag("reaction-history-filter-hugs").performClick().assertIsSelected()
+        compose.onNodeWithTag("reaction-history-user-user4").assertIsDisplayed()
+        compose.onNodeWithTag("reaction-history-user-alice").assertDoesNotExist()
+        compose.onNodeWithTag("liquid-action-sheet").assertIsDisplayed()
         capture("reaction-history-narrow.png")
     }
 

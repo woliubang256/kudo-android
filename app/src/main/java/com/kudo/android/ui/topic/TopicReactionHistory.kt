@@ -4,9 +4,11 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,7 +54,7 @@ internal fun TopicReactionHistoryHost(accountKey: Any?, screenKey: Any?, glass: 
             CompositionLocalProvider(LocalReactionHistory provides controller::open,
                 LocalReadingBlocked provides (LocalReadingBlocked.current || showing), content = content)
         }
-        CommunitySheet(visibility, "点赞与回应", controller::dismiss, showTitle = true, scrollContent = false,
+        CommunitySheet(visibility, "点赞与回应", controller::dismiss, showTitle = false, scrollContent = false,
             maxHeightFraction = .78f, backdrop = backdrop, glass = glass) {
             TopicReactionHistoryContent(state, controller::select, controller::more, controller::retry,
                 user = { controller.dismiss(); user(it) }, enabled = visibility.targetState)
@@ -64,8 +66,8 @@ internal fun TopicReactionHistoryHost(accountKey: Any?, screenKey: Any?, glass: 
 internal fun ColumnScope.TopicReactionHistoryContent(state: ReactionHistoryState, select: (String?) -> Unit,
     more: () -> Unit, retry: () -> Unit, user: (String) -> Unit, enabled: Boolean) {
     val history = state.history
-    if (history != null) FlowRow(Modifier.fillMaxWidth().testTag("reaction-history-filters"),
-        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    if (history != null && history.groups.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        .testTag("reaction-history-filters"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         ReactionHistoryFilter(null, "全部 ${history.total}", state.reaction == null, enabled) { select(null) }
         history.groups.forEach { group ->
             ReactionHistoryFilter(group.reaction, group.count.toString(), state.reaction == group.reaction, enabled) { select(group.reaction) }
@@ -118,6 +120,6 @@ private fun ReactionHistoryFilter(reaction: String?, label: String, active: Bool
         .testTag("reaction-history-filter-${reaction ?: "all"}").heightIn(min = 40.dp).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (reaction != null) SiteEmoji(reaction, Modifier.size(20.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = if (active) Ink else MaterialTheme.colorScheme.onSurface)
+        Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium, color = if (active) Ink else MaterialTheme.colorScheme.onSurface)
     }
 }
