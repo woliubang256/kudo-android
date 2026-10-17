@@ -162,6 +162,55 @@ class PostDisplayUiTest {
         compose.runOnIdle { assertEquals(1, likes); assertEquals(1, choices); assertEquals(1, opened) }
     }
 
+    @Test fun replyUsesAnIconAndKeepsCompactHitTargetsAndCallbacks() {
+        var replyTarget: Post? = null
+        var boostTarget: Post? = null
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.5f)) {
+                Box(Modifier.width(320.dp)) {
+                    TopicPost(post, detail, TopicState(detail, false), true,
+                        {}, {}, { replyTarget = it }, {}, {}, {}, {}, boost = { boostTarget = it })
+                }
+            }
+        } }
+        compose.onNodeWithText("回复").assertDoesNotExist()
+        val reply = compose.onNodeWithTag("post-reply-2").assertIsDisplayed().assertIsEnabled()
+            .assert(hasContentDescription("回复第 2 楼")).assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        val like = compose.onNodeWithContentDescription("回应此楼层").fetchSemanticsNode().boundsInRoot
+        val boost = compose.onNodeWithContentDescription("Boost 此帖子").fetchSemanticsNode().boundsInRoot
+        val replyBounds = reply.fetchSemanticsNode().boundsInRoot
+        assertEquals("图标按钮保持相同宽度", like.width, replyBounds.width, 1f)
+        assertEquals("点赞和 Boost 保持紧凑中心间距", like.width, boost.center.x - like.center.x, 1f)
+        assertEquals("Boost 和回复保持紧凑中心间距", like.width, replyBounds.center.x - boost.center.x, 1f)
+        assertEquals("互动图标同一行居中", like.center.y, replyBounds.center.y, 1f)
+        capture("post-reply-icon.png")
+        compose.onNodeWithContentDescription("Boost 此帖子").performClick()
+        reply.performClick()
+        compose.runOnIdle { assertEquals(post, replyTarget); assertEquals(post, boostTarget) }
+    }
+
+    @Test fun replyIconRetainsClosedDisabledAndOwnPostStates() {
+        var closed by mutableStateOf(false)
+        var enabled by mutableStateOf(true)
+        var own by mutableStateOf(false)
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            val current = detail.copy(closed = closed)
+            TopicPost(post, current, TopicState(current, false, viewerId = if (own) member.id else null), enabled,
+                {}, {}, {}, {}, {}, {}, {})
+        } }
+        compose.onNodeWithTag("post-reply-2").assertIsEnabled()
+        compose.runOnIdle { closed = true }
+        compose.onNodeWithTag("post-reply-2").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("回应此楼层").assertIsEnabled()
+        compose.runOnIdle { closed = false; enabled = false }
+        compose.onNodeWithTag("post-reply-2").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("回应此楼层").assertIsNotEnabled()
+        compose.runOnIdle { enabled = true; own = true }
+        compose.onNodeWithTag("post-edit-2").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Boost 此帖子").assertDoesNotExist()
+        compose.onNodeWithTag("post-reply-2").assertIsEnabled()
+    }
+
     private fun capture(name: String) {
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), name)

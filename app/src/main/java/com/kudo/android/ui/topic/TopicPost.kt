@@ -114,7 +114,11 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
                     }
                 }
-                TextButton(onClick = { reply(post) }, enabled = enabled && !detail.closed) { Text("回复") }
+                IconButton(onClick = { reply(post) }, enabled = enabled && !detail.closed,
+                    modifier = Modifier.size(48.dp).testTag("post-reply-${post.number}")) {
+                    Icon(Icons.Rounded.ChatBubbleOutline, "回复第 ${post.number} 楼", Modifier.size(19.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
+                }
             }
             PostBoosts(post, enabled, user, openLink)
         }
