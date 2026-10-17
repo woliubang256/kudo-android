@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -28,6 +29,7 @@ import com.kudo.android.media.imageLoadErrorText
 import com.kudo.android.ui.account.LocalWebVerification
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
+import com.kudo.android.ui.theme.LocalDisplaySettings
 import kotlinx.coroutines.delay
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -163,7 +165,10 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
             TopicUnreadBadge(topic)
         }
         if (topic.excerpt.isNotBlank()) Text(topic.excerpt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        mediaUrl(topic.image)?.let { TopicPreviewImage(topic.id, it, onClick) }
+        mediaUrl(topic.image)?.let {
+            TopicPreviewImage(topic.id, it, onClick,
+                blurred = LocalDisplaySettings.current.blurNsfwImages && topic.hasNsfwTag())
+        }
         if (topic.tagDetails.isNotEmpty()) TopicTags(topic.tagDetails)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Stat(Icons.Rounded.Visibility, compactNumber(topic.views))
@@ -173,8 +178,11 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
     }
 }
 
+private fun Topic.hasNsfwTag(): Boolean = tags.any { it.equals("nsfw", ignoreCase = true) } ||
+    tagDetails.any { it.name.equals("nsfw", ignoreCase = true) || it.slug.equals("nsfw", ignoreCase = true) }
+
 @Composable
-private fun TopicPreviewImage(topicId: Int, url: String, openTopic: () -> Unit) {
+private fun TopicPreviewImage(topicId: Int, url: String, openTopic: () -> Unit, blurred: Boolean) {
     var decodedRatio by remember(url) { mutableStateOf<Float?>(null) }
     var loading by remember(url) { mutableStateOf(true) }
     var failureText by remember(url) { mutableStateOf<String?>(null) }
@@ -186,8 +194,12 @@ private fun TopicPreviewImage(topicId: Int, url: String, openTopic: () -> Unit) 
         .clickable(onClickLabel = if (failed) "重新加载图片" else "进入帖子详情") {
             if (failed) { loading = true; failureText = null; retry++ } else openTopic()
         }) {
-        key(url, retry) { AsyncImage(url, if (failed) "话题图片加载失败，点击重试" else "话题图片，点击进入帖子详情",
-            Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+        key(url, retry) { AsyncImage(url, when {
+                failed -> "话题图片加载失败，点击重试"
+                blurred -> "话题图片已模糊，点击进入帖子详情"
+                else -> "话题图片，点击进入帖子详情"
+            }, Modifier.fillMaxSize().then(if (blurred) Modifier.blur(14.dp) else Modifier)
+                .testTag(if (blurred) "topic-image-$topicId-blurred" else "topic-image-$topicId-sharp"), contentScale = ContentScale.Crop,
             onLoading = { loading = true; failureText = null; decodedRatio = null },
             onError = { loading = false; failureText = imageLoadErrorText(it.result.throwable); decodedRatio = null },
             onSuccess = {

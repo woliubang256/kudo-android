@@ -75,6 +75,16 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                             CommunitySwitch(settings.advancedWebViewMaterial, { update(settings.copy(advancedWebViewMaterial = it)) }, enabled = !showing, modifier = Modifier.testTag("advanced-webview-material"))
                         }
                         SettingsDivider()
+                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 18.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+                                Text("模糊 NSFW 图片", style = MaterialTheme.typography.bodyLarge)
+                                Text("列表中带有 nsfw 标签的话题图片会自动模糊", Modifier.padding(top = 4.dp),
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            CommunitySwitch(settings.blurNsfwImages, { update(settings.copy(blurNsfwImages = it)) }, enabled = !showing,
+                                modifier = Modifier.testTag("blur-nsfw-images"))
+                        }
+                        SettingsDivider()
                         SettingRow("字体大小", if (settings.fontScale == 1f) "跟随系统" else "${(settings.fontScale * 100).toInt()}%", !showing) { show("font") }
                         SettingsDivider()
                         SettingRow("主题列表样式", settings.topicListStyle.label, !showing) { show("list") }
