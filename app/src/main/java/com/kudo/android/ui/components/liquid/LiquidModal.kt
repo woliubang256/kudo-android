@@ -37,6 +37,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.TransformOrigin
@@ -147,9 +148,10 @@ internal fun LiquidModal(
 }
 
 @Composable
-internal fun LiquidModalAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false) {
+internal fun LiquidModalAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false,
+    sheetShape: Shape = CircleShape) {
     if (LocalSheetActions.current) {
-        Box(modifier.clip(CircleShape).background(if (primary) LogoYellow else Color.Transparent)
+        Box(modifier.clip(sheetShape).background(if (primary) LogoYellow else Color.Transparent)
             .clickable(role = Role.Button, onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
             Text(text, style = MaterialTheme.typography.bodyMedium, color = if (primary) Ink else LocalContentColor.current)
         }

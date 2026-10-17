@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -150,7 +152,8 @@ internal fun DohSettingsScreen(network: DohNetwork, requests: RequestSettings, b
             showTitle = mode != "actions", showActions = mode != "actions", actions = {
                 if (mode == "view") LiquidModalAction("完成", ::dismiss, Modifier.fillMaxWidth(), primary = true)
                 else {
-                    LiquidModalAction("取消", ::dismiss, Modifier.weight(1f))
+                    val sheetShape = if (mode == "edit" && serverId == null) RectangleShape else CircleShape
+                    LiquidModalAction("取消", ::dismiss, Modifier.weight(1f), sheetShape = sheetShape)
                     LiquidModalAction(if (mode == "delete") "删除" else "保存", {
                         if (!panel.targetState) return@LiquidModalAction
                         if (mode == "delete") {
@@ -160,7 +163,7 @@ internal fun DohSettingsScreen(network: DohNetwork, requests: RequestSettings, b
                                 else validateDohServer(name, url, bootstrap, serverId!!)
                             network.settings.update(configuration.saveServer(value)); network.refresh(); dismiss()
                         } catch (e: IllegalArgumentException) { error = e.message }
-                    }, Modifier.weight(1f), primary = true)
+                    }, Modifier.weight(1f), primary = true, sheetShape = sheetShape)
                 }
             }) {
             when (mode) {
