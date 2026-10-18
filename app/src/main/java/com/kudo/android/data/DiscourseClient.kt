@@ -80,15 +80,19 @@ class DiscourseClient(
     internal suspend fun sharedSessionKey(): String = Jsoup.parse(request("GET", "/latest", htmlResponse = true).getString("html"))
         .selectFirst("meta[name=shared_session_key]")?.attr("content")?.takeIf { it.isNotBlank() }
         ?: throw ApiFailure(FailureKind.SIGN_IN, "推送会话暂不可用")
-    suspend fun write(method: String, path: String, fields: Map<String, String> = emptyMap(), body: RequestBody? = null): JSONObject {
+    suspend fun write(method: String, path: String, fields: Map<String, String> = emptyMap(), body: RequestBody? = null,
+        allowNonJsonResponse: Boolean = false): JSONObject {
         val token = csrfMutex.withLock {
             csrf ?: get("/session/csrf").optString("csrf").takeIf { it.isNotBlank() && it != "null" }
                 ?.also { csrf = it } ?: throw ApiFailure(FailureKind.SIGN_IN, "登录状态已失效，请重新登录")
         }
-        return request(method, path, body = body ?: FormBody.Builder().apply { fields.forEach { (key, value) -> add(key, value) } }.build(), token = token)
+        return request(method, path, body = body ?: FormBody.Builder().apply { fields.forEach { (key, value) -> add(key, value) } }.build(),
+            token = token, allowNonJsonResponse = allowNonJsonResponse)
     }
 
-    private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(), body: RequestBody? = null, token: String? = null, redirects: Int = 0, arrayResponse: Boolean = false, htmlResponse: Boolean = false, collectionResponse: Boolean = false, verificationAttempt: Int = 0): JSONObject {
+    private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(), body: RequestBody? = null, token: String? = null,
+        redirects: Int = 0, arrayResponse: Boolean = false, htmlResponse: Boolean = false, collectionResponse: Boolean = false,
+        allowNonJsonResponse: Boolean = false, verificationAttempt: Int = 0): JSONObject {
         val url = resolve(path).newBuilder().apply { query.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
         cooldown.remainingSeconds(url).takeIf { it > 0 }?.let { throw rateLimitFailure(it) }
         val request = Request.Builder().url(url).method(method, body)
@@ -139,6 +143,7 @@ class DiscourseClient(
                 !it.isSuccessful -> throw ApiFailure(FailureKind.SERVER, reason ?: "社区暂时无法处理请求（${it.code}）")
                 htmlResponse -> return JSONObject().put("html", text)
                 it.code == 204 || text.isBlank() -> return JSONObject()
+                allowNonJsonResponse && json == null -> return JSONObject()
                 arrayResponse && it.isSuccessful -> {
                     val array = runCatching { JSONArray(text) }.getOrNull()
                         ?: throw ApiFailure(FailureKind.SERVER, "服务器未返回话题跟踪列表")

@@ -14,6 +14,29 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SolutionRepositoryTest {
+    @Test fun acceptingSolutionRefreshesThePostWhenThePluginReturnsPlainText() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when {
+                    request.path == "/session/csrf" -> MockResponse().setBody("""{"csrf":"test-token"}""")
+                    request.path == "/solution/accept" -> MockResponse().setBody("OK")
+                    request.path == "/posts/7.json" -> MockResponse().setBody(postJson(true))
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            val initial = Post(7, 2, com.kudo.android.data.Member(3, "helper", "", ""), "<p>回复</p>", "", 0,
+                false, null, null, true, canAcceptSolution = true)
+
+            val selected = repository.setSolution(initial, true)
+
+            assertTrue(selected.isSolution)
+            assertEquals(listOf("/session/csrf", "/solution/accept", "/posts/7.json"),
+                listOf(server.takeRequest().path, server.takeRequest().path, server.takeRequest().path))
+        }
+    }
+
     @Test fun acceptingAndUnacceptingSolutionsUseThePluginEndpointsAndRefreshThePost() = runBlocking {
         MockWebServer().use { server ->
             var accepted = false
