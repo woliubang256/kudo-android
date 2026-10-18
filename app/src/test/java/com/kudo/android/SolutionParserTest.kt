@@ -37,6 +37,20 @@ class SolutionParserTest {
         assertEquals(setOf(3, 4), detail.posts.filter { it.isSolution }.map { it.number }.toSet())
     }
 
+    @Test fun parsesSolvedActionPermissionsForTheTopicOwner() {
+        val detail = DiscourseParser.detail(JSONObject(
+            """{"id":5,"title":"主题","post_stream":{"stream":[1,2],"posts":[
+                {"id":1,"post_number":1,"user_id":2,"username":"author","cooked":"<p>主帖</p>"},
+                {"id":2,"post_number":2,"user_id":3,"username":"helper","cooked":"<p>回复</p>","can_accept_answer":true,"can_unaccept_answer":false,"accepted_answer":false}
+            ]}}"""
+        ))
+
+        val post = detail.posts.single { it.number == 2 }
+        assertTrue(post.canAcceptSolution)
+        assertTrue(!post.canUnacceptSolution)
+        assertTrue(!post.isSolution)
+    }
+
     private fun topicJson(extra: String, solutionPostNumbers: Set<Int> = emptySet()): String {
         val posts = (1..4).joinToString(",") { number ->
             val flag = if (number in solutionPostNumbers) ",\"accepted_answer\":true" else ""

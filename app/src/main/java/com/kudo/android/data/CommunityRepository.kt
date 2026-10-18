@@ -136,6 +136,19 @@ class CommunityRepository(val client: DiscourseClient) {
         return result.positiveInt("id") ?: result.optJSONObject("bookmark")?.positiveInt("id")
             ?: throw ApiFailure(FailureKind.SERVER, "收藏状态需刷新确认")
     }
+    suspend fun setSolution(post: Post, accepted: Boolean): Post {
+        val allowed = if (accepted) post.canAcceptSolution else post.canUnacceptSolution
+        if (!allowed) throw ApiFailure(FailureKind.FORBIDDEN, if (accepted) "暂时无法选择此回复为解决方案" else "暂时无法取消此解决方案")
+        val endpoint = if (accepted) "/solution/accept" else "/solution/unaccept"
+        val result = client.write("POST", endpoint, mapOf("id" to post.id.toString()))
+        val success = result.opt("success")
+        if (success != null && success.toString().let { it != "OK" && !it.equals("true", ignoreCase = true) }) {
+            throw ApiFailure(FailureKind.SERVER, "解决方案状态需刷新确认")
+        }
+        val updated = post(post.id)
+        if (updated.id != post.id) throw ApiFailure(FailureKind.SERVER, "解决方案状态需刷新确认")
+        return updated
+    }
     suspend fun bookmarks(username: String, page: Int): Pair<List<SavedTopic>, Boolean> {
         val url = client.baseUrl.newBuilder().addPathSegment("u").addPathSegment(username).addPathSegment("bookmarks.json").addQueryParameter("page", page.toString()).build()
         val list = client.get(url.toString()).optJSONObject("user_bookmark_list")
