@@ -143,6 +143,22 @@ class ReactionHistoryUiTest {
         capture("reaction-history-single.png")
     }
 
+    @Test fun shortReactionHistoryKeepsAdaptivePagerHeight() {
+        val single = ReactionHistory(listOf(history.groups.first().copy(count = 1)))
+        var density = 1f
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            val currentDensity = LocalDensity.current.density
+            SideEffect { density = currentDensity }
+            TopicReactionHistoryHost(1, "topic", GlassMode.TRANSLUCENT, { _, _ -> single }, {}) {
+                val open = LocalReactionHistory.current
+                TextButton(onClick = { open(post) }) { Text("打开历史") }
+            }
+        } }
+        compose.onNodeWithText("打开历史").performClick()
+        val pagerHeight = compose.onNodeWithTag("reaction-history-pager").fetchSemanticsNode().boundsInRoot.height
+        assertTrue("短名单不应使用 Pager 的最大高度", pagerHeight < 440f * density - 1f)
+    }
+
     @Test fun emptyHistoryHidesFiltersButKeepsTheEmptyState() {
         compose.setContent { KudoTheme(DisplaySettings()) {
             TopicReactionHistoryHost(1, "topic", GlassMode.TRANSLUCENT, { _, _ -> ReactionHistory(emptyList()) }, {}) {

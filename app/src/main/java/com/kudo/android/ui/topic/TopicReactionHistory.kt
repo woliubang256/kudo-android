@@ -90,9 +90,9 @@ internal fun ColumnScope.TopicReactionHistoryContent(state: ReactionHistoryState
         }
     }
     if (pages.size > 1) {
-        HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 440.dp)
+        HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 440.dp).wrapContentHeight()
             .testTag("reaction-history-pager"), key = { pages[it] ?: "all" }) { index ->
-            ReactionHistoryUsersPage(history, pages[index], state, Modifier.fillMaxSize(), more, retry, user, enabled,
+            ReactionHistoryUsersPage(history, pages[index], state, Modifier.fillMaxWidth(), more, retry, user, enabled,
                 pager.settledPage == index)
         }
     } else {
