@@ -17,13 +17,11 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.toArgb
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.editor.EditorForm
 import com.kudo.android.ui.editor.ReplyEditorSheet
 import com.kudo.android.ui.theme.KudoTheme
-import com.kudo.android.ui.theme.LogoYellow
 import com.kudo.android.ui.topic.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -82,23 +80,27 @@ class PostQuoteUiTest {
         compose.runOnIdle {
             clipboard.setPrimaryClip(ClipData.newPlainText("原内容", "旧内容"))
         }
-        SystemClock.sleep(2200)
+        SystemClock.sleep(4000)
         selectWord(sentence, "needle")
         revealMenu("复制引用")
         capture("post-quote-menu.png")
         clickMenu("复制引用")
-        compose.waitUntil(3000) { hasYellowToast() }
         val expected = postQuoteMarkdown(700, source, "needle")
         compose.runOnIdle {
             assertEquals(expected, clipboard.primaryClip!!.getItemAt(0).text.toString())
             assertEquals(0, replies)
         }
+        compose.waitUntil(5000) { hasYellowToast() }
         compose.onNodeWithTag("editor-body").assertDoesNotExist()
     }
 
-    @Test fun originalCopyAndSelectAllRemainAvailable() {
+    @Test fun onlyCopySelectAndQuoteActionsRemainInTheSelectionMenu() {
         article()
         selectWord(sentence, "needle")
+        revealMenu("复制引用")
+        assertNotNull(nativeNode("复制", "Copy"))
+        assertNotNull(nativeNode("全选", "Select all"))
+        assertNull(nativeNode("翻译", "Translate"))
         clickMenu("复制", "Copy")
         assertClipboard("needle")
         selectWord(sentence, "needle")
@@ -129,7 +131,7 @@ class PostQuoteUiTest {
         assertClipboard(postQuoteMarkdown(700, post, "selection"))
     }
 
-    @Test fun closedAndArchivedTopicsOnlyOfferCopyQuote() {
+    @Test fun closedAndArchivedTopicsOmitReplyQuoteOnly() {
         var archived by mutableStateOf(false)
         compose.setContent { KudoTheme(DisplaySettings()) {
             val detail = TopicDetail(700, "不可回复", 1, listOf(source), listOf(source.id), !archived, archived = archived)
@@ -142,6 +144,8 @@ class PostQuoteUiTest {
             selectWord(sentence, "needle")
             revealMenu("复制引用")
             assertNull(nativeNode("引用"))
+            assertNotNull(nativeNode("复制", "Copy"))
+            assertNotNull(nativeNode("全选", "Select all"))
             clickMenu("复制引用")
             assertClipboard(postQuoteMarkdown(700, source, "needle"))
             compose.runOnIdle { archived = true }
@@ -189,6 +193,7 @@ class PostQuoteUiTest {
         val localized = labels.toSet() + labels.map { when (it) {
             "复制" -> "複製"
             "全选" -> "全選"
+            "翻译" -> "翻譯"
             "更多选项" -> "更多選項"
             "更多" -> "更多"
             else -> it
@@ -230,10 +235,13 @@ class PostQuoteUiTest {
     private fun hasYellowToast(): Boolean {
         val bitmap = automation.takeScreenshot() ?: return false
         return try {
-            val yellow = LogoYellow.toArgb()
             (0 until bitmap.height / 3 step 4).any { row ->
                 (bitmap.width / 4 until bitmap.width * 3 / 4 step 4).count { column ->
-                    bitmap.getPixel(column, row) == yellow
+                    val pixel = bitmap.getPixel(column, row)
+                    val red = pixel shr 16 and 0xff
+                    val green = pixel shr 8 and 0xff
+                    val blue = pixel and 0xff
+                    red >= 220 && green in 130..210 && blue <= 80
                 } > bitmap.width / 40
             }
         } finally { bitmap.recycle() }

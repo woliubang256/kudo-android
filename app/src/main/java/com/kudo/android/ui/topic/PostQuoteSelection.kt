@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import com.kudo.android.R
 import com.kudo.android.data.Post
 import com.kudo.android.data.postQuoteMarkdown
 import com.kudo.android.ui.components.showKudoToast
@@ -35,12 +36,12 @@ internal fun PostQuoteSelection(topicId: Int?, post: Post, reply: ((String) -> U
         Modifier.appendTextContextMenuComponents {
             clipboard.copyItem = null
             separator()
-            if (reply != null) item(QuoteSelectionKey, "引用") {
+            if (reply != null) item(QuoteSelectionKey, "引用", R.drawable.ic_text_quote) {
                 val selected = clipboard.selectedText(this)
                 close()
                 if (selected != null) reply(postQuoteMarkdown(topicId, post, selected))
             }
-            item(CopyQuoteSelectionKey, "复制引用") {
+            item(CopyQuoteSelectionKey, "复制引用", R.drawable.ic_text_copy) {
                 val selected = clipboard.selectedText(this)
                 close()
                 if (selected != null) {
@@ -52,7 +53,9 @@ internal fun PostQuoteSelection(topicId: Int?, post: Post, reply: ((String) -> U
             }
         }.filterTextContextMenuComponents { component ->
             if (component.key === TextContextMenuKeys.CopyKey && component is TextContextMenuItem) clipboard.copyItem = component
-            true
+            component.key === TextContextMenuKeys.CopyKey ||
+                component.key === TextContextMenuKeys.SelectAllKey ||
+                component.key === QuoteSelectionKey || component.key === CopyQuoteSelectionKey
         }
     }
     CompositionLocalProvider(LocalClipboard provides clipboard, LocalPostQuoteSelection provides menuModifier) {
