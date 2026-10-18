@@ -105,6 +105,44 @@ class TopicViewModelTest {
         }
     }
 
+    @Test fun selectingASolutionReplacesTheExistingSummaryAndClearsTheOldFloor() = runTest {
+        val initial = solutionTopicJson(acceptedNumber = 3, canAcceptNumber = 2)
+        val writes = AtomicInteger()
+        withTopic(initial = initial, response = { request ->
+            when {
+                request.path == "/solution/accept" -> {
+                    writes.incrementAndGet(); MockResponse().setBody("""{"success":"OK"}""")
+                }
+                request.path == "/posts/11.json" -> MockResponse().setBody(solutionPostJson(2, accepted = true))
+                else -> null
+            }
+        }) { vm, _ ->
+            val loaded = vm.awaitState { !it.loading }
+            vm.toggleSolution(loaded.detail!!.posts.single { it.number == 2 })
+            val updated = vm.awaitState { it.busy.isEmpty() && it.detail?.solutions?.singleOrNull()?.postNumber == 2 }
+            assertEquals(1, writes.get())
+            assertTrue(updated.detail!!.posts.single { it.number == 2 }.isSolution)
+            assertFalse(updated.detail.posts.single { it.number == 3 }.isSolution)
+            assertEquals("helper", updated.detail.solutions.single().username)
+        }
+    }
+
+    @Test fun unselectingASolutionClearsTheSummaryAfterServerConfirmation() = runTest {
+        val initial = solutionTopicJson(acceptedNumber = 2, canUnacceptNumber = 2)
+        withTopic(initial = initial, response = { request ->
+            when {
+                request.path == "/solution/unaccept" -> MockResponse().setBody("""{"success":"OK"}""")
+                request.path == "/posts/11.json" -> MockResponse().setBody(solutionPostJson(2, accepted = false))
+                else -> null
+            }
+        }) { vm, _ ->
+            val loaded = vm.awaitState { !it.loading }
+            vm.toggleSolution(loaded.detail!!.posts.single { it.number == 2 })
+            val updated = vm.awaitState { it.busy.isEmpty() && it.detail?.solutions?.isEmpty() == true }
+            assertFalse(updated.detail!!.posts.single { it.number == 2 }.isSolution)
+        }
+    }
+
     @Test fun reactionUsesTheServerConfirmedPostInsteadOfLocalArithmetic() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         MockWebServer().use { server ->
@@ -280,4 +318,14 @@ class TopicViewModelTest {
             try { block(vm, server) } finally { vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); Dispatchers.resetMain() }
         }
     }
+
+    private fun solutionTopicJson(acceptedNumber: Int, canAcceptNumber: Int? = null, canUnacceptNumber: Int? = null): String {
+        val accepted = "\"accepted_answer\":{\"post_number\":$acceptedNumber,\"username\":\"helper\",\"name\":\"热心用户\",\"excerpt\":\"<p>已选回复</p>\"},"
+        return """{"id":5,"title":"解决方案操作",$accepted"post_stream":{"stream":[10,11,12],"posts":[$original,
+            ${solutionPostJson(2, acceptedNumber == 2, canAcceptNumber == 2, canUnacceptNumber == 2)},
+            ${solutionPostJson(3, acceptedNumber == 3, canAcceptNumber == 3, canUnacceptNumber == 3)}]}}"""
+    }
+
+    private fun solutionPostJson(number: Int, accepted: Boolean, canAccept: Boolean = false, canUnaccept: Boolean = false) =
+        """{"id":${if (number == 2) 11 else 12},"post_number":$number,"user_id":${number + 1},"username":"${if (number == 2) "helper" else "other"}","name":"用户$number","cooked":"<p>回复$number</p>","accepted_answer":$accepted,"can_accept_answer":$canAccept,"can_unaccept_answer":$canUnaccept}"""
 }

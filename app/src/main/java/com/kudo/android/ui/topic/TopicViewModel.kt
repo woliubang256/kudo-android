@@ -23,6 +23,21 @@ private fun TopicDetail.mergeSolutions(
     })
 }
 
+private fun TopicDetail.replaceSolution(updated: Post, accepted: Boolean): TopicDetail {
+    val confirmed = updated.copy(isSolution = accepted)
+    return copy(
+        posts = posts.map { post ->
+            when {
+                post.id == updated.id -> confirmed
+                post.number > 1 -> post.copy(isSolution = false)
+                else -> post
+            }
+        },
+        solutions = if (accepted) listOf(TopicSolution(confirmed.number, confirmed.author.username, confirmed.author.name,
+            plainText(confirmed.cooked))) else emptyList(),
+    )
+}
+
 data class TopicState(
     val detail: TopicDetail? = null, val loading: Boolean = true, val loadingMore: Boolean = false,
     val error: Throwable? = null, val moreError: Throwable? = null, val busy: Set<Int> = emptySet(),
@@ -492,6 +507,35 @@ class TopicViewModel(
         repository.react(latest, reaction)
     }
     fun bookmark(post: Post) = action(post) { latest -> latest.copy(bookmarkId = repository.bookmark(latest)) }
+    fun toggleSolution(post: Post) {
+        val snapshot = _state.value
+        if (snapshot.loading || post.id in snapshot.busy) return
+        val latest = snapshot.allPosts.firstOrNull { it.id == post.id } ?: return
+        val accepted = when {
+            latest.canUnacceptSolution -> false
+            latest.canAcceptSolution -> true
+            else -> return
+        }
+        _state.update { it.copy(busy = it.busy + latest.id) }
+        viewModelScope.launch {
+            try {
+                val updated = withContext(Dispatchers.IO) { repository.setSolution(latest, accepted) }
+                _state.update { current ->
+                    val detail = current.detail?.replaceSolution(updated, accepted)
+                    val related = current.related.map { relatedPost ->
+                        when {
+                            relatedPost.id == updated.id -> updated.copy(isSolution = accepted)
+                            relatedPost.number > 1 -> relatedPost.copy(isSolution = false)
+                            else -> relatedPost
+                        }
+                    }
+                    current.copy(detail = detail, related = related)
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { messages.send(e.message ?: "解决方案操作失败") }
+            finally { _state.update { it.copy(busy = it.busy - latest.id) } }
+        }
+    }
     fun vote(post: Post, name: String, options: List<String>) {
         if (_state.value.viewerId == null || _state.value.detail?.archived != false) return
         action(post) { repository.vote(it, name, options) }
