@@ -41,27 +41,30 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
-fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: () -> Unit, more: () -> Unit, login: () -> Unit, like: (Post) -> Unit, bookmark: (Post) -> Unit, reply: (Post?) -> Unit, user: (String) -> Unit, image: (String) -> Unit, openLink: (String) -> Unit, share: () -> Unit, follow: () -> Unit = {}, react: (Post, String) -> Unit = { _, _ -> }, openBrowser: (String) -> Unit = openLink, loadReplies: (Post, Boolean) -> Unit = { _, _ -> }, resolveContext: () -> Unit = {}, readingEnabled: Boolean = true, onReadingBatch: (TopicReadingBatch) -> Unit = {}, onPostsRead: (Set<Int>) -> Unit = {}, loadBoostRules: () -> Unit = {}, boost: (Post, String, () -> Unit) -> Unit = { _, _, _ -> }, jumpTo: (Int) -> Unit = {}, vote: (Post, String, List<String>) -> Unit = { _, _, _ -> }, openCategory: (Int) -> Unit = {}, openTag: (TopicTag) -> Unit = {}, previous: () -> Unit = {}, quoteReply: ((Post, String) -> Unit)? = null) {
+fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: () -> Unit, more: () -> Unit, login: () -> Unit, like: (Post) -> Unit, bookmark: (Post) -> Unit, reply: (Post?) -> Unit, user: (String) -> Unit, image: (String) -> Unit, openLink: (String) -> Unit, share: () -> Unit, follow: () -> Unit = {}, react: (Post, String) -> Unit = { _, _ -> }, openBrowser: (String) -> Unit = openLink, loadReplies: (Post, Boolean) -> Unit = { _, _ -> }, resolveContext: () -> Unit = {}, readingEnabled: Boolean = true, onReadingBatch: (TopicReadingBatch) -> Unit = {}, onPostsRead: (Set<Int>) -> Unit = {}, loadBoostRules: () -> Unit = {}, boost: (Post, String, () -> Unit) -> Unit = { _, _, _ -> }, jumpTo: (Int) -> Unit = {}, vote: (Post, String, List<String>) -> Unit = { _, _, _ -> }, openCategory: (Int) -> Unit = {}, openTag: (TopicTag) -> Unit = {}, previous: () -> Unit = {}, quoteReply: ((Post, String) -> Unit)? = null, solution: (Post) -> Unit = {}) {
     val backdrop = rememberLayerBackdrop()
     val modalBackdrop = rememberLayerBackdrop()
     val visibility = remember { MutableTransitionState(false) }
     var reactionPostId by remember { mutableStateOf<Int?>(null) }
     val threadVisibility = remember { MutableTransitionState(false) }
     var threadRootId by rememberSaveable { mutableStateOf<Int?>(null) }
+    val solutionVisibility = remember { MutableTransitionState(false) }
+    var solutionPostId by rememberSaveable { mutableStateOf<Int?>(null) }
     val boostVisibility = remember { MutableTransitionState(false) }
     var boostPostId by rememberSaveable { mutableStateOf<Int?>(null) }
     var boostRaw by rememberSaveable(boostPostId) { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
     val boostShowing = boostVisibility.currentState || boostVisibility.targetState
+    val solutionShowing = solutionVisibility.currentState || solutionVisibility.targetState
     val floorVisibility = remember { MutableTransitionState(false) }
     var floorRaw by rememberSaveable { mutableStateOf("1") }
     val floorShowing = floorVisibility.currentState || floorVisibility.targetState
     val reactionShowing = visibility.currentState || visibility.targetState
-    val overlayShowing = reactionShowing || boostShowing || floorShowing
+    val overlayShowing = reactionShowing || boostShowing || floorShowing || solutionShowing
     val threadShowing = threadVisibility.currentState || threadVisibility.targetState
     val showing = overlayShowing || threadShowing
-    val modalShowing = reactionShowing || boostShowing || threadShowing
-    val bottomEnabled = !reactionShowing && !boostShowing && !threadShowing
+    val modalShowing = reactionShowing || boostShowing || threadShowing || solutionShowing
+    val bottomEnabled = !reactionShowing && !boostShowing && !threadShowing && !solutionShowing
     fun openBoost(post: Post) {
         if (state.viewerId == null) { login(); return }
         if (!post.canBoost) return
@@ -84,6 +87,19 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
     val tocShowing = tocVisibility.currentState || tocVisibility.targetState
     fun dismiss() { visibility.targetState = false }
     fun choose(post: Post) { reactionPostId = post.id; visibility.targetState = true }
+    fun openSolution(post: Post) {
+        if (post.canAcceptSolution || post.canUnacceptSolution) {
+            solutionPostId = post.id
+            solutionVisibility.targetState = true
+        }
+    }
+    fun closeSolution() { solutionVisibility.targetState = false }
+    fun confirmSolution() {
+        state.allPosts.firstOrNull { it.id == solutionPostId }?.let { post ->
+            closeSolution()
+            solution(post)
+        }
+    }
     fun replyTo(post: Post?) { threadVisibility.targetState = false; visibility.targetState = false; reply(post) }
     val quotedReply: ((Post, String) -> Unit)? = quoteReply?.let { action -> { post, markdown ->
         threadVisibility.targetState = false; visibility.targetState = false; action(post, markdown)
@@ -236,7 +252,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                         returnTopError = null
                         if (hasPrevious) { returningToTop = true; jumpTo(1) }
                         else { listState.animateScrollToItem(0); currentFloor = 1 }
-                    }, contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = 110.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    }, contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = 180.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.loading && detail == null) item { LoadingRow() }
                     if (state.error != null) item { ErrorState(state.error, retry, login, back) }
                     if (detail != null) {
@@ -279,7 +295,7 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                                     revealOriginal, revealOriginal = { revealOriginal = true }, boost = ::openBoost, vote = vote, login = login,
                                     onHeading = if (post.number == 1 && tocEntries.isNotEmpty()) { heading, requester ->
                                         if (heading.level == 2 || heading.level == 3) headingAnchors[heading.path] = requester
-                                    } else null, quote = quotedReply)
+                                    } else null, quote = quotedReply, solution = ::openSolution)
                                 if (post.number == 1) TopicSolutionsSummary(detail, posts, !showing, ::navigatePost)
                                 if (post.number > 1 && !post.isSystemAction && thread != null) ReplyPreview(thread, state.replyLoads[post.id], state.hasMoreReplies(post), !showing) {
                                     if (it == null) openThread(post) else navigatePost(it)
@@ -354,6 +370,18 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                     if (visibility.targetState) { dismiss(); react(selected, it) }
                 }
             }
+        }
+        val solutionPost = state.allPosts.firstOrNull { it.id == solutionPostId }
+        val solutionSelected = solutionPost?.isSolution == true || solutionPost?.canUnacceptSolution == true
+        LiquidModal(solutionVisibility, if (solutionSelected) "取消解决方案？" else "选择解决方案？", false, modalBackdrop, glass,
+            ::closeSolution, actions = {
+                LiquidModalAction("取消", ::closeSolution, Modifier.weight(1f))
+                LiquidModalAction(if (solutionSelected) "取消解决方案" else "选为解决方案", ::confirmSolution,
+                    Modifier.weight(1f), primary = true)
+            }) {
+            Text(if (solutionSelected) "确定取消第 ${solutionPost?.number ?: ""} 楼的解决方案标记吗？"
+                else "确定将第 ${solutionPost?.number ?: ""} 楼标记为解决方案吗？",
+                Modifier.testTag("solution-confirmation"), style = MaterialTheme.typography.bodyLarge)
         }
         val boostPost = state.allPosts.firstOrNull { it.id == boostPostId }
         val boosting = boostPostId in state.busy

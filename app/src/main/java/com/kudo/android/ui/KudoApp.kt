@@ -397,7 +397,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             openCategory = { categoryId -> if (categoryId > 0) nav.navigate("category/$categoryId") { launchSingleTop = true } },
                             openTag = ::openTag, quoteReply = { post, markdown -> authenticated {
                                 replyQuote = markdown; replyTarget = post.number; replyVisibility.targetState = true
-                            } })
+                            } }, solution = { post -> authenticated { vm.toggleSolution(post) } })
                         }
                         val currentUser = account.user
                         val target = replyTarget

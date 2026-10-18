@@ -16,6 +16,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -44,7 +47,7 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
     originalRevealed: Boolean = false, revealOriginal: () -> Unit = {}, boost: (Post) -> Unit = {},
     vote: (Post, String, List<String>) -> Unit = { _, _, _ -> }, login: () -> Unit = {},
     onHeading: ((ArticleHeading, BringIntoViewRequester) -> Unit)? = null,
-    quote: ((Post, String) -> Unit)? = null) {
+    quote: ((Post, String) -> Unit)? = null, solution: (Post) -> Unit = {}) {
     if (post.isSystemAction) {
         TopicSystemAction(post, enabled && !state.loading, user)
         return
@@ -101,6 +104,28 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
             UserSignature(post, openLink)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { TopicReactionSummary(post, enabled && !state.loading) }
+                val canToggleSolution = enabled && !state.loading && post.id !in state.busy &&
+                    (post.canAcceptSolution || post.canUnacceptSolution)
+                val showSolution = canToggleSolution || post.isSolution
+                if (showSolution) {
+                    val selected = post.isSolution || post.canUnacceptSolution
+                    val solutionColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                        alpha = .75f * if (enabled) 1f else .38f)
+                    Row(Modifier.clip(RoundedCornerShape(50)).clickable(enabled = canToggleSolution, role = Role.Button,
+                        onClickLabel = if (selected) "取消第 ${post.number} 楼解决方案" else "选择第 ${post.number} 楼为解决方案") { solution(post) }
+                        .heightIn(min = 48.dp).widthIn(min = 48.dp)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = if (selected) "第 ${post.number} 楼解决方案" else "第 ${post.number} 楼选择解决方案"
+                            stateDescription = if (selected) "已选为解决方案" else "未选为解决方案"
+                        }.padding(horizontal = 8.dp).testTag("solution-action-${post.number}"), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Icon(if (selected) Icons.Rounded.CheckBox else Icons.Rounded.CheckBoxOutlineBlank, null,
+                            Modifier.size(19.dp), tint = if (selected) MaterialTheme.colorScheme.primary else solutionColor)
+                        Text("解决方案", style = MaterialTheme.typography.labelLarge,
+                            color = if (selected) MaterialTheme.colorScheme.primary else solutionColor,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
                 val actions = LocalTopicActions.current
                 TopicReactionButton(post, enabled && !state.loading && post.id !in state.busy && (state.viewerId == null || post.canReact),
                     choose = if (post.reactionsAvailable && detail.validReactions.isNotEmpty()) ({ choose(post) }) else null,

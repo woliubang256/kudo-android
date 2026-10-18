@@ -83,6 +83,7 @@ class TopicDetailUiTest {
         state: TopicState, settings: DisplaySettings = DisplaySettings(theme = ThemeMode.LIGHT),
         like: (Post) -> Unit = {}, follow: () -> Unit = {}, react: (Post, String) -> Unit = { _, _ -> },
         user: (String) -> Unit = {}, retry: () -> Unit = {}, share: () -> Unit = {}, link: (String) -> Unit = {},
+        solution: (Post) -> Unit = {},
     ) {
         val scope = rememberCoroutineScope()
         val cache = remember { AvatarMetadataCache(scope, { emptyList() }, {
@@ -91,7 +92,8 @@ class TopicDetailUiTest {
         DisposableEffect(cache) { onDispose { cache.close() } }
         CompositionLocalProvider(LocalAvatarMetadata provides cache) {
             KudoTheme(settings) {
-                TopicScreen(state, settings.glass, {}, retry, {}, {}, like, {}, {}, user, {}, link, share, follow, react)
+                TopicScreen(state, settings.glass, {}, retry, {}, {}, like, {}, {}, user, {}, link, share, follow, react,
+                    solution = solution)
             }
         }
     }
@@ -252,6 +254,37 @@ class TopicDetailUiTest {
     @Test fun topicWithoutSolutionsDoesNotRenderSolutionSummary() {
         compose.setContent { Screen(initial.copy(detail = detail.copy(solutions = emptyList()))) }
         compose.onNodeWithTag("topic-solutions").assertDoesNotExist()
+    }
+
+    @Test fun solutionActionRequiresConfirmationAndMarksTheReplyAfterSelection() {
+        val candidate = reply.copy(canAcceptSolution = true)
+        var state by mutableStateOf(initial.copy(viewerId = author.id, detail = detail.copy(posts = listOf(first, candidate))))
+        var selected: Post? = null
+        compose.setContent {
+            Screen(state, solution = { post ->
+                selected = post
+                val confirmed = post.copy(isSolution = true, canAcceptSolution = false, canUnacceptSolution = true)
+                state = state.copy(detail = state.detail!!.copy(posts = listOf(first, confirmed), solutions = listOf(
+                    TopicSolution(confirmed.number, confirmed.author.username, confirmed.author.name, "回复正文"))))
+            })
+        }
+
+        compose.onNodeWithTag("topic-posts").performScrollToNode(hasTestTag("solution-action-2"))
+        compose.onNodeWithTag("topic-posts").performTouchInput { swipeUp(durationMillis = 300) }
+        compose.onNodeWithTag("solution-action-2", useUnmergedTree = true).assertIsDisplayed().assertIsEnabled()
+            .assertHasClickAction().performTouchInput { click() }
+        compose.onNodeWithTag("solution-confirmation", useUnmergedTree = true).assertIsDisplayed()
+        compose.runOnIdle { assertNull(selected) }
+        compose.onNodeWithText("选为解决方案").performClick()
+        compose.runOnIdle { assertEquals(2, selected?.number) }
+        compose.onNodeWithTag("solution-marker-2").assertIsDisplayed()
+        compose.onNodeWithTag("topic-solutions").assertIsDisplayed()
+    }
+
+    @Test fun replyWithoutSolvedPermissionDoesNotRenderSolutionAction() {
+        compose.setContent { Screen(initial.copy(viewerId = author.id)) }
+        compose.onNodeWithTag("topic-posts").performScrollToNode(hasTestTag("post-2"))
+        compose.onNodeWithTag("solution-action-2").assertDoesNotExist()
     }
 
     @Test fun shortTapCancelsHeartOrEmojiAndLongPressOnlyOpensTheResponsePicker() {
