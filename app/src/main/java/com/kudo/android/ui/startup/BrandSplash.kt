@@ -45,6 +45,10 @@ internal fun ComponentActivity.installBrandSplash(restored: Boolean) {
     }
 }
 
+internal fun brandLaunchLayerAlpha(elapsedMillis: Float): Float =
+    1f - ((elapsedMillis - BrandLaunchFadeStartMillis) /
+        (BrandLaunchDurationMillis - BrandLaunchFadeStartMillis)).coerceIn(0f, 1f)
+
 internal class BrandSplashPlayback(
     private val layer: View, private val icon: View, private val completed: () -> Unit,
 ) {
@@ -63,8 +67,7 @@ internal class BrandSplashPlayback(
         animator.addUpdateListener { animation ->
             drawable.progress = animation.animatedValue as Float
             val elapsed = drawable.progress * BrandLaunchDurationMillis
-            layer.alpha = 1f - ((elapsed - BrandLaunchFadeStartMillis) /
-                (BrandLaunchDurationMillis - BrandLaunchFadeStartMillis)).coerceIn(0f, 1f)
+            layer.alpha = brandLaunchLayerAlpha(elapsed)
         }
         animator.doOnEnd { finish() }
         animator.start()

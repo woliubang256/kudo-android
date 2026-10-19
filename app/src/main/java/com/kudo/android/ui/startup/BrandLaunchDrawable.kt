@@ -17,8 +17,8 @@ import androidx.core.graphics.PathParser
 import kotlin.math.abs
 import kotlin.math.min
 
-internal const val BrandLaunchDurationMillis = 750L
-internal const val BrandLaunchFadeStartMillis = 665L
+internal const val BrandLaunchDurationMillis = 900L
+internal const val BrandLaunchFadeStartMillis = 750L
 
 internal class BrandLaunchDrawable : Drawable() {
     var progress = 0f
