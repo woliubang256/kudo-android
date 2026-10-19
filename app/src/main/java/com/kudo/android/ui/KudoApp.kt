@@ -6,9 +6,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.focusGroup
@@ -91,6 +88,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         val account = model("account") { AccountViewModel(app) }
         val homeUpdate = model("home-update") { HomeUpdateViewModel(GitHubUpdates()::latest) }
         val nav = rememberNavController()
+        val topicTransitions = remember(nav, account.user?.id) { TopicTransitions(nav) }
         LaunchedEffect(incomingDownloads, linkSequence) {
             if (incomingDownloads) { nav.navigate("downloads") { launchSingleTop = true }; consumeDownloads() }
         }
@@ -122,7 +120,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         }
         fun login() { nav.navigate("login") { launchSingleTop = true } }
         fun authenticated(action: () -> Unit) { if (account.user == null) login() else action() }
-        fun topic(id: Int, number: Int? = null) { if (id > 0) nav.navigate("topic/$id?post=${number ?: 0}") }
+        fun topic(id: Int, number: Int? = null) { topicTransitions.openTopic(id, number) }
         fun user(username: String) { if (username.isNotBlank()) nav.navigate("user/${Uri.encode(username)}") }
         fun openTag(tag: TopicTag) {
             val slug = tag.slug.ifBlank { tag.name }
@@ -137,7 +135,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }
             if (appLinks.open(url, display.externalLinkMode)) return
             val fallback = ExternalAppLinkPolicy.fallbackUrl(url) ?: return invalidLink()
-            nav.openContentLink(fallback, { selected = 0 }, ::invalidLink)
+            val target = LinuxDoLink.parseContent(fallback)
+            if (target is LinuxDoDestination.Topic) topic(target.id, target.number)
+            else nav.openContentLink(fallback, { selected = 0 }, ::invalidLink)
         }
         fun editor(id: Int? = null, number: Int? = null, categoryId: Int? = null) { authenticated { nav.navigate("compose?topic=${id ?: 0}&reply=${number ?: 0}&category=${categoryId ?: 0}") } }
         ApkInstallHost {
@@ -181,10 +181,11 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     nav.currentBackStackEntry?.savedStateHandle?.set("refresh", System.nanoTime())
                 }) {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.TopCenter) {
+                TopicTransitionHost(topicTransitions) {
                 NavHost(nav, "root", Modifier.widthIn(max = 840.dp).fillMaxSize(),
                     enterTransition = { fadeIn(tween(280)) }, exitTransition = { fadeOut(tween(180)) },
                     popEnterTransition = { fadeIn(tween(220)) }, popExitTransition = { fadeOut(tween(220)) }) {
-                    composable("root") {
+                    topicListComposable("root") {
                         val directory = model("community-directory") { CommunityDirectoryViewModel(app.repository) }
                         val feed = model("feed") { FeedViewModel(app.repository, initialUser = account.user, updates = DiscourseMessageBus(app.client, userAgent = app.userAgent, route = app.network::client)) }
                         val state by feed.state.collectAsStateWithLifecycle()
@@ -238,7 +239,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         }
                         }
                     }
-                    composable("category/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
+                    topicListComposable("category/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
                         val id = entry.arguments!!.getInt("id")
                         val vm = model("category-$id") { FeedViewModel(app.repository, id, account.user) }
                         val state by vm.state.collectAsStateWithLifecycle()
@@ -248,7 +249,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             ?: Category(id, "社区分类", "", "", "", 0)
                         FeedScreen(state.forUser(account.user, inCategory = true), account.user, vm::select, vm::refresh, vm::more, { topic(it) }, ::user, { nav.navigate("search") }, ::login, {}, category = category, back = { nav.popBackStack() }, listStyle = display.topicListStyle, pages = pages, createTopic = { editor(categoryId = it) }, glass = display.glass)
                     }
-                    composable("tag/{slug}?id={id}&name={name}", arguments = listOf(navArgument("slug") { type = NavType.StringType }, navArgument("id") { type = NavType.IntType; defaultValue = 0 }, navArgument("name") { type = NavType.StringType; defaultValue = "" })) { entry ->
+                    topicListComposable("tag/{slug}?id={id}&name={name}", arguments = listOf(navArgument("slug") { type = NavType.StringType }, navArgument("id") { type = NavType.IntType; defaultValue = 0 }, navArgument("name") { type = NavType.StringType; defaultValue = "" })) { entry ->
                         val slug = entry.arguments!!.getString("slug").orEmpty()
                         val id = entry.arguments!!.getInt("id").takeIf { it > 0 }
                         val vm = model("tag-$slug-${id ?: 0}") { FeedViewModel(app.repository, initialUser = account.user, tagSlug = slug, tagId = id) }
@@ -258,7 +259,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         TagFeedScreen(slug, state.forUser(account.user, inCategory = true), account.user, vm::select, vm::refresh, vm::more,
                             { topic(it) }, ::user, { nav.navigate("search") }, ::login, { nav.popBackStack() }, display.topicListStyle, pages, name = entry.arguments!!.getString("name").orEmpty())
                     }
-                    composable("search") {
+                    topicListComposable("search") {
                         val vm = model("search") { SearchViewModel(app.repository, account.user?.id) }
                         val state by vm.state.collectAsStateWithLifecycle()
                         LaunchedEffect(vm, account.user?.id) { vm.useAccount(account.user?.id) }
@@ -268,7 +269,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory,
                             initialScrollIndex = vm.scrollIndex, initialScrollOffset = vm.scrollOffset, saveScrollPosition = vm::saveScrollPosition)
                     }
-                    composable("personal/{destination}") { entry ->
+                    topicListComposable("personal/{destination}") { entry ->
                         val member = account.user
                         val destination = AccountDestination.entries.firstOrNull { it.name == entry.arguments?.getString("destination") }
                         if (member != null && destination != null) {
@@ -277,7 +278,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 { nav.navigate("new-message") }, drafts = { nav.navigate("drafts") })
                         } else MaterialPagePlaceholder("个人内容", { nav.popBackStack() }) { EmptyState("登录后查看", "登录后查看自己的社区内容。", actionLabel = "登录", action = ::login) }
                     }
-                    composable("liked-posts") {
+                    topicListComposable("liked-posts") {
                         val member = account.user
                         if (member != null) {
                             val vm = model("liked-posts-${member.id}") { LikedPostsViewModel(app.repository, member.username) }
@@ -357,11 +358,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser, advancedMaterial = display.advancedWebViewMaterial,
                             openApp = { appLinks.open(it) }, externalLinkMode = display.externalLinkMode)
                     }
-                    composable("topic/{id}?post={post}",
-                        arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("post") { type = NavType.IntType; defaultValue = 0 }),
-                        enterTransition = { fadeIn(tween(280)) + scaleIn(tween(280, easing = FastOutSlowInEasing), initialScale = 0.97f) },
-                        popEnterTransition = { fadeIn(tween(220)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.98f) },
-                        popExitTransition = { fadeOut(tween(220)) + scaleOut(tween(220, easing = FastOutSlowInEasing), targetScale = 0.98f) }) { entry ->
+                    topicDetailComposable("topic/{id}?post={post}",
+                        arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("post") { type = NavType.IntType; defaultValue = 0 })) { entry ->
                         val id = entry.arguments!!.getInt("id")
                         val number = entry.arguments!!.getInt("post").takeIf { it > 0 }
                         val vm = model("topic-$id-$number-${account.user?.id}") {
@@ -463,13 +461,13 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             account.recordIgnore(id, username, false); refreshEpoch++
                         } }
                     }
-                    composable("bookmarks") { LaunchedEffect(account.user?.id) { account.loadSaved() }; BookmarksScreen(account, { nav.popBackStack() }, ::login, ::topic) }
+                    topicListComposable("bookmarks") { LaunchedEffect(account.user?.id) { account.loadSaved() }; BookmarksScreen(account, { nav.popBackStack() }, ::login, ::topic) }
                     composable("unavailable") {
                         MaterialPagePlaceholder("内容不可访问", { nav.popBackStack() }) {
                             ErrorState(ApiFailure(FailureKind.NOT_FOUND, "内容不存在或暂无权限"), {}, ::login, { nav.popBackStack() })
                         }
                     }
-                    composable("user-search/{username}") { entry ->
+                    topicListComposable("user-search/{username}") { entry ->
                         val username = entry.arguments!!.getString("username")!!
                         val vm = model("user-search-$username") { SearchViewModel(app.repository, account.user?.id, "@$username") }
                         val state by vm.state.collectAsStateWithLifecycle()
@@ -480,7 +478,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             loadMetadata = vm::loadMetadata, suggestTags = vm::suggestTags, applyFilters = vm::applyFilters, clearHistory = vm::clearHistory,
                             initialScrollIndex = vm.scrollIndex, initialScrollOffset = vm.scrollOffset, saveScrollPosition = vm::saveScrollPosition)
                     }
-                    composable("user/{username}") { entry ->
+                    topicListComposable("user/{username}") { entry ->
                         val username = entry.arguments!!.getString("username")!!
                         key(username, account.user?.id) {
                             UserScreen(username, app.repository, { nav.popBackStack() }, ::login, ::openLink,
@@ -508,6 +506,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             EditorScreen(vm, account.categories, account.categoryError, account::loadCategories, { nav.popBackStack() })
                         }
                     }
+                }
                 }
             }
             }

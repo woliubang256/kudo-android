@@ -145,8 +145,9 @@ fun SearchScreen(
                     }
                     when (page.kind) {
                         SearchKind.POSTS -> items(posts, key = { "post-${it.postId}" }) { hit ->
+                            TopicTransitionItem(hit.topic.id, if (listStyle == TopicListStyle.FEED) 18.dp else 0.dp,
+                                { openTopic(hit.topic.id, hit.postNumber) }) { open ->
                             Column(Modifier.fillMaxWidth().padding(horizontal = if (listStyle == TopicListStyle.FEED) 12.dp else 0.dp).testTag("search-hit-${hit.postId}")) {
-                                val open = { openTopic(hit.topic.id, hit.postNumber) }
                                 if (listStyle == TopicListStyle.FEED) TopicCard(hit.topic, null, open, openUser)
                                 else {
                                     TopicTitleRow(hit.topic, null, open, openUser)
@@ -154,6 +155,7 @@ fun SearchScreen(
                                         .padding(start = 66.dp, end = 16.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                                 }
                                 Text("命中第 ${hit.postNumber} 楼", Modifier.clickable(onClick = open).padding(start = 12.dp, top = 4.dp, bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             }
                         }
                         SearchKind.CATEGORIES_TAGS -> {

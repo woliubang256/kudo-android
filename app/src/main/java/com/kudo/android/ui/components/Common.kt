@@ -149,8 +149,9 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
         return
     }
     val resolvedCategory = category ?: LocalTopicPresentation.current.categories.firstOrNull { it.id == topic.categoryId }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surface)
-        .clickable(onClick = onClick)
+    val transition = topicTransitionAnchor(topic.id, 18.dp, onClick)
+    Column(Modifier.fillMaxWidth().then(transition.modifier).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surface)
+        .clickable(onClick = transition.open)
         .testTag("topic-card-${topic.id}").padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Avatar(topic.author, 35.dp) { topic.author?.username?.let(onUser) }
@@ -166,7 +167,7 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
         }
         if (topic.excerpt.isNotBlank()) Text(topic.excerpt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         mediaUrl(topic.image)?.let {
-            TopicPreviewImage(topic.id, it, onClick,
+            TopicPreviewImage(topic.id, it, transition.open,
                 blurred = LocalDisplaySettings.current.blurNsfwImages && topic.hasNsfwTag())
         }
         if (topic.tagDetails.isNotEmpty()) TopicTags(topic.tagDetails)

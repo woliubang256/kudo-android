@@ -24,8 +24,9 @@ fun TopicTitleRow(topic: Topic, category: Category?, onClick: () -> Unit, onUser
         return
     }
     val resolvedCategory = category ?: LocalTopicPresentation.current.categories.firstOrNull { it.id == topic.categoryId }
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)
-        .clickable(onClick = onClick)
+    val transition = topicTransitionAnchor(topic.id, 0.dp, onClick)
+    Column(Modifier.fillMaxWidth().then(transition.modifier).background(MaterialTheme.colorScheme.surface)
+        .clickable(onClick = transition.open)
         .testTag("topic-title-${topic.id}")) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 13.dp), verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {

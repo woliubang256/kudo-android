@@ -201,7 +201,8 @@ fun BookmarksScreen(vm: AccountViewModel, back: () -> Unit, login: () -> Unit, o
                 if (vm.user == null) item { EmptyState("把好内容留在这里", "登录后查看你的社区收藏。", Icons.Rounded.BookmarkBorder, "登录", login) }
                 if (vm.savedLoading) item { LoadingRow() }
                 items(vm.saved, key = { it.id }) { topic ->
-                    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable { open(topic.topicId, topic.postNumber) }.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val transition = topicTransitionAnchor(topic.topicId, 0.dp) { open(topic.topicId, topic.postNumber) }
+                    Column(Modifier.fillMaxWidth().then(transition.modifier).background(MaterialTheme.colorScheme.surface).clickable(onClick = transition.open).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         TopicTitleText(topic.title, style = MaterialTheme.typography.titleMedium)
                         if (topic.excerpt.isNotBlank()) Text(topic.excerpt, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

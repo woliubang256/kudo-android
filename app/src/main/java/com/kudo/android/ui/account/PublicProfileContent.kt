@@ -123,8 +123,9 @@ internal fun ProfileSectionTitle(title: String) {
 @Composable
 internal fun ProfileEntryRow(entry: ProfileEntry, open: (String) -> Unit) {
     val category = entry.category ?: LocalTopicPresentation.current.categories.firstOrNull { it.id == entry.categoryId }
-    Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp))
-        .background(MaterialTheme.colorScheme.surface).clickable(role = Role.Button) { open(entry.url) }
+    val transition = topicTransitionAnchor(entry.topicId, 10.dp) { open(entry.url) }
+    Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().then(transition.modifier).clip(RoundedCornerShape(10.dp))
+        .background(MaterialTheme.colorScheme.surface).clickable(role = Role.Button, onClick = transition.open)
         .testTag("profile-entry-${entry.key}").padding(horizontal = 14.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
