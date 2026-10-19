@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -59,6 +60,7 @@ import com.kudo.android.ui.components.TopicTransitionHost
 import com.kudo.android.ui.components.TopicTransitionBody
 import com.kudo.android.ui.components.TopicTransitionItem
 import com.kudo.android.ui.components.TopicTransitions
+import com.kudo.android.ui.components.TopicOpeningPreview
 import com.kudo.android.ui.components.topicDetailComposable
 import com.kudo.android.ui.components.topicListComposable
 import com.kudo.android.ui.theme.KudoTheme
@@ -137,6 +139,53 @@ class TopicTransitionUiTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    private fun showOpeningPreview(theme: ThemeMode = ThemeMode.LIGHT, image: String = "") {
+        compose.setContent {
+            KudoTheme(DisplaySettings(theme = theme)) {
+                TopicOpeningPreview(previewTopic.copy(image = image)) {}
+            }
+        }
+    }
+
+    @Test fun openingPreviewDoesNotRenderTheListCover() {
+        showOpeningPreview(image = "https://fixture.test/unused-cover.png")
+        compose.onNodeWithContentDescription("帖子封面摘要").assertDoesNotExist()
+        compose.onNodeWithContentDescription("帖子封面摘要，已模糊").assertDoesNotExist()
+        compose.onNodeWithText(previewTopic.title).assertIsDisplayed()
+    }
+
+    @Test fun openingSkeletonHasThreeTallSeparatedParagraphs() {
+        showOpeningPreview()
+        val paragraphs = (0..2).map { index ->
+            compose.onNodeWithTag("topic-opening-paragraph-$index").assertIsDisplayed()
+                .assertHeightIsAtLeast(80.dp).fetchSemanticsNode().boundsInRoot
+        }
+        paragraphs.zipWithNext().forEach { (previous, next) ->
+            assertTrue("Skeleton paragraphs must have visible separation", next.top > previous.bottom)
+        }
+    }
+
+    @Test fun openingSkeletonMovesWithoutChangingItsBounds() {
+        compose.mainClock.autoAdvance = false
+        showOpeningPreview(ThemeMode.DARK)
+        compose.mainClock.advanceTimeBy(160)
+        val paragraph = compose.onNodeWithTag("topic-opening-paragraph-0")
+        val bounds = paragraph.fetchSemanticsNode().boundsInRoot
+        val first = paragraph.captureToImage().toPixelMap()
+        compose.mainClock.advanceTimeBy(600)
+        val second = paragraph.captureToImage().toPixelMap()
+        assertEquals(bounds, paragraph.fetchSemanticsNode().boundsInRoot)
+        var changedPixels = 0
+        for (row in 0 until first.height) for (column in 0 until first.width) {
+            if (kotlin.math.abs(first[column, row].red - second[column, row].red) > .015f) changedPixels++
+        }
+        assertTrue("The loading highlight must visibly move", changedPixels > first.width)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.getExternalFilesDir(null), "topic-opening-skeleton-dark.png").outputStream().use {
+            compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
     }
 
     @Test fun openingStartsTheRequestWithoutComposingTheDetailBody() {
