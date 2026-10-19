@@ -1,4 +1,14 @@
 <resources>
+    <color name="launch_background">#F4F4F7</color>
+    <bool name="launch_light_bars">true</bool>
+
+    <style name="Theme.Kudo.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launch_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launch_linux_do</item>
+        <item name="postSplashScreenTheme">@style/Theme.Kudo</item>
+        <item name="android:windowLightStatusBar">@bool/launch_light_bars</item>
+    </style>
+
     <style name="Theme.Kudo" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>

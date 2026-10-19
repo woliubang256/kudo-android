@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kudo.android.ui.KudoApp
+import com.kudo.android.ui.startup.installBrandSplash
 
 class MainActivity : ComponentActivity() {
     private var incomingUrl by mutableStateOf<String?>(null)
@@ -16,6 +17,7 @@ class MainActivity : ComponentActivity() {
     private var incomingDownloads by mutableStateOf(false)
     private var incomingNotification by mutableStateOf<com.kudo.android.data.NotificationTarget?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
+        installBrandSplash(restored = savedInstanceState != null)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = (application as KudoApplication).container
