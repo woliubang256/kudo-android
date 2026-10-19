@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +47,7 @@ internal fun MaterialPageScaffold(
         return
     }
     val backdrop = rememberLayerBackdrop()
-    var headerHeight by remember { mutableIntStateOf(0) }
+    var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val top = with(LocalDensity.current) { headerHeight.toDp() }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("material-page-content")) {

@@ -71,7 +71,7 @@ internal fun CategoryFeedScreen(category: Category, state: FeedState, user: Memb
             return Offset(0f, previous - collapse)
         }
     } }
-    var headerHeight by remember { mutableIntStateOf(0) }
+    var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val tabs = FeedFilter.available(user != null).map { it.value to it.label }

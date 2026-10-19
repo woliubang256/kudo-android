@@ -6,8 +6,10 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,7 +29,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -42,6 +46,7 @@ import java.util.UUID
 private const val SourceKey = "topic-transition-key"
 private const val SourceEntry = "topic-transition-entry"
 private const val SourceRadius = "topic-transition-radius"
+private const val ContainerDuration = 480
 
 internal class TopicTransitions(private val nav: NavHostController) {
     private data class Source(val topicId: Int, val entryId: String, val key: String, val radius: Float)
@@ -110,14 +115,14 @@ internal fun NavGraphBuilder.topicDetailComposable(
 ) {
     composable(route, arguments,
         enterTransition = {
-            if (targetState.hasTopicTransition()) fadeIn(tween(360))
+            if (targetState.hasTopicTransition()) EnterTransition.None
             else fadeIn(tween(280)) + scaleIn(tween(280, easing = FastOutSlowInEasing), initialScale = 0.97f)
         },
         popEnterTransition = {
             fadeIn(tween(220)) + scaleIn(tween(220, easing = FastOutSlowInEasing), initialScale = 0.98f)
         },
         popExitTransition = {
-            if (initialState.hasTopicTransition()) fadeOut(tween(360))
+            if (initialState.hasTopicTransition()) ExitTransition.None
             else fadeOut(tween(220)) + scaleOut(tween(220, easing = FastOutSlowInEasing), targetScale = 0.98f)
         }) { entry ->
         TopicTransitionDetail(entry, this) { content(entry) }
@@ -133,17 +138,31 @@ internal fun topicTransitionAnchor(topicId: Int, radius: Dp, onClick: () -> Unit
     if (environment == null || source == null) return TopicTransitionAnchor(Modifier, onClick)
     val instance = rememberSaveable { UUID.randomUUID().toString() }
     val key = "${source.entryId}:$topicId:$instance"
-    val corner by source.animation.transition.animateDp(
-        transitionSpec = { tween(360, easing = FastOutSlowInEasing) }, label = "topic-source-corner",
-    ) { if (it == EnterExitState.Visible) radius else 0.dp }
+    val surface = MaterialTheme.colorScheme.surface
+    val background = MaterialTheme.colorScheme.background
     val modifier = with(environment.shared) {
+        val state = rememberSharedContentState(key)
+        val corner by source.animation.transition.animateDp(
+            transitionSpec = { tween(ContainerDuration, easing = FastOutSlowInEasing) }, label = "topic-source-corner",
+        ) { if (!state.isMatchFound || it == EnterExitState.Visible) radius else 0.dp }
+        val color by source.animation.transition.animateColor(
+            transitionSpec = { tween(ContainerDuration, easing = FastOutSlowInEasing) }, label = "topic-container-color",
+        ) { if (!state.isMatchFound || it == EnterExitState.Visible) surface else background }
+        val opacity by source.animation.transition.animateFloat(
+            transitionSpec = { if (targetState == EnterExitState.Visible) tween(220) else tween(300) },
+            label = "topic-source-content",
+        ) { if (!state.isMatchFound || it == EnterExitState.Visible) 1f else 0f }
         Modifier.sharedBounds(
-            rememberSharedContentState(key), source.animation,
-            enter = fadeIn(tween(220)), exit = fadeOut(tween(180)),
-            boundsTransform = { _, _ -> tween(360, easing = FastOutSlowInEasing) },
-            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.FillWidth, Alignment.TopStart),
+            state, source.animation,
+            enter = EnterTransition.None, exit = ExitTransition.None,
+            boundsTransform = { _, _ -> tween(ContainerDuration, easing = FastOutSlowInEasing) },
+            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
             clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(corner)),
-        )
+        ).drawBehind {
+            if (state.isMatchFound) drawRoundRect(color, cornerRadius = CornerRadius(corner.toPx()))
+        }
+            .skipToLookaheadSize { state.isMatchFound }
+            .graphicsLayer { alpha = if (state.isMatchFound) opacity else 1f }
     }
     return TopicTransitionAnchor(modifier) {
         environment.transitions.fromCard(topicId, source.entryId, key, radius, onClick)
@@ -168,17 +187,21 @@ internal fun TopicTransitionDetail(
     val key = entry.savedStateHandle.get<String>(SourceKey)
     val radius = (entry.savedStateHandle.get<Float>(SourceRadius) ?: 0f).dp
     val corner by animation.transition.animateDp(
-        transitionSpec = { tween(360, easing = FastOutSlowInEasing) }, label = "topic-detail-corner",
+        transitionSpec = { tween(ContainerDuration, easing = FastOutSlowInEasing) }, label = "topic-detail-corner",
     ) { if (it == EnterExitState.Visible) 0.dp else radius }
     val sharedModifier = if (environment != null && key != null) with(environment.shared) {
+        val state = rememberSharedContentState(key)
         Modifier.sharedBounds(
-            rememberSharedContentState(key), animation,
-            enter = fadeIn(tween(260, delayMillis = 60)), exit = fadeOut(tween(180)),
-            boundsTransform = { _, _ -> tween(360, easing = FastOutSlowInEasing) },
-            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(ContentScale.FillWidth, Alignment.TopStart),
+            state, animation,
+            enter = EnterTransition.None, exit = ExitTransition.None,
+            boundsTransform = { _, _ -> tween(ContainerDuration, easing = FastOutSlowInEasing) },
+            resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
             clipInOverlayDuringTransition = OverlayClip(RoundedCornerShape(corner)),
             zIndexInOverlay = 1f,
-        )
+        ).skipToLookaheadSize { state.isMatchFound }
+            .then(with(animation) {
+                Modifier.animateEnterExit(enter = fadeIn(tween(260, delayMillis = 60)), exit = fadeOut(tween(180)))
+            })
     } else Modifier
     CompositionLocalProvider(LocalTopicTransitionSource provides null) {
         Box(Modifier.fillMaxSize().then(sharedModifier).background(MaterialTheme.colorScheme.background)

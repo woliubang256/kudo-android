@@ -81,7 +81,7 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
     val surface = MaterialTheme.colorScheme.surface
     val canBlur = glass != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
     val canRefract = glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
-    var headerHeight by remember { mutableIntStateOf(0) }
+    var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).nestedScroll(scrollBehavior.nestedScrollConnection)) {
         val tabs = FeedFilter.available(user != null).map {

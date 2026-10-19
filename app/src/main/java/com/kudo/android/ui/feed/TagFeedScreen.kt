@@ -13,6 +13,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -41,7 +42,7 @@ internal fun TagFeedScreen(slug: String, state: FeedState, user: Member?, select
     pages: Map<String, FeedState>, modifier: Modifier = Modifier, name: String = "") {
     val title = state.tag?.name ?: name.ifBlank { if (slug.matches(Regex("[0-9]+-tag"))) "标签" else slug }
     val backdrop = rememberLayerBackdrop()
-    var headerHeight by remember { mutableIntStateOf(0) }
+    var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val tabs = FeedFilter.available(user != null).map { it.value to it.label }

@@ -64,7 +64,7 @@ fun SearchScreen(
     val clearVisibility = remember(state.accountId) { MutableTransitionState(false) }
     val backdrop = rememberLayerBackdrop()
     val contentBackdrop = rememberLayerBackdrop()
-    var headerHeight by remember { mutableIntStateOf(0) }
+    var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     val showing = clearVisibility.currentState || clearVisibility.targetState
     fun dismissClear() { if (!state.historyClearing) clearVisibility.targetState = false }
