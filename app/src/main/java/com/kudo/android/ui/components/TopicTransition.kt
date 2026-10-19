@@ -56,6 +56,7 @@ import java.util.UUID
 
 private const val SourceKey = "topic-transition-key"
 private const val SourceEntry = "topic-transition-entry"
+private const val OpeningDuration = 300
 private const val ContainerDuration = 480
 
 internal class TopicTransitions(private val nav: NavHostController) {
@@ -147,12 +148,13 @@ internal fun TopicTransitionBody(ready: Boolean, content: @Composable () -> Unit
     val entered = LocalTopicEntered.current?.value != false
     val preview = LocalTopicPreview.current
     val transitions = LocalTopicTransitions.current
-    TopicTransitionContentReady(entered && (ready || preview != null))
-    if (entered) {
-        if (preview == null) content()
-        else Crossfade(ready, animationSpec = tween(180), label = "topic-preview-handoff") { loaded ->
+    TopicTransitionContentReady(preview != null || (entered && ready))
+    if (preview != null) {
+        Crossfade(entered && ready, animationSpec = tween(180), label = "topic-preview-handoff") { loaded ->
             if (loaded) content() else TopicOpeningPreview(preview) { transitions?.back() }
         }
+    } else if (entered) {
+        content()
     }
 }
 
@@ -171,7 +173,10 @@ internal fun NavGraphBuilder.topicListComposable(
         val source = remember(entry.id) { TopicTransitionSource(entry.id) }
         val blurEnabled = LocalTopicTransitions.current?.hasSource(entry.id) == true
         val blur by transition.animateDp(
-            transitionSpec = { tween(ContainerDuration, easing = FastOutSlowInEasing) }, label = "topic-feed-blur",
+            transitionSpec = {
+                tween(if (blurEnabled && targetState == EnterExitState.PostExit) OpeningDuration else ContainerDuration,
+                    easing = FastOutSlowInEasing)
+            }, label = "topic-feed-blur",
         ) { if (blurEnabled && it != EnterExitState.Visible) 6.dp else 0.dp }
         CompositionLocalProvider(LocalTopicTransitionSource provides source) {
             Box(Modifier.fillMaxSize().blur(blur)) { content(entry) }
@@ -261,7 +266,10 @@ internal fun TopicTransitionDetail(
         entry.savedStateHandle.remove<String>(SourceEntry)
     }
     val progress = if (activeSnapshot != null) animation.transition.animateFloat(
-        transitionSpec = { tween(ContainerDuration, easing = FastOutSlowInEasing) }, label = "topic-card-progress",
+        transitionSpec = {
+            tween(if (targetState == EnterExitState.Visible) OpeningDuration else ContainerDuration,
+                easing = FastOutSlowInEasing)
+        }, label = "topic-card-progress",
     ) { if (it == EnterExitState.Visible) 1f else 0f } else rememberUpdatedState(1f)
     if (snapshot != null && !leaving && !entered.value && progress.value >= 1f) SideEffect {
         snapshot.opened = true

@@ -51,6 +51,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.DisplaySettings
 import com.kudo.android.data.ThemeMode
@@ -222,6 +223,51 @@ class TopicTransitionUiTest {
         compose.onNodeWithContentDescription("返回").performClick()
         compose.waitForIdle()
         assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+    }
+
+    @Test fun openingSkeletonIsAlreadyVisibleDuringTheExpansion() {
+        showList(patterned = true, withPreview = true)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.mainClock.advanceTimeBy(224)
+        compose.runOnIdle {
+            assertEquals("The skeleton must overlap an unfinished expansion", Lifecycle.State.STARTED,
+                navigation.currentBackStackEntry?.lifecycle?.currentState)
+            assertEquals("Only the lightweight preview may mount during expansion", 0, bodyCompositions)
+        }
+        val image = compose.onRoot().captureToImage()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.getExternalFilesDir(null), "topic-opening-overlap.png").outputStream().use {
+            image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        val pixels = image.toPixelMap()
+        var skeletonPixels = 0
+        for (row in pixels.height * 2 / 5 until pixels.height * 4 / 5) {
+            for (column in pixels.width / 3 until pixels.width * 2 / 3) {
+                val color = pixels[column, row]
+                if (color.red in .6f..0.98f && color.green < .1f && color.blue < .1f) skeletonPixels++
+            }
+        }
+        assertTrue("The lower preview skeleton must fade in before expansion ends, pixels=$skeletonPixels",
+            skeletonPixels > 2000)
+        compose.mainClock.advanceTimeBy(800)
+    }
+
+    @Test fun openingFinishesBeforeThePreviousExpansionBudget() {
+        showList(patterned = true, withPreview = true)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle { detailReady = true }
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle { assertEquals("The response must still wait for expansion", 0, bodyCompositions) }
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle {
+            assertTrue("The detail must mount without the old 480ms wait", bodyCompositions > 0)
+            assertEquals("The source blur must not extend navigation beyond the new opening budget",
+                Lifecycle.State.RESUMED, navigation.currentBackStackEntry?.lifecycle?.currentState)
+        }
+        compose.mainClock.advanceTimeBy(800)
     }
 
     @Test fun loadedBodyAndFailureBothReplaceTheLightweightPreview() {
