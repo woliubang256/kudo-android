@@ -369,6 +369,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         ObserveTopicUpdates(vm)
                         val state by vm.state.collectAsStateWithLifecycle()
                         val nonce by entry.savedStateHandle.getStateFlow("refresh", 0L).collectAsStateWithLifecycle()
+                        TopicTransitionContentReady(state.detail != null || !state.loading)
                         LaunchedEffect(vm, postEditResult) {
                             postEditResult?.takeIf { it.topicId == id }?.let { vm.applyEdit(it); postEditResult = null }
                         }

@@ -2,6 +2,9 @@ package com.kudo.android
 
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -10,10 +13,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -24,10 +31,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsOwner
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -37,11 +46,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.DisplaySettings
 import com.kudo.android.data.ThemeMode
 import com.kudo.android.data.Topic
 import com.kudo.android.ui.components.TopicTransitionHost
+import com.kudo.android.ui.components.TopicTransitionContentReady
 import com.kudo.android.ui.components.TopicTransitionItem
 import com.kudo.android.ui.components.TopicTransitions
 import com.kudo.android.ui.components.topicDetailComposable
@@ -59,24 +71,31 @@ import java.io.File
 class TopicTransitionUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private lateinit var navigation: NavHostController
+    private lateinit var controller: TopicTransitions
+    private var detailReady by mutableStateOf(false)
+    private var sourceVisible by mutableStateOf(true)
 
-    private fun showList() {
+    private fun showList(patterned: Boolean = false) {
         compose.setContent {
             KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
                 MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(surface = Color.Red, background = Color.Red)) {
                     val nav = rememberNavController()
                     val transitions = remember(nav) { TopicTransitions(nav) }
-                    SideEffect { navigation = nav }
+                    SideEffect { navigation = nav; controller = transitions }
                     TopicTransitionHost(transitions) {
                         NavHost(nav, "list", Modifier.fillMaxSize()) {
                             topicListComposable("list") {
                                 LazyColumn(Modifier.fillMaxSize().background(Color.Black)) {
                                     item { Spacer(Modifier.height(150.dp)) }
-                                    item {
-                                        Box(Modifier.padding(horizontal = 8.dp)) {
+                                    if (sourceVisible) item {
+                                        Box(Modifier.padding(horizontal = if (patterned) 70.dp else 8.dp)) {
                                             TopicTransitionItem(5, 18.dp, { transitions.openTopic(5) }) { open ->
                                                 Box(Modifier.fillMaxWidth().height(140.dp).background(Color.Red)
-                                                    .clickable(onClick = open).testTag("transition-source"))
+                                                    .clickable(onClick = open).testTag("transition-source")) {
+                                                    if (patterned) Box(Modifier.padding(start = 20.dp, top = 20.dp)) {
+                                                        Box(Modifier.size(48.dp, 24.dp).background(Color.Green))
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -92,7 +111,13 @@ class TopicTransitionUiTest {
                                 navArgument("id") { type = NavType.IntType },
                                 navArgument("post") { type = NavType.IntType; defaultValue = 0 },
                             )) {
-                                Box(Modifier.fillMaxSize().background(Color.Red).testTag("transition-content"))
+                                TopicTransitionContentReady(!patterned || detailReady)
+                                Box(Modifier.fillMaxSize().background(if (patterned) {
+                                    if (detailReady) Color.Yellow else Color.White
+                                } else Color.Red).testTag("transition-content"))
+                            }
+                            composable("profile", popExitTransition = { fadeOut(tween(160)) }) {
+                                Box(Modifier.fillMaxSize().background(Color.Cyan))
                             }
                         }
                     }
@@ -100,6 +125,155 @@ class TopicTransitionUiTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    @Test fun coldDetailKeepsTheCardContentScaledUntilItIsReady() {
+        showList(patterned = true)
+        val original = greenMarker()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        val expanding = greenMarker()
+        assertTrue("Card content must scale with its container", expanding.width > original.width * 1.05f)
+        assertTrue("Card content must move upwards with its container", expanding.top < original.top)
+        compose.mainClock.advanceTimeBy(700)
+        assertTrue("A cold request must not replace the expanded card with a loading page", greenMarker().width > original.width * 1.4f)
+        compose.runOnIdle { detailReady = true }
+        compose.mainClock.advanceTimeBy(500)
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("Loaded detail must take over", center.red > 0.95f && center.green > 0.95f)
+    }
+
+    @Test fun returningRestoresTheScaledCardContentBeforeLanding() {
+        detailReady = true
+        showList(patterned = true)
+        val original = greenMarker()
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.waitForIdle()
+        val detail = navigation.currentBackStackEntry!!
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { navigation.popBackStack() }
+        compose.mainClock.advanceTimeBy(320)
+        compose.runOnIdle {
+            val snapshot = controller.snapshot(detail)!!
+            assertNotNull("Returning key=${snapshot.key}; anchors=${controller.anchors.mapValues { it.value.bounds() }}",
+                controller.anchors[snapshot.key]?.bounds())
+        }
+        val shrinking = greenMarker()
+        assertTrue("The card image must return before the final frame", shrinking.width > original.width)
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals(original, greenMarker())
+    }
+
+    @Test fun coldDetailCanReturnAndReleasesItsSnapshot() {
+        showList(patterned = true)
+        val original = greenMarker()
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.waitForIdle()
+        val detail = navigation.currentBackStackEntry!!
+        compose.runOnIdle { assertNotNull(controller.snapshot(detail)) }
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.waitForIdle()
+        assertEquals(original, greenMarker())
+        compose.runOnIdle {
+            assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+            assertEquals(null, controller.snapshot(detail))
+        }
+    }
+
+    @Test fun directDetailDoesNotWaitForCardReadiness() {
+        showList(patterned = true)
+        compose.runOnIdle { controller.openTopic(5) }
+        compose.waitForIdle()
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("Without a card snapshot the ordinary loading page must remain visible", center.red > .95f && center.blue > .95f)
+        compose.runOnIdle {
+            assertEquals(null, navigation.currentBackStackEntry?.savedStateHandle?.get<String>("topic-transition-key"))
+            navigation.popBackStack()
+        }
+        compose.waitForIdle()
+        assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+    }
+
+    @Test fun coldCardContentStaysBelowTheStatusBar() {
+        compose.runOnUiThread { compose.activity.enableEdgeToEdge() }
+        showList(patterned = true)
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.waitForIdle()
+        val inset = ViewCompat.getRootWindowInsets(compose.activity.window.decorView)!!
+            .getInsets(WindowInsetsCompat.Type.statusBars()).top
+        assertTrue("The enlarged card's content must not enter the status bar", greenMarker().top >= inset)
+    }
+
+    @Test fun missingReturningCardFadesInsteadOfShrinkingToAnObsoletePosition() {
+        detailReady = true
+        showList(patterned = true)
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { sourceVisible = false; navigation.popBackStack() }
+        compose.mainClock.advanceTimeBy(128)
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        val top = pixels[pixels.width / 2, 5]
+        assertTrue("Without a live source the detail must fade in place", top.red > .5f && top.green > .5f)
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+    }
+
+    @Test fun repeatedClicksDuringCaptureOpenOnlyOneDetail() {
+        showList()
+        val click = compose.onNodeWithTag("transition-source").fetchSemanticsNode()
+            .config[SemanticsActions.OnClick].action!!
+        compose.runOnIdle { click(); click() }
+        compose.waitForIdle()
+        compose.runOnIdle { navigation.popBackStack() }
+        compose.waitForIdle()
+        assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+    }
+
+    @Test fun returningFromAChildPageDoesNotReplayTheListCardExpansion() {
+        detailReady = true
+        showList(patterned = true)
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { navigation.navigate("profile") }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { navigation.popBackStack() }
+        compose.mainClock.advanceTimeBy(180)
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        val bottom = pixels[pixels.width / 2, pixels.height - 100]
+        assertTrue("A child-page return must keep the detail full-size", bottom.red > .5f && bottom.green > .5f)
+        val hasCardImage = (0 until pixels.height).any { row ->
+            (0 until pixels.width).any { column ->
+                val color = pixels[column, row]
+                color.green > color.red + .2f && color.blue < .5f
+            }
+        }
+        assertTrue("Returning from a child route must not expand the old list card again", !hasCardImage)
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle { navigation.popBackStack() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+    }
+
+    private fun greenMarker(): Rect {
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        var left = pixels.width
+        var top = pixels.height
+        var right = -1
+        var bottom = -1
+        for (row in 0 until pixels.height) for (column in 0 until pixels.width) {
+            val color = pixels[column, row]
+            if (color.green > 0.95f && color.red < 0.05f && color.blue < 0.05f) {
+                left = minOf(left, column); top = minOf(top, row)
+                right = maxOf(right, column); bottom = maxOf(bottom, row)
+            }
+        }
+        assertTrue("The original card's high-contrast content must stay visible", right >= left && bottom >= top)
+        return Rect(left.toFloat(), top.toFloat(), (right + 1).toFloat(), (bottom + 1).toFloat())
     }
 
     @Test fun openingExpandsFromTheCardAndKeepsTheNeighborStill() {

@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+来源身份、回栈和 headerHeight 保存约束继续有效；下述 sharedBounds 绘制决定由[整卡画面连续性](../../implemented/bug-fix/2026-10-20-topic-card-content-continuity.md)部分取代。保留原决定及其取舍，后续验证和产物以新篇为准。
+
 在 Navigation Compose 2 的 NavHost 外放置 Compose SharedTransitionLayout，复用导航的 AnimatedContentScope，以 sharedBounds 连接列表项和整个详情容器。卡片、标题行、紧凑置顶行、收藏及公开主页条目使用同一来源协议，列表内容和正文交叉淡变，容器边界及圆角随导航过渡变化。搜索将整个命中条目作为来源，摘要、卡片及命中楼层点击都沿用同一来源键。父容器保持列表原位置。共享边界采用 RemeasureToBounds，来源在共享节点内绘制随边界增长的连续不透明底色；内部布局用 skipToLookaheadSize 固定测量，仅内部内容交叉淡变。匹配导航不再叠加整页淡变，避免底色与内容一同消失，只剩列表轻微位移。边界、圆角与底色统一使用 480ms，来源内容退出保留 300ms，给真机复杂页面更多可辨认的中间帧。未匹配的列表项不改变底色、圆角或透明度，避免整张列表一起闪动和无关项逐帧重绘。详情覆盖层 zIndexInOverlay=1，高于来源默认的 0，防止返回时重建的列表卡覆盖仍在收缩的详情；Host 内保留 TopCenter，使 840dp 限宽页面继续居中。
 
 首页、分类、标签、搜索及共用 MaterialPageScaffold 的已测量 headerHeight 使用 rememberSaveable 随回栈保存，返回第一次测量就带上顶部留白，不能先以 0 作为共享目标再在后续帧补上。窗口或字号变化后的新尺寸仍以 onSizeChanged 实测更新；本次回归针对同窗口返回，不声称跨窗口首帧零偏差。
@@ -37,7 +39,7 @@ Status: implemented
 - 进入正文后打开图片预览，先返回图片再返回帖子，检查覆盖层与导航返回顺序。
 - 搜索中分别点击同帖不同命中的卡片、摘要及楼层，检查跳转楼层及返回目标；收藏、点赞、公开主页和个人内容重复检查返回位置。
 
-## Testing
+## Prior implementation verification
 
 2026-10-19 用户连接 RMX2202 / Android 13 后，先核对已安装 0.2.10-dev / 2023 和证书，再以相同 Debug 证书覆盖安装显式 0.3.0-dev / 3001，保留原有数据。真实帖子录屏 artifacts/topic-transition-baseline.mp4 复现进入和返回主要表现为整页淡变，没有明显的卡片展开；逐帧拼图为 topic-transition-baseline-opening.png 与 topic-transition-baseline-closing.png。新增 TopicTransitionUiTest 用真实 NavHost、LazyColumn 和生产转场容器检查进出中间帧像素范围及邻项位置，打开测试先失败。临时探针确认真实导航的来源键与共享状态匹配，打开边界从原卡片到全屏；失败原因不是无图或缺少共享键，而是底色及内容淡变方式。探针同时发现首页返回目标的顶部由 365px 暂时变成 24px。生产 FeedScreen 回归断言首次放置，修复前实际为 24px、期望 258px；rememberSaveable 修复后通过。带共享锚点的未选中邻项像素测试也先复现一同淡出，再限制透明度只作用于匹配卡片。探针不保留在发布代码中。
 
