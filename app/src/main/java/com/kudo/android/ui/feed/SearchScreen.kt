@@ -146,7 +146,7 @@ fun SearchScreen(
                     when (page.kind) {
                         SearchKind.POSTS -> items(posts, key = { "post-${it.postId}" }) { hit ->
                             TopicTransitionItem(hit.topic.id, if (listStyle == TopicListStyle.FEED) 18.dp else 0.dp,
-                                { openTopic(hit.topic.id, hit.postNumber) }) { open ->
+                                { openTopic(hit.topic.id, hit.postNumber) }, preview = hit.topic) { open ->
                             Column(Modifier.fillMaxWidth().padding(horizontal = if (listStyle == TopicListStyle.FEED) 12.dp else 0.dp).testTag("search-hit-${hit.postId}")) {
                                 if (listStyle == TopicListStyle.FEED) TopicCard(hit.topic, null, open, openUser)
                                 else {

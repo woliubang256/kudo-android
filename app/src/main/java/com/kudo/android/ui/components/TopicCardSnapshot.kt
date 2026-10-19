@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import com.kudo.android.data.Topic
 
 internal class TopicCardAnchor {
     var coordinates: LayoutCoordinates? = null
@@ -57,6 +58,7 @@ internal class TopicCardAnchor {
 
 internal data class TopicCardSnapshot(
     val key: String, val bounds: Rect, val radius: Dp, val surface: Color, val image: ImageBitmap,
+    val preview: Topic? = null,
 ) {
     var opened = false
 }

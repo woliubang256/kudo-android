@@ -369,12 +369,12 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         ObserveTopicUpdates(vm)
                         val state by vm.state.collectAsStateWithLifecycle()
                         val nonce by entry.savedStateHandle.getStateFlow("refresh", 0L).collectAsStateWithLifecycle()
-                        TopicTransitionContentReady(state.detail != null || !state.loading)
                         LaunchedEffect(vm, postEditResult) {
                             postEditResult?.takeIf { it.topicId == id }?.let { vm.applyEdit(it); postEditResult = null }
                         }
                         LaunchedEffect(nonce) { if (nonce != 0L) vm.refresh() }
                         LaunchedEffect(vm) { vm.events.collect { showMessage(it) } }
+                        TopicTransitionBody(state.detail != null || !state.loading) {
                         var replyTarget by rememberSaveable(account.user?.id) { mutableStateOf<Int?>(null) }
                         var replyQuote by rememberSaveable(account.user?.id) { mutableStateOf<String?>(null) }
                         val replyVisibility = remember(account.user?.id) { MutableTransitionState(replyTarget != null) }
@@ -416,6 +416,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 EditorScreen(editorVm, account.categories, account.categoryError, account::loadCategories,
                                     { keyboard?.hide(); replyVisibility.targetState = false }, replyAuthor = replyAuthor)
                             }
+                        }
                         }
                         }
                     }

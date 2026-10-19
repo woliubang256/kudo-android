@@ -1,6 +1,7 @@
 package com.kudo.android.ui.components
 
 import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -47,6 +49,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.kudo.android.data.Topic
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -122,6 +125,8 @@ private class TopicTransitionSource(val entryId: String)
 private val LocalTopicTransitions = staticCompositionLocalOf<TopicTransitions?> { null }
 private val LocalTopicTransitionSource = staticCompositionLocalOf<TopicTransitionSource?> { null }
 private val LocalTopicContentReady = staticCompositionLocalOf<MutableState<Boolean>?> { null }
+private val LocalTopicEntered = staticCompositionLocalOf<State<Boolean>?> { null }
+private val LocalTopicPreview = staticCompositionLocalOf<Topic?> { null }
 
 @Composable
 internal fun TopicTransitionHost(transitions: TopicTransitions, content: @Composable () -> Unit) {
@@ -135,6 +140,20 @@ internal fun TopicTransitionHost(transitions: TopicTransitions, content: @Compos
 internal fun TopicTransitionContentReady(ready: Boolean) {
     val state = LocalTopicContentReady.current
     SideEffect { state?.value = ready }
+}
+
+@Composable
+internal fun TopicTransitionBody(ready: Boolean, content: @Composable () -> Unit) {
+    val entered = LocalTopicEntered.current?.value != false
+    val preview = LocalTopicPreview.current
+    val transitions = LocalTopicTransitions.current
+    TopicTransitionContentReady(entered && (ready || preview != null))
+    if (entered) {
+        if (preview == null) content()
+        else Crossfade(ready, animationSpec = tween(180), label = "topic-preview-handoff") { loaded ->
+            if (loaded) content() else TopicOpeningPreview(preview) { transitions?.back() }
+        }
+    }
 }
 
 internal fun NavGraphBuilder.topicListComposable(
@@ -184,7 +203,7 @@ internal fun NavGraphBuilder.topicDetailComposable(
 internal class TopicTransitionAnchor(val modifier: Modifier, val open: () -> Unit)
 
 @Composable
-internal fun topicTransitionAnchor(topicId: Int, radius: Dp, onClick: () -> Unit): TopicTransitionAnchor {
+internal fun topicTransitionAnchor(topicId: Int, radius: Dp, preview: Topic? = null, onClick: () -> Unit): TopicTransitionAnchor {
     val transitions = LocalTopicTransitions.current
     val source = LocalTopicTransitionSource.current
     if (transitions == null || source == null) return TopicTransitionAnchor(Modifier, onClick)
@@ -207,15 +226,16 @@ internal fun topicTransitionAnchor(topicId: Int, radius: Dp, onClick: () -> Unit
             transitions.fromCard(topicId, source.entryId, capture = {
                 val bounds = anchor.bounds()
                 if (bounds == null || layer.size.width.toLong() * layer.size.height !in 1..4_000_000) null
-                else TopicCardSnapshot(key, bounds, radius, surface, layer.toImageBitmap())
+                else TopicCardSnapshot(key, bounds, radius, surface, layer.toImageBitmap(), preview?.takeIf { it.id == topicId })
             }, open = onClick)
         }
     }
 }
 
 @Composable
-internal fun TopicTransitionItem(topicId: Int, radius: Dp, onClick: () -> Unit, content: @Composable (() -> Unit) -> Unit) {
-    val anchor = topicTransitionAnchor(topicId, radius, onClick)
+internal fun TopicTransitionItem(topicId: Int, radius: Dp, onClick: () -> Unit, preview: Topic? = null,
+    content: @Composable (() -> Unit) -> Unit) {
+    val anchor = topicTransitionAnchor(topicId, radius, preview, onClick)
     CompositionLocalProvider(LocalTopicTransitionSource provides null) {
         Box(Modifier.fillMaxWidth().then(anchor.modifier)) { content(anchor.open) }
     }
@@ -235,6 +255,7 @@ internal fun TopicTransitionDetail(
     val activeSnapshot = snapshot?.takeIf { (firstVisit && !leaving) || returning }
     if (leaving && !returning && firstVisit) SideEffect { firstVisit = false }
     val ready = remember(entry.id) { mutableStateOf(true) }
+    val entered = remember(entry.id, snapshot) { mutableStateOf(snapshot?.opened != false) }
     if (snapshot == null) SideEffect {
         entry.savedStateHandle.remove<String>(SourceKey)
         entry.savedStateHandle.remove<String>(SourceEntry)
@@ -242,8 +263,12 @@ internal fun TopicTransitionDetail(
     val progress = if (activeSnapshot != null) animation.transition.animateFloat(
         transitionSpec = { tween(ContainerDuration, easing = FastOutSlowInEasing) }, label = "topic-card-progress",
     ) { if (it == EnterExitState.Visible) 1f else 0f } else rememberUpdatedState(1f)
-    if (snapshot != null && !leaving && progress.value >= 1f) SideEffect { snapshot.opened = true }
-    CompositionLocalProvider(LocalTopicTransitionSource provides null, LocalTopicContentReady provides ready) {
+    if (snapshot != null && !leaving && !entered.value && progress.value >= 1f) SideEffect {
+        snapshot.opened = true
+        entered.value = true
+    }
+    CompositionLocalProvider(LocalTopicTransitionSource provides null, LocalTopicContentReady provides ready,
+        LocalTopicEntered provides entered, LocalTopicPreview provides snapshot?.preview) {
         TopicCardContainer(activeSnapshot, progress, ready,
             closing = { animation.transition.targetState == EnterExitState.PostExit },
             sourceBounds = { snapshot?.let { transitions.anchors[it.key]?.bounds() } },

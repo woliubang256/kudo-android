@@ -34,9 +34,11 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -52,8 +54,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.DisplaySettings
 import com.kudo.android.data.ThemeMode
 import com.kudo.android.data.Topic
+import com.kudo.android.data.Member
 import com.kudo.android.ui.components.TopicTransitionHost
-import com.kudo.android.ui.components.TopicTransitionContentReady
+import com.kudo.android.ui.components.TopicTransitionBody
 import com.kudo.android.ui.components.TopicTransitionItem
 import com.kudo.android.ui.components.TopicTransitions
 import com.kudo.android.ui.components.topicDetailComposable
@@ -74,8 +77,13 @@ class TopicTransitionUiTest {
     private lateinit var controller: TopicTransitions
     private var detailReady by mutableStateOf(false)
     private var sourceVisible by mutableStateOf(true)
+    private var requestsStarted = 0
+    private var bodyCompositions = 0
+    private var detailFailed by mutableStateOf(false)
+    private val previewTopic = Topic(5, "渐进首屏测试", "这是列表已有的摘要，不是完整正文。",
+        Member(7, "preview", "首屏作者", ""), 1, emptyList(), 0, 0, 0, "", "")
 
-    private fun showList(patterned: Boolean = false) {
+    private fun showList(patterned: Boolean = false, withPreview: Boolean = false) {
         compose.setContent {
             KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
                 MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(surface = Color.Red, background = Color.Red)) {
@@ -89,7 +97,8 @@ class TopicTransitionUiTest {
                                     item { Spacer(Modifier.height(150.dp)) }
                                     if (sourceVisible) item {
                                         Box(Modifier.padding(horizontal = if (patterned) 70.dp else 8.dp)) {
-                                            TopicTransitionItem(5, 18.dp, { transitions.openTopic(5) }) { open ->
+                                            TopicTransitionItem(5, 18.dp, { transitions.openTopic(5) },
+                                                preview = previewTopic.takeIf { withPreview }) { open ->
                                                 Box(Modifier.fillMaxWidth().height(140.dp).background(Color.Red)
                                                     .clickable(onClick = open).testTag("transition-source")) {
                                                     if (patterned) Box(Modifier.padding(start = 20.dp, top = 20.dp)) {
@@ -111,10 +120,13 @@ class TopicTransitionUiTest {
                                 navArgument("id") { type = NavType.IntType },
                                 navArgument("post") { type = NavType.IntType; defaultValue = 0 },
                             )) {
-                                TopicTransitionContentReady(!patterned || detailReady)
-                                Box(Modifier.fillMaxSize().background(if (patterned) {
-                                    if (detailReady) Color.Yellow else Color.White
-                                } else Color.Red).testTag("transition-content"))
+                                androidx.compose.runtime.LaunchedEffect(Unit) { requestsStarted++ }
+                                TopicTransitionBody(!patterned || detailReady || detailFailed) {
+                                    SideEffect { bodyCompositions++ }
+                                    Box(Modifier.fillMaxSize().background(if (patterned) {
+                                        if (detailFailed) Color.Magenta else if (detailReady) Color.Yellow else Color.White
+                                    } else Color.Red).testTag("transition-content"))
+                                }
                             }
                             composable("profile", popExitTransition = { fadeOut(tween(160)) }) {
                                 Box(Modifier.fillMaxSize().background(Color.Cyan))
@@ -125,6 +137,85 @@ class TopicTransitionUiTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    @Test fun openingStartsTheRequestWithoutComposingTheDetailBody() {
+        showList(patterned = true)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle {
+            assertEquals("Networking must already be running during the animation", 1, requestsStarted)
+            assertEquals("Hidden detail composition must not compete with the entrance", 0, bodyCompositions)
+            detailReady = true
+        }
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle { assertEquals("An early response must not mount the body mid-animation", 0, bodyCompositions) }
+        compose.mainClock.advanceTimeBy(800)
+        compose.runOnIdle { assertTrue("The body must mount after the entrance", bodyCompositions > 0) }
+    }
+
+    @Test fun slowRequestShowsTheListPreviewWithoutMountingThePostBody() {
+        showList(patterned = true, withPreview = true)
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertEquals(1, requestsStarted)
+            assertEquals("A slow request must only mount the lightweight preview", 0, bodyCompositions)
+        }
+        compose.onNodeWithText(previewTopic.title).assertIsDisplayed()
+        compose.onNodeWithText(previewTopic.author!!.displayName).assertIsDisplayed()
+        compose.onNodeWithText(previewTopic.excerpt).assertIsDisplayed()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.getExternalFilesDir(null), "topic-opening-preview.png").outputStream().use {
+            compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.waitForIdle()
+        assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+    }
+
+    @Test fun loadedBodyAndFailureBothReplaceTheLightweightPreview() {
+        showList(patterned = true, withPreview = true)
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("topic-opening-preview").assertIsDisplayed()
+        compose.runOnIdle { detailFailed = true }
+        compose.waitForIdle()
+        compose.onNodeWithTag("topic-opening-preview").assertDoesNotExist()
+        compose.onNodeWithTag("transition-content").assertIsDisplayed()
+        compose.runOnIdle { detailFailed = false; detailReady = true }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue(bodyCompositions > 0) }
+        val pixels = compose.onRoot().captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("A successful response must still replace the preview", center.red > .95f && center.green > .95f)
+    }
+
+    @Test fun responseDuringTheEntranceSkipsThePreviewAfterExpansion() {
+        showList(patterned = true, withPreview = true)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle { detailReady = true }
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle { assertEquals(0, bodyCompositions) }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("topic-opening-preview").assertDoesNotExist()
+        compose.onNodeWithTag("transition-content").assertIsDisplayed()
+    }
+
+    @Test fun returningDuringTheEntranceDoesNotMountTheUnusedDetailBody() {
+        showList(patterned = true)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("transition-source").performClick()
+        compose.mainClock.advanceTimeBy(128)
+        compose.runOnIdle { navigation.popBackStack() }
+        compose.mainClock.advanceTimeBy(800)
+        compose.runOnIdle {
+            assertEquals("list", navigation.currentBackStackEntry?.destination?.route)
+            assertEquals("A cancelled entrance must not construct its hidden body", 0, bodyCompositions)
+        }
     }
 
     @Test fun coldDetailKeepsTheCardContentScaledUntilItIsReady() {

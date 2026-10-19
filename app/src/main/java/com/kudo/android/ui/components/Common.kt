@@ -149,7 +149,7 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
         return
     }
     val resolvedCategory = category ?: LocalTopicPresentation.current.categories.firstOrNull { it.id == topic.categoryId }
-    val transition = topicTransitionAnchor(topic.id, 18.dp, onClick)
+    val transition = topicTransitionAnchor(topic.id, 18.dp, topic, onClick)
     Column(Modifier.fillMaxWidth().then(transition.modifier).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surface)
         .clickable(onClick = transition.open)
         .testTag("topic-card-${topic.id}").padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -179,7 +179,7 @@ fun TopicCard(topic: Topic, category: Category?, onClick: () -> Unit, onUser: (S
     }
 }
 
-private fun Topic.hasNsfwTag(): Boolean = tags.any { it.equals("nsfw", ignoreCase = true) } ||
+internal fun Topic.hasNsfwTag(): Boolean = tags.any { it.equals("nsfw", ignoreCase = true) } ||
     tagDetails.any { it.name.equals("nsfw", ignoreCase = true) || it.slug.equals("nsfw", ignoreCase = true) }
 
 @Composable

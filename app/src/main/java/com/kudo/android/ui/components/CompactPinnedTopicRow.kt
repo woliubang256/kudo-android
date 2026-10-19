@@ -27,7 +27,7 @@ internal fun CompactPinnedTopicRow(topic: Topic, category: Category?, onClick: (
         runCatching { Color(android.graphics.Color.parseColor("#${value.removePrefix("#")}")) }.getOrNull()
     } ?: MaterialTheme.colorScheme.onSurfaceVariant
     val blue = Color(0xFF3D8BFF)
-    val transition = topicTransitionAnchor(topic.id, 12.dp, onClick)
+    val transition = topicTransitionAnchor(topic.id, 12.dp, topic, onClick)
     Row(Modifier.fillMaxWidth().then(transition.modifier).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
         .clickable(onClick = transition.open).heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp)
         .testTag("topic-pinned-${topic.id}"),
