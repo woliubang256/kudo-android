@@ -136,6 +136,7 @@ class QuoteContentUiTest {
             assertTrue(region.contains(bounds.center))
         }
         compose.onNodeWithText("“", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("article-quote-mark-root-0", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("article-image-article-0").assertDoesNotExist()
         capture("quote-fixed.png")
         compose.onNodeWithContentDescription("跳转引用原帖").performClick()
@@ -150,7 +151,53 @@ class QuoteContentUiTest {
             }
         } }
         compose.onNodeWithText("普通正文引用", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("“", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("“", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("article-quote-mark-root-0", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun shortQuoteHeightFollowsItsTextWithoutAnExtraLine() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            Column(Modifier.fillMaxSize().padding(16.dp).testTag("quote-fixture")) {
+                RichContent("<blockquote><p>老家 潍坊</p></blockquote>", {}, {})
+            }
+        } }
+        val region = compose.onNodeWithTag("article-quote-root-0").fetchSemanticsNode().boundsInRoot
+        val text = compose.onNodeWithTag("article-text-root-0-0").fetchSemanticsNode().boundsInRoot
+        capture("quote-short.png")
+        assertEquals(text.height, region.height, 1f)
+    }
+
+    @Test fun shortQuoteAtLargeFontKeepsTheVectorInsideItsTextHeight() {
+        compose.setContent { KudoTheme(DisplaySettings(theme = com.kudo.android.data.ThemeMode.DARK, fontScale = 1.3f)) {
+            Column(Modifier.fillMaxSize().padding(16.dp).testTag("quote-fixture")) {
+                RichContent("<blockquote><p>老家 潍坊</p></blockquote>", {}, {})
+            }
+        } }
+        val region = compose.onNodeWithTag("article-quote-root-0").fetchSemanticsNode().boundsInRoot
+        val text = compose.onNodeWithTag("article-text-root-0-0").fetchSemanticsNode().boundsInRoot
+        val mark = compose.onNodeWithTag("article-quote-mark-root-0", useUnmergedTree = true)
+            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        capture("quote-short-dark-large.png")
+        assertEquals(text.height, region.height, 1f)
+        assertTrue(mark.left >= region.left && mark.right <= region.right)
+        assertTrue(mark.top >= region.top && mark.bottom <= region.bottom)
+        compose.onNodeWithText("“", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test fun plainQuoteKeepsExplicitLineBreaksAndParagraphSpacing() {
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            Column(Modifier.fillMaxSize().padding(16.dp).testTag("quote-fixture")) {
+                RichContent("<blockquote><p>第一行<br>第二行</p><p>下一个段落</p></blockquote>", {}, {})
+            }
+        } }
+        compose.onNodeWithText("第一行\n第二行", useUnmergedTree = true).assertIsDisplayed()
+        val first = compose.onNodeWithTag("article-text-root-0-0").fetchSemanticsNode().boundsInRoot
+        val second = compose.onNodeWithTag("article-text-root-0-1").fetchSemanticsNode().boundsInRoot
+        val region = compose.onNodeWithTag("article-quote-root-0").fetchSemanticsNode().boundsInRoot
+        assertEquals(with(compose.density) { 12.dp.toPx() }, second.top - first.bottom, 1f)
+        assertEquals(second.bottom - first.top, region.height, 1f)
+        compose.onAllNodesWithTag("article-quote-mark-root-0", useUnmergedTree = true).assertCountEquals(1)
+        capture("quote-paragraphs.png")
     }
 
     @Test fun collapsedQuoteStaysCollapsedAfterSavedStateRestoration() {

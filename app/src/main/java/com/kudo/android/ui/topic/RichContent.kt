@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -73,6 +74,7 @@ import coil3.asDrawable
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.kudo.android.R
 import com.kudo.android.data.AvatarMetadataCache
 import com.kudo.android.ui.components.AvatarImage
 import com.kudo.android.ui.components.ImageAspectBadge
@@ -640,14 +642,20 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                 }
                 if (path !in collapsed) {
                     Box(Modifier.fillMaxWidth()) {
-                        if (block.source == null) {
-                            Text("“", Modifier.align(Alignment.TopStart),
-                                style = MaterialTheme.typography.displayMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .28f))
-                        }
                         ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll, onImage,
                             firstLineIndent = if (block.source == null) 48.sp else TextUnit.Unspecified,
                             image = image)
+                        if (block.source == null) {
+                            val density = LocalDensity.current
+                            Box(Modifier.matchParentSize()) {
+                                Icon(painterResource(R.drawable.ic_quote_open), null,
+                                    Modifier.align(Alignment.TopStart)
+                                        .padding(top = with(density) { 2.sp.toDp() })
+                                        .size(width = with(density) { 36.sp.toDp() }, height = with(density) { 28.sp.toDp() })
+                                        .testTag("article-quote-mark-$path"),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .28f))
+                            }
+                        }
                     }
                 }
             }
