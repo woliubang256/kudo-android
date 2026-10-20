@@ -78,6 +78,7 @@ class TopicViewModel(
     private val updates: TopicUpdates? = null, private val updateUser: Member? = null,
     private val updateIntervalMillis: Long = 3000,
 ) : ViewModel() {
+    internal val reactionHistory = ReactionHistoryController(viewModelScope, repository::reactionHistory)
     private val _state = MutableStateFlow(TopicState(viewerId = viewerId, targetNumber = number))
     val state = _state.asStateFlow()
     private var refreshJob: Job? = null

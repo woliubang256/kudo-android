@@ -6,7 +6,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -33,10 +35,10 @@ import coil3.request.Options
 import com.kudo.android.data.*
 import com.kudo.android.ui.account.PublicProfilePage
 import com.kudo.android.ui.account.PublicProfileState
+import com.kudo.android.ui.account.publicSummary
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.KudoTheme
-import com.kudo.android.ui.topic.TopicTopBar
-import com.kudo.android.ui.topic.TopicState
+import com.kudo.android.ui.topic.*
 import okio.Buffer
 import org.junit.After
 import org.junit.Assert.*
@@ -81,19 +83,24 @@ class AvatarProfileTransitionUiTest {
 
     @After fun restore() { SingletonImageLoader.setUnsafe(original); loader.shutdown() }
 
-    private fun showNavigation(duplicate: Boolean = false, topicAuthor: Boolean = false) {
+    private fun showNavigation(duplicate: Boolean = false, topicAuthor: Boolean = false, entryPoint: String = "") {
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
             val nav = rememberNavController()
             val avatars = remember(nav) { AvatarTransitions(nav) }
             SideEffect { navigation = nav; transitions = avatars }
             val topics = remember(nav) { TopicTransitions(nav) }
+            val scope = rememberCoroutineScope()
+            val history = remember { ReactionHistoryController(scope) { _, _ ->
+                ReactionHistory(listOf(ReactionHistoryGroup("heart", 1, listOf(ReactionHistoryUser(member, "heart")))))
+            } }
             TopicTransitionHost(topics, avatars) {
                 NavHost(nav, "list", Modifier.fillMaxSize(), enterTransition = { fadeIn(tween(280)) },
                     exitTransition = { fadeOut(tween(180)) }, popEnterTransition = { fadeIn(tween(220)) },
                     popExitTransition = { fadeOut(tween(220)) }) {
-                    topicListComposable("list") {
+                    val source: @Composable androidx.compose.animation.AnimatedContentScope.(androidx.navigation.NavBackStackEntry) -> Unit = {
                         Box(Modifier.fillMaxSize().background(Color.White)) {
-                            if (topicAuthor) TopicTopBar(TopicState(detail = TopicDetail(1, "头像入口", 1, emptyList(), emptyList(), false, author = member)),
+                            if (entryPoint.isNotEmpty()) EntryPoint(entryPoint, avatars, history)
+                            else if (topicAuthor) TopicTopBar(TopicState(detail = TopicDetail(1, "头像入口", 1, emptyList(), emptyList(), false, author = member)),
                                 true, {}, { avatars.openUser(it) }, {}, {})
                             else if (sourceVisible) Avatar(member, 35.dp, Modifier.offset(160.dp, 450.dp).testTag("avatar-source")) {
                                 avatars.openUser(member.username)
@@ -103,6 +110,9 @@ class AvatarProfileTransitionUiTest {
                             }
                         }
                     }
+                    if (entryPoint == "chat" || entryPoint == "history") avatarComposable("list", content = source)
+                    else if (topicAuthor || entryPoint in listOf("reply", "boost", "reaction")) topicDetailComposable("list", emptyList(), content = source)
+                    else topicListComposable("list", content = source)
                     topicListComposable("user/{username}") { entry ->
                         Box(Modifier.fillMaxSize().background(Color(0xFF202060))) {
                             val initial = avatars.seed(entry)?.member ?: member
@@ -113,8 +123,80 @@ class AvatarProfileTransitionUiTest {
                 }
             }
         } }
-        compose.waitUntil(5000) { requests.get() > 0 }
+        if (entryPoint != "reaction") compose.waitUntil(5000) { requests.get() > 0 }
         compose.waitForIdle()
+    }
+
+    @Composable private fun EntryPoint(kind: String, avatars: AvatarTransitions, history: ReactionHistoryController) {
+        val open: (String) -> Unit = { avatars.openUser(it) }
+        val post = Post(2, 2, member, "<p>回复正文</p>", "", 0, false, null, null, true)
+        val detail = TopicDetail(1, "帖子", 1, listOf(post), listOf(post.id), false)
+        when (kind) {
+            "reply" -> TopicPost(post, detail, TopicState(detail = detail, loading = false), true, {}, {}, {}, open, {}, {}, {})
+            "boost" -> Box(Modifier.padding(top = 400.dp)) {
+                PostBoosts(post.copy(boosts = listOf(PostBoost(10, member, "<p>支持一下</p>"))), true, open, {})
+            }
+            "history" -> PostHistoryScreen(2, PostHistoryState(versions = listOf(HistoryVersion(1, member, "", "", "", "")), loading = false),
+                {}, {}, {}, {}, open, {})
+            "chat" -> Avatar(member, 32.dp, Modifier.offset(100.dp, 400.dp).testTag("chat-avatar"), onClick = { open(member.username) })
+            "summary" -> LazyColumn(Modifier.fillMaxSize()) {
+                publicSummary(ProfileSummary(emptyMap(), emptyList(), emptyList(), emptyList(),
+                    mapOf("most_liked_users" to listOf(ProfileUserCount(member, 1))), emptyList(), emptyList()),
+                    { open(android.net.Uri.parse(it).lastPathSegment!!) }, {})
+            }
+            "follows" -> PublicProfilePage(PublicProfileState(profile = PublicProfile(member.copy(id = 88, username = "source", name = "来源用户", avatar = ""),
+                1, 1, "", "", "", "", "", false), loading = false, follows = listOf(member), showingFollowers = true),
+                null, {}, {}, { open(android.net.Uri.parse(it).lastPathSegment!!) }, {}, {}, {})
+            "reaction" -> TopicReactionHistoryHost(1, "list", GlassMode.TRANSLUCENT, { _, _ -> error("Use retained history") }, open,
+                retainedController = history) {
+                val show = LocalReactionHistory.current
+                Text("打开回应", Modifier.testTag("show-reactions").clickable { show(post) })
+            }
+            "disabled" -> AvatarProfileLink(member, false, { open(member.username) }) { show ->
+                Row(Modifier.offset(100.dp, 400.dp).clickable(enabled = false, onClick = show).testTag("disabled-source")) { Avatar(member, 32.dp) }
+            }
+        }
+    }
+
+    private fun assertEntryPointSharesAndReturns(kind: String) {
+        showNavigation(entryPoint = kind)
+        if (kind == "reaction") {
+            compose.onNodeWithTag("show-reactions").performClick()
+            compose.waitUntil(5000) { requests.get() > 0 }
+            compose.waitForIdle()
+        }
+        val source = greenBounds()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("${member.displayName}的头像").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(144)
+        compose.runOnIdle {
+            assertEquals("Every native avatar entry must seed the displayed member", member.avatar, transitions.seed(navigation.currentBackStackEntry!!)?.member?.avatar)
+        }
+        val moving = greenBounds()
+        compose.mainClock.advanceTimeBy(600)
+        val target = greenBounds()
+        assertTrue("The $kind avatar must be between source and profile: $source -> $moving -> $target",
+            moving.top > minOf(source.top, target.top) + 3 && moving.top < maxOf(source.top, target.top) - 3)
+        compose.runOnIdle { navigation.popBackStack() }
+        compose.mainClock.advanceTimeBy(144)
+        val returning = greenBounds()
+        assertTrue(returning.top > minOf(source.top, target.top) + 3 && returning.top < maxOf(source.top, target.top) - 3)
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals("Returning must restore the $kind avatar", source.top, greenBounds().top, 4f)
+        assertEquals("The $kind avatar should stay in memory", 1, requests.get())
+    }
+
+    @Test fun replyAvatarSharesAndReturns() = assertEntryPointSharesAndReturns("reply")
+    @Test fun boostAvatarSharesAndReturns() = assertEntryPointSharesAndReturns("boost")
+    @Test fun editorAvatarOnANormalRouteSharesAndReturns() = assertEntryPointSharesAndReturns("history")
+    @Test fun chatAvatarOnANormalRouteSharesAndReturns() = assertEntryPointSharesAndReturns("chat")
+    @Test fun summaryUserAvatarSharesAndReturns() = assertEntryPointSharesAndReturns("summary")
+    @Test fun followerSheetAvatarSharesAndRestoresTheSheet() = assertEntryPointSharesAndReturns("follows")
+    @Test fun reactionSheetAvatarSharesAndRestoresTheSheet() = assertEntryPointSharesAndReturns("reaction")
+    @Test fun aDisabledIdentityRowDoesNotGainAnAvatarNavigationAction() {
+        showNavigation(entryPoint = "disabled")
+        compose.onNodeWithContentDescription("${member.displayName}的头像", useUnmergedTree = true).performTouchInput { click() }
+        compose.runOnIdle { assertEquals("list", navigation.currentBackStackEntry?.destination?.route) }
     }
 
     @Test fun openingAndReturningMoveTheLoadedAvatarThroughIntermediatePositions() {

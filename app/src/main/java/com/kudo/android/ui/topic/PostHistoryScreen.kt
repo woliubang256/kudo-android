@@ -43,16 +43,18 @@ fun PostHistoryScreen(postId: Int, state: PostHistoryState, reload: () -> Unit, 
                 itemsIndexed(state.versions, key = { _, version -> version.number }) { index, version ->
                     Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(16.dp)
                         .testTag("history-version-${version.number}"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AvatarProfileLink(version.editor, onClick = { user(version.editor.username) }) { open ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Avatar(version.editor, 36.dp, presentation = AvatarPresentation.PUBLIC)
                             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                                 Text(version.editor.displayName.ifBlank { "编辑者" },
-                                    Modifier.clickable(enabled = version.editor.username.isNotBlank()) { user(version.editor.username) },
+                                    Modifier.clickable(enabled = version.editor.username.isNotBlank(), onClick = open),
                                     style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(listOf(historyTime(version.createdAt), if (version.original) "原始版本" else if (index == 0) "最新版本" else "编辑")
                                     .filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                        }
                         }
                         if (version.title.isNotBlank()) Text(version.title, style = MaterialTheme.typography.titleMedium)
                         if (version.cooked != null) RichContent(version.cooked, image, openLink, galleryKey = "history-$postId-${version.number}")

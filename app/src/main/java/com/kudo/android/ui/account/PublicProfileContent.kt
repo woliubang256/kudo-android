@@ -74,11 +74,13 @@ internal fun LazyListScope.publicSummary(summary: ProfileSummary, open: (String)
             ProfileSectionTitle(title)
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(users, key = { it.member.username }) { value ->
-                    Column(Modifier.width(68.dp).clickable(role = Role.Button) { open("https://linux.do/u/${android.net.Uri.encode(value.member.username)}") },
+                    AvatarProfileLink(value.member, onClick = { open("https://linux.do/u/${android.net.Uri.encode(value.member.username)}") }) { showUser ->
+                    Column(Modifier.width(68.dp).clickable(role = Role.Button, onClick = showUser),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Avatar(value.member, 46.dp)
                         Text(value.member.displayName, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         value.count?.let { Text("${compactNumber(it)}次", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
                     }
                 }
             }

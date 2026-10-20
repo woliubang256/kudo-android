@@ -16,7 +16,7 @@ Status: implemented
 
 上游控制器 `MAX_USERS_COUNT=26`，实际每类最多返回 27 位，且不接受分页游标；不能通过反复请求相同接口伪造分页。面板每批展开 40 条已返回名单，并在数量大于可用名单时明确显示站点仅返回部分记录。无 reactions 插件的普通点赞使用 `/post_action_users.json?id={postId}&post_action_type_id=2&page={page}&limit=50`，读取 `post_action_users` 与 `total_rows_post_action_users`，按真实页码继续加载；不将插件权限错误回退成空名单。
 
-历史由独立 `TopicReactionHistoryHost` 承载，以账号和导航条目隔离控制器；关闭或离开取消读请求，并同时检查取消状态与请求代次。用户名可在没有数字 ID 时作为名单去重键；隐去身份的核心记录不生成用户主页。打开历史阻断底层阅读上报，不改变点赞、长按选择或 Boost 写操作。
+历史由独立 `TopicReactionHistoryHost` 承载，以账号和导航条目隔离控制器；关闭或离开取消读请求，并同时检查取消状态与请求代次。实际话题中的控制器归属对应 TopicViewModel，进入用户主页时保留面板、筛选和已有名单用于返回共享头像，离开组合只 stop 读取而不清空来源；返回仅重试未完成且无错误的首读。未注入持久控制器的独立 Host 仍在跳主页时关闭。来源绑定和双向恢复见[头像到个人主页](2026-10-20-avatar-profile-continuity.md)。用户名可在没有数字 ID 时作为名单去重键；隐去身份的核心记录不生成用户主页。打开历史阻断底层阅读上报和话题实时订阅，不改变点赞、长按选择或 Boost 写操作。
 
 ## Existing note audit
 

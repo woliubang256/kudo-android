@@ -142,7 +142,7 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
                 }.padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(40.dp).clickable(onClick = login), contentAlignment = Alignment.Center) {
                         if (user == null) Image(painterResource(R.drawable.ic_linux_do), "Linux.do 社区 Logo", Modifier.size(28.dp))
-                        else Avatar(user, 28.dp, presentation = AvatarPresentation.ACCOUNT)
+                        else Avatar(user, 28.dp, presentation = AvatarPresentation.ACCOUNT, onClick = login)
                     }
                     Box(Modifier.weight(1f).heightIn(min = 40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = search).testTag("home-search"), contentAlignment = Alignment.Center) {
                         Row(Modifier.fillMaxWidth().heightIn(min = 30.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 10.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

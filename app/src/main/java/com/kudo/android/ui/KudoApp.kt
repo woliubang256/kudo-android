@@ -138,6 +138,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             val fallback = ExternalAppLinkPolicy.fallbackUrl(url) ?: return invalidLink()
             val target = LinuxDoLink.parseContent(fallback)
             if (target is LinuxDoDestination.Topic) topic(target.id, target.number)
+            else if (target is LinuxDoDestination.User) user(target.username)
             else nav.openContentLink(fallback, { selected = 0 }, ::invalidLink)
         }
         fun editor(id: Int? = null, number: Int? = null, categoryId: Int? = null) { authenticated { nav.navigate("compose?topic=${id ?: 0}&reply=${number ?: 0}&category=${categoryId ?: 0}") } }
@@ -169,8 +170,6 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                 }
                 parseArticle(first?.cooked ?: error("暂时无法读取主帖图片")).articleImages()
             }, openLink = ::openLink, accountKey = account.user?.id) {
-            val historyEntry by nav.currentBackStackEntryAsState()
-            TopicReactionHistoryHost(account.user?.id, historyEntry?.id, display.glass, app.repository::reactionHistory, ::user) {
             TopicActionsHost(app.repository, account.user, display.glass, ::login,
                 ignored = { id, username -> account.recordIgnore(id, username, true); refreshEpoch++ },
                 message = { showMessage(it) }, editPost = { id, post ->
@@ -344,7 +343,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 source = if (sourceTopic > 0 && sourcePost > 0 && sourceTitle.isNotBlank()) PostMessageSource(sourceTopic, sourcePost, sourceTitle) else null)
                         } } ?: MaterialPagePlaceholder("写私信", { nav.popBackStack() }) { EmptyState("请先登录", "登录后发送私信。", actionLabel = "登录", action = ::login) }
                     }
-                    composable("chat/{id}?message={message}", arguments = listOf(navArgument("id") { type = NavType.IntType },
+                    avatarComposable("chat/{id}?message={message}", arguments = listOf(navArgument("id") { type = NavType.IntType },
                         navArgument("message") { type = NavType.IntType; defaultValue = 0 })) { entry ->
                         account.user?.let { member ->
                             val id = entry.arguments!!.getInt("id")
@@ -367,7 +366,6 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             TopicViewModel(app.repository, id, number, account.user?.id,
                                 updates = DiscourseMessageBus(app.client, userAgent = app.userAgent, route = app.network::client), updateUser = account.user)
                         }
-                        ObserveTopicUpdates(vm)
                         val state by vm.state.collectAsStateWithLifecycle()
                         val nonce by entry.savedStateHandle.getStateFlow("refresh", 0L).collectAsStateWithLifecycle()
                         LaunchedEffect(vm, postEditResult) {
@@ -375,6 +373,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         }
                         LaunchedEffect(nonce) { if (nonce != 0L) vm.refresh() }
                         LaunchedEffect(vm) { vm.events.collect { showMessage(it) } }
+                        TopicReactionHistoryHost(account.user?.id, entry.id, display.glass, app.repository::reactionHistory, ::user,
+                            retainedController = vm.reactionHistory) {
+                        ObserveTopicUpdates(vm)
                         TopicTransitionBody(state.detail != null || !state.loading) {
                         var replyTarget by rememberSaveable(account.user?.id) { mutableStateOf<Int?>(null) }
                         var replyQuote by rememberSaveable(account.user?.id) { mutableStateOf<String?>(null) }
@@ -421,7 +422,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         }
                         }
                     }
-                    composable("post-history/{post}", arguments = listOf(navArgument("post") { type = NavType.IntType })) { entry ->
+                    }
+                    avatarComposable("post-history/{post}", arguments = listOf(navArgument("post") { type = NavType.IntType })) { entry ->
                         val postId = entry.arguments!!.getInt("post")
                         val vm = model("post-history-${account.user?.id}-$postId") { PostHistoryViewModel(app.repository, postId) }
                         val state by vm.state.collectAsStateWithLifecycle()
@@ -511,7 +513,6 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     }
                 }
                 }
-            }
             }
             }
             }

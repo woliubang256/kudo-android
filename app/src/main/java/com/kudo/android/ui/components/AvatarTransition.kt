@@ -69,7 +69,8 @@ private class ProfileAvatarLink(val source: ProfileAvatarSource, val open: (() -
 private val LocalProfileAvatarLink = staticCompositionLocalOf<ProfileAvatarLink?> { null }
 
 @Composable
-internal fun AvatarProfileLink(member: Member, enabled: Boolean = true, onClick: () -> Unit, content: @Composable (() -> Unit) -> Unit) {
+internal fun AvatarProfileLink(member: Member?, enabled: Boolean = true, onClick: () -> Unit, content: @Composable (() -> Unit) -> Unit) {
+    if (member == null) { content { if (enabled) onClick() }; return }
     val scene = LocalAvatarScene.current
     val transitions = LocalAvatarTransitions.current
     val instance = rememberSaveable { UUID.randomUUID().toString() }

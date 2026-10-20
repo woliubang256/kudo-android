@@ -129,7 +129,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
         DisposableEffect(Unit) { onDispose { statusBarStyle(null) } }
         val moreVisibility = remember { MutableTransitionState(false) }
         val detailsVisibility = remember(profile?.member?.id) { MutableTransitionState(false) }
-        val followsVisibility = remember { MutableTransitionState(false) }
+        val followsVisibility = remember { MutableTransitionState(state.showingFollowers != null) }
         LaunchedEffect(state.showingFollowers) { followsVisibility.targetState = state.showingFollowers != null }
         var selectedBadge by remember { mutableStateOf<UserBadge?>(null) }
         val badgeVisibility = remember { MutableTransitionState(false) }
@@ -244,10 +244,12 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
             state.followsError?.let { error -> item { ErrorState(error, { showFollows(state.showingFollowers == true) }, login) } }
             if (state.follows?.isEmpty() == true) item { Text("暂无公开用户", Modifier.padding(16.dp), fontSize = 14.sp) }
             items(state.follows.orEmpty(), key = Member::username) { member ->
-                Row(Modifier.fillMaxWidth().clickable { closeFollows(); openLink("https://linux.do/u/${android.net.Uri.encode(member.username)}") }.padding(12.dp),
+                AvatarProfileLink(member, onClick = { openLink("https://linux.do/u/${android.net.Uri.encode(member.username)}") }) { open ->
+                Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Avatar(member, 40.dp)
                     Column { Text(member.displayName, fontSize = 14.sp); Text("@${member.username}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
                 }
             }
             }

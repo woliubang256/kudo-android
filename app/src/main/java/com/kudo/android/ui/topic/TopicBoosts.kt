@@ -80,13 +80,15 @@ internal fun PostBoosts(post: Post, enabled: Boolean, user: (String) -> Unit, op
                     SiteEmoji(emoji.name, Modifier.fillMaxSize(), emoji.url)
                 }
             }
+            AvatarProfileLink(boost.author, enabled, { user(boost.author.username) }) { open ->
             Row(Modifier.heightIn(min = 40.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .055f), RoundedCornerShape(20.dp))
-                .clickable(enabled = enabled, role = Role.Button) { user(boost.author.username) }
+                .clickable(enabled = enabled, role = Role.Button, onClick = open)
                 .padding(horizontal = 8.dp, vertical = 7.dp).testTag("boost-${boost.id}"),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Avatar(boost.author, 22.dp, presentation = AvatarPresentation.PLAIN)
                 Text(article.text, Modifier.weight(1f, fill = false), inlineContent = emojis,
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             }
         }
     }

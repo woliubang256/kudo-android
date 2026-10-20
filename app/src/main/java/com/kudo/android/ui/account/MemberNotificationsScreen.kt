@@ -92,8 +92,7 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                     CompactAccountRow(Icons.Rounded.MailOutline, Color(0xFF6C83CA), "查看私信收件箱", privateMessages)
                 }
                 items(notices, key = { it.id }) { notice ->
-                    Row(Modifier.fillMaxWidth().background(if (notice.read) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = .8f))
-                        .clickable {
+                    AvatarProfileLink(notice.actor?.takeIf { notice.type == 800 && it.username.isNotBlank() && !it.username.equals(vm.user?.username, ignoreCase = true) }, onClick = {
                             vm.markRead(notice.id)
                             when {
                                 notice.type == 12 -> badges(notice.badgeId)
@@ -107,7 +106,9 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                                     website("https://linux.do/u/$username/notifications")
                                 }
                             }
-                        }.padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        }) { showNotice ->
+                    Row(Modifier.fillMaxWidth().background(if (notice.read) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = .8f))
+                        .clickable(onClick = showNotice).padding(horizontal = 16.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box {
                             if (notice.actor != null) Avatar(notice.actor, 36.dp) else Icon(Icons.Rounded.NotificationsNone, null, Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (notice.isSolved) Icon(Icons.Rounded.CheckBox, "话题已解决",
@@ -131,6 +132,7 @@ internal fun MemberNotificationsScreen(vm: AccountViewModel, login: () -> Unit, 
                             }
                             if (notice.time.isNotBlank()) Text(relativeTime(notice.time), fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                    }
                     }
                 }
                 if (vm.noticesLoading) item { LoadingRow() }

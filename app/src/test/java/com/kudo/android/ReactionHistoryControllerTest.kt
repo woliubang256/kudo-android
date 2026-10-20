@@ -74,4 +74,36 @@ class ReactionHistoryControllerTest {
         assertEquals(listOf("first", "second"), controller.state.history!!.users(null).map { it.member.username })
         controller.dismiss()
     }
+
+    @Test fun stoppingAProfileSourceRetainsItsHistoryAndSelection() = runTest {
+        val controller = ReactionHistoryController(this) { _, _ -> history("first") }
+        controller.open(post)
+        runCurrent()
+        controller.select("heart")
+        controller.stop()
+        assertEquals(post, controller.state.post)
+        assertEquals("first", controller.state.history!!.users(null).single().member.username)
+        assertEquals("heart", controller.state.reaction)
+        assertFalse(controller.state.loading)
+    }
+
+    @Test fun stoppingAnUnfinishedSourceRejectsLateResultsAndAllowsRetry() = runTest {
+        val pending = CompletableDeferred<Unit>()
+        var calls = 0
+        val controller = ReactionHistoryController(this) { _, _ ->
+            if (++calls == 1) withContext(NonCancellable) { pending.await() }
+            history("user$calls")
+        }
+        controller.open(post)
+        runCurrent()
+        controller.stop()
+        assertEquals(post, controller.state.post)
+        assertFalse(controller.state.loading)
+        pending.complete(Unit)
+        runCurrent()
+        assertNull(controller.state.history)
+        controller.retry()
+        runCurrent()
+        assertEquals("user2", controller.state.history!!.users(null).single().member.username)
+    }
 }

@@ -36,6 +36,13 @@ internal class ReactionHistoryController(private val scope: CoroutineScope, priv
         state = ReactionHistoryState()
     }
 
+    fun stop() {
+        generation++
+        request?.cancel()
+        request = null
+        state = state.copy(loading = false)
+    }
+
     fun select(reaction: String?) {
         if (reaction == null || state.history?.groups?.any { it.reaction == reaction } == true) {
             state = state.copy(reaction = reaction, visibleCount = 40)

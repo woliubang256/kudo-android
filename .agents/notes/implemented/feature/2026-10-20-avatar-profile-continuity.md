@@ -16,6 +16,10 @@ Status: implemented
 
 外层身份行通过 AvatarProfileLink 与内部 Avatar 共用来源键和点击回调，头像把实际显示的补全 Member 写回来源；点击名字或头像都从同一个实际头像出发，不共享整行。明确传入自身 onClick 的头像保持独立来源，禁用状态和空用户名不新增导航。普通非列表路由通过 avatarComposable 接入相同场景，不改变该路由原有过渡。
 
+原生主页入口覆盖话题顶部作者、普通回复作者、Boost、编辑历史、搜索与话题列表、聊天、个人中心与首页头像、主页互动用户、关注/粉丝和关注者通知。聊天与编辑历史使用头像场景路由；原生内容中的用户链接交给同一个 openUser，以便主页互动用户和关注列表携带 seed，WebView 内导航分流规则不改变。通知只在原本跳主页的 800 类型绑定来源，徽章和帖子通知仍执行原目标和标读操作；空目标及自己账号不猜测为其他用户。
+
+关注/粉丝列表与回应历史进入用户主页时保留来源面板，不先清空来源；返回恢复面板和原头像位置。回应历史 Host 放在话题条目的共享场景内，控制器由对应 TopicViewModel 持有，不再随全局当前路由变化而销毁。来源离开组合时 stop 取消请求、推进代次但保留帖子、筛选和已有历史；返回时仅重试没有历史且没有错误的未完成首读。默认未注入控制器的 Host 仍在跳转时关闭，以保持独立使用和既有测试契约。阻断底层阅读和实时订阅的范围保持包住完整话题内容。控制器的接口与名单上限仍由[回应历史](2026-10-18-reaction-history.md)约束。
+
 公开主页的三接口仍立即独立读取；完整资料到达前使用已知身份绘制只读头部，未知统计保持未知，不开放关注、私信、关注列表或资料操作。真实资料接管显示和权限，不把摘要当作完整资料。无真实资料且请求失败时显示已有错误页，不保留伪完整资料。
 
 ## Existing note audit
@@ -35,6 +39,12 @@ Status: implemented
 ## Testing
 
 实际 TopicTopBar 的整行点击首先复现未携带来源（artifacts/avatar-entry-repro-device.txt）。增加统一绑定并接入作者行后，原六项与新增作者进出真实像素用例共七项全部通过（11.293 秒，artifacts/avatar-entry-core-device.txt）。入口扩展分为统一绑定、话题相关、用户列表与聊天通知三个单元；引用头像折叠引用、回复预览头像和参与讨论头像不属于既有个人主页入口，不改变它们的点击语义。
+
+扩展测试使用真实作者、回复、Boost、编辑历史、主页互动用户、关注列表和回应历史控件，分别验证进出真实像素的中间位置、返回来源和一次图片读取；聊天验证既有可点击 Avatar 配合普通路由场景。作者、回复、Boost 和历史面板使用话题详情路由包装，而不是只在列表场景测试。首次 15 项中，Boost 夹具用未合并树同时找到了隐藏测量槽与已摆放节点，改用实际可访问节点定位后通过，不为测试移除生产测量槽。
+
+最终 15 项头像动画与状态用例，加两项关注通知的原生主页/标读/缺失及自身目标回归，共 17 项真机全部通过（30.588 秒，artifacts/avatar-entry-focused-device.txt）。相关 44 项 JVM 全部通过，包括新增 stop 保留历史和拒绝迟到响应两项（artifacts/avatar-entry-final-build.txt）。Debug、测试 APK、R8 Release 和 Lint 通过（artifacts/avatar-entry-release-build.txt）。扩大回归 47 项中有两项失败（artifacts/avatar-entry-final-device.txt）：一次命令误写不存在的 FollowNotificationUiTest，改为实际 MemberAccountUiTest 两项后通过；既有 TopicBoostsUiTest.postActionsOnlyShowUsefulControlsAndReplyStillTargetsItsFloor 仍寻找文字“回复”，而改动前源码就使用带楼层描述的图标按钮，本次未修改该互动控件或断言，不能宣称扩大回归全绿。
+
+优化构建在同一 RMX2202 真机只读检查实际 LvCupid 帖子的作者头像→公开主页→返回帖子，artifacts/avatar-entry/topic-profile-return.mp4 覆盖完整过程，已查看 topic-profile-return.png、topic-avatar-opening-full.png 和 topic-avatar-return-full.png：头像保持实际图片，进入时移动放大，返回恢复到作者栏，资料异步到达、中文可读；没有发送关注、私信或回应。0.3.0 / 3001 正式包另存 artifacts/avatar-entry/kodo_0.3.0_release_arm64-v8a.apk，已核对正式证书；手机覆盖同份 R8 产物的既有开发签名版本 kodo_0.3.0_device_preserve-data.apk，版本和 firstInstallTime 保持不变，未卸载或清数据。
 
 先用真机夹具证明同一头像经过 35/40/60dp 显示会读取三次而非一次（artifacts/avatar-continuity-repro-device.txt）。新增三项缓存测试验证一次读取、512px 请求未完成时显示真实的 256px 缓存像素、资源地址变更重新读取；均通过（artifacts/avatar-cache-final-device.txt）。该轮旧用例 collapsingTheHomeHeaderStopsItsAnimationUntilItIsVisibleAgain 的下滑恢复首页头部断言失败，未修改其滚动逻辑，也未证明它在改动前通过。
 

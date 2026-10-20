@@ -37,12 +37,17 @@ internal val LocalReactionHistory = staticCompositionLocalOf<(Post) -> Unit> { {
 
 @Composable
 internal fun TopicReactionHistoryHost(accountKey: Any?, screenKey: Any?, glass: GlassMode,
-    load: suspend (Post, Int) -> ReactionHistory, user: (String) -> Unit, content: @Composable () -> Unit) {
+    load: suspend (Post, Int) -> ReactionHistory, user: (String) -> Unit,
+    retainedController: ReactionHistoryController? = null, content: @Composable () -> Unit) {
     val scope = rememberCoroutineScope()
     val currentLoad by rememberUpdatedState(load)
-    val controller = remember(accountKey, screenKey) { ReactionHistoryController(scope) { post, page -> currentLoad(post, page) } }
-    DisposableEffect(controller) { onDispose { controller.dismiss() } }
-    val visibility = remember(controller) { MutableTransitionState(false) }
+    val controller = retainedController ?: remember(accountKey, screenKey) { ReactionHistoryController(scope) { post, page -> currentLoad(post, page) } }
+    DisposableEffect(controller) { onDispose { if (retainedController == null) controller.dismiss() else controller.stop() } }
+    LaunchedEffect(controller) {
+        val state = controller.state
+        if (state.post != null && state.history == null && state.error == null && !state.loading) controller.retry()
+    }
+    val visibility = remember(controller) { MutableTransitionState(controller.state.post != null) }
     val current = controller.state
     var retained by remember(controller) { mutableStateOf(current) }
     SideEffect { if (current.post != null) retained = current }
@@ -60,7 +65,7 @@ internal fun TopicReactionHistoryHost(accountKey: Any?, screenKey: Any?, glass: 
         CommunitySheet(visibility, "点赞与回应", controller::dismiss, showTitle = false, scrollContent = false,
             maxHeightFraction = .78f, backdrop = backdrop, glass = glass) {
             TopicReactionHistoryContent(state, controller::select, controller::more, controller::retry,
-                user = { controller.dismiss(); user(it) }, enabled = visibility.targetState)
+                user = { if (retainedController == null) controller.dismiss(); user(it) }, enabled = visibility.targetState)
         }
     }
 }
@@ -108,7 +113,8 @@ private fun ReactionHistoryUsersPage(history: ReactionHistory?, reaction: String
     val userTagSuffix = if (active) "" else "-${reaction ?: "all"}"
     LazyColumn(modifier.testTag("reaction-history-users$userTagSuffix"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(users.take(state.visibleCount), key = { it.member.username.lowercase(java.util.Locale.ROOT) }) { entry ->
-            Row(Modifier.fillMaxWidth().clip(CircleShape).clickable(enabled = enabled, role = Role.Button) { user(entry.member.username) }
+            AvatarProfileLink(entry.member, enabled, { user(entry.member.username) }) { open ->
+            Row(Modifier.fillMaxWidth().clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = open)
                 .testTag("reaction-history-user-${entry.member.username}$userTagSuffix").padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Avatar(entry.member, 36.dp, presentation = AvatarPresentation.PLAIN)
@@ -120,6 +126,7 @@ private fun ReactionHistoryUsersPage(history: ReactionHistory?, reaction: String
                 if (entry.createdAt.isNotBlank()) Text(relativeTime(entry.createdAt), style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 SiteEmoji(entry.reaction, Modifier.size(22.dp))
+            }
             }
         }
         if (active && state.loading) item { LoadingRow() }
