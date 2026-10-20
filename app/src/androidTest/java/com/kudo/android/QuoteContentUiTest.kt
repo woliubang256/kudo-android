@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -159,8 +161,10 @@ class QuoteContentUiTest {
 
     @Test fun shortQuoteHeightFollowsItsTextWithoutAnExtraLine() {
         var markHeight = 0.dp
+        var indent = 0f
         compose.setContent { KudoTheme(DisplaySettings()) {
             markHeight = with(LocalDensity.current) { (MaterialTheme.typography.bodyLarge.fontSize * .8f).toDp() }
+            indent = with(LocalDensity.current) { (MaterialTheme.typography.bodyLarge.fontSize * 2f).toPx() }
             Column(Modifier.fillMaxSize().padding(16.dp).testTag("quote-fixture")) {
                 RichContent("<blockquote><p>老家 潍坊</p></blockquote>", {}, {})
             }
@@ -171,12 +175,15 @@ class QuoteContentUiTest {
         assertEquals(text.height, region.height, 1f)
         compose.onNodeWithTag("article-quote-mark-root-0", useUnmergedTree = true)
             .assertHeightIsEqualTo(markHeight).assertWidthIsEqualTo(markHeight * (36f / 28f))
+        assertEquals(indent, firstLineIndent("老家 潍坊"), 1f)
     }
 
     @Test fun shortQuoteAtLargeFontKeepsTheVectorInsideItsTextHeight() {
         var markHeight = 0.dp
+        var indent = 0f
         compose.setContent { KudoTheme(DisplaySettings(theme = com.kudo.android.data.ThemeMode.DARK, fontScale = 1.3f)) {
             markHeight = with(LocalDensity.current) { (MaterialTheme.typography.bodyLarge.fontSize * .8f).toDp() }
+            indent = with(LocalDensity.current) { (MaterialTheme.typography.bodyLarge.fontSize * 2f).toPx() }
             Column(Modifier.fillMaxSize().padding(16.dp).testTag("quote-fixture")) {
                 RichContent("<blockquote><p>老家 潍坊</p></blockquote>", {}, {})
             }
@@ -190,6 +197,7 @@ class QuoteContentUiTest {
         assertEquals(text.height, region.height, 1f)
         assertTrue(mark.left >= region.left && mark.right <= region.right)
         assertTrue(mark.top >= region.top && mark.bottom <= region.bottom)
+        assertEquals(indent, firstLineIndent("老家 潍坊"), 1f)
         compose.onNodeWithText("“", useUnmergedTree = true).assertDoesNotExist()
     }
 
@@ -205,6 +213,7 @@ class QuoteContentUiTest {
         val region = compose.onNodeWithTag("article-quote-root-0").fetchSemanticsNode().boundsInRoot
         assertEquals(with(compose.density) { 12.dp.toPx() }, second.top - first.bottom, 1f)
         assertEquals(second.bottom - first.top, region.height, 1f)
+        assertEquals(0f, firstLineIndent("下一个段落"), 1f)
         compose.onAllNodesWithTag("article-quote-mark-root-0", useUnmergedTree = true).assertCountEquals(1)
         capture("quote-paragraphs.png")
     }
@@ -243,6 +252,14 @@ class QuoteContentUiTest {
         compose.onNodeWithText("电子称重勺").assertIsDisplayed()
         compose.onNodeWithTag("article-image-article-1").performClick()
         compose.runOnIdle { assertEquals(1, gallery.session!!.index) }
+    }
+
+    private fun firstLineIndent(text: String): Float {
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(text, useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
+            assertTrue(it(layouts))
+        }
+        return layouts.single().getBoundingBox(0).left
     }
 
     private fun capture(name: String) {

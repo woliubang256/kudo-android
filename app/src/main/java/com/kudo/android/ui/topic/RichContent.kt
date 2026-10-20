@@ -643,7 +643,7 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                 if (path !in collapsed) {
                     Box(Modifier.fillMaxWidth()) {
                         ArticleBlocks(block.blocks, path, collapsed, toggle, onLink, linkHandler, poll, onImage,
-                            firstLineIndent = if (block.source == null) 48.sp else TextUnit.Unspecified,
+                            firstLineIndent = if (block.source == null) MaterialTheme.typography.bodyLarge.fontSize * 2f else TextUnit.Unspecified,
                             image = image)
                         if (block.source == null) {
                             val density = LocalDensity.current
