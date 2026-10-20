@@ -10,6 +10,118 @@ import org.junit.Test
 class PostBoostsTest {
     private val post = Post(12, 8, Member(2, "user", "用户", ""), "<p>正文</p>", "", 2, false, null, 2, true, canBoost = true)
     private val json = """{"id":8,"cooked":"<p>加油<img class=\"emoji\" alt=\":grin:\" src=\"/grin.png\"></p>","user":{"id":3,"username":"booster","avatar_template":"/{size}.png"}}"""
+    private val boostedPost get() = post.copy(boosts = DiscourseParser.post(JSONObject("""{"id":12,"boosts":[$json]}""")).boosts)
+
+    private fun reactionJson(reaction: String?) = JSONObject("""{"id":12,"post_number":8,"user_id":2,"username":"user",
+        "cooked":"<p>正文</p>","actions_summary":[{"id":2,"count":27,"acted":${reaction == "heart"},"can_act":true,"can_undo":true}],
+        "reactions":[{"id":"heart","type":"emoji","count":27}],"reaction_users_count":29,
+        "current_user_reaction":${if (reaction == null) "null" else """{"id":"$reaction","type":"emoji","can_undo":true}"""}}""")
+
+    @Test fun likingUnlikingAndChangingReactionPreserveOmittedBoostFields() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"csrf":"token"}"""))
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            var current = boostedPost.copy(reactionsAvailable = true)
+            for (reaction in listOf("heart", null, "clap")) {
+                server.enqueue(MockResponse().setBody(reactionJson(reaction).toString()))
+                current = if (reaction == "clap") repository.react(current, reaction) else repository.like(current)
+                assertEquals(reaction, current.activeReaction)
+                assertEquals(29, current.reactionCount)
+                assertEquals(boostedPost.boosts, current.boosts)
+                assertTrue(current.canBoost)
+            }
+            assertEquals(4, server.requestCount)
+        }
+    }
+
+    @Test fun coreLikeAndUnlikePreserveBoostsWithoutTheReactionsPlugin() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"csrf":"token"}"""))
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            var current = boostedPost
+            for (reaction in listOf("heart", null)) {
+                val response = reactionJson(reaction).apply {
+                    remove("reactions"); remove("current_user_reaction"); remove("reaction_users_count")
+                }
+                server.enqueue(MockResponse().setBody(response.toString()))
+                current = repository.like(current)
+                assertEquals(reaction, current.activeReaction)
+                assertEquals(boostedPost.boosts, current.boosts)
+                assertTrue(current.canBoost)
+            }
+            assertEquals("/session/csrf", server.takeRequest().path)
+            val like = server.takeRequest()
+            assertEquals("POST", like.method); assertEquals("/post_actions", like.path)
+            val unlike = server.takeRequest()
+            assertEquals("DELETE", unlike.method); assertEquals("/post_actions/12?post_action_type_id=2", unlike.path)
+        }
+    }
+
+    @Test fun reactionRefetchPreservesOmittedBoostFields() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"csrf":"token"}"""))
+            server.enqueue(MockResponse().setBody("{}"))
+            server.enqueue(MockResponse().setBody(reactionJson("heart").toString()))
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            val updated = repository.like(boostedPost.copy(reactionsAvailable = true))
+            assertEquals("heart", updated.activeReaction)
+            assertEquals(boostedPost.boosts, updated.boosts)
+            assertTrue(updated.canBoost)
+            server.takeRequest(); server.takeRequest()
+            assertEquals("/posts/12.json", server.takeRequest().path)
+        }
+    }
+
+    @Test fun explicitBoostFieldsOverridePreviousValuesIndependently() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"csrf":"token"}"""))
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            val initial = boostedPost.copy(reactionsAvailable = true)
+            server.enqueue(MockResponse().setBody(reactionJson("heart").put("boosts", org.json.JSONArray()).toString()))
+            val cleared = repository.like(initial)
+            assertTrue(cleared.boosts.isEmpty()); assertTrue(cleared.canBoost)
+            server.enqueue(MockResponse().setBody(reactionJson("heart").put("can_boost", false).toString()))
+            val forbidden = repository.like(initial)
+            assertEquals(initial.boosts, forbidden.boosts); assertFalse(forbidden.canBoost)
+            server.enqueue(MockResponse().setBody("{}"))
+            server.enqueue(MockResponse().setBody(reactionJson("heart")
+                .put("boosts", org.json.JSONArray()).put("can_boost", false).toString()))
+            val refreshed = repository.like(initial)
+            assertTrue(refreshed.boosts.isEmpty()); assertFalse(refreshed.canBoost)
+        }
+    }
+
+    @Test fun aReactionCannotEnableBoostWhenThePermissionWasMissing() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"csrf":"token"}"""))
+            server.enqueue(MockResponse().setBody(reactionJson("heart").toString()))
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            val updated = repository.like(boostedPost.copy(canBoost = false, reactionsAvailable = true))
+            assertEquals(boostedPost.boosts, updated.boosts)
+            assertFalse(updated.canBoost)
+        }
+    }
+
+    @Test fun boostAfterLikingPreservesTheConfirmedReaction() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"csrf":"token"}"""))
+            server.enqueue(MockResponse().setBody(reactionJson("heart").toString()))
+            server.enqueue(MockResponse().setBody(JSONObject(json).put("id", 9).toString()))
+            val repository = CommunityRepository(DiscourseClient(NoCookies, server.url("/")))
+            val liked = repository.like(boostedPost.copy(reactionsAvailable = true))
+            val boosted = repository.boost(liked, "加油", emptySet())
+            assertEquals(liked.copy(boosts = boosted.boosts), boosted)
+            assertEquals(listOf(8, 9), boosted.boosts.map(PostBoost::id))
+            assertEquals("heart", boosted.activeReaction)
+            assertEquals(29, boosted.reactionCount)
+        }
+    }
 
     @Test fun countsWebsiteEmojiSequencesAndUtf16InsteadOfAllGraphemes() {
         assertEquals(BoostCount(2, 0), BoostRules.count(" 中文 ", emptySet()))

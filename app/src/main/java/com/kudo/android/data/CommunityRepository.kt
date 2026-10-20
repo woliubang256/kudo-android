@@ -117,9 +117,13 @@ class CommunityRepository(val client: DiscourseClient) {
             if (post.liked) client.write("DELETE", "/post_actions/${post.id}?post_action_type_id=2")
             else client.write("POST", "/post_actions", mapOf("id" to post.id.toString(), "post_action_type_id" to "2"))
         }
-        val updated = if (result.optInt("id") == post.id && result.has("post_number")) DiscourseParser.post(result) else post(post.id)
+        val confirmed = if (result.optInt("id") == post.id && result.has("post_number")) result else client.get("/posts/${post.id}.json")
+        val updated = DiscourseParser.post(confirmed)
         if (updated.id != post.id) throw ApiFailure(FailureKind.SERVER, "回应状态需刷新确认")
-        return updated
+        return updated.copy(
+            boosts = if (confirmed.has("boosts")) updated.boosts else post.boosts,
+            canBoost = if (confirmed.has("can_boost")) updated.canBoost else post.canBoost,
+        )
     }
 
     suspend fun follow(member: Member): Boolean {
