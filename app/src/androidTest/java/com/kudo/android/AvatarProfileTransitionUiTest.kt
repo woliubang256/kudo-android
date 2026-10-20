@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -37,6 +38,8 @@ import com.kudo.android.ui.account.PublicProfilePage
 import com.kudo.android.ui.account.PublicProfileState
 import com.kudo.android.ui.account.publicSummary
 import com.kudo.android.ui.components.*
+import com.kudo.android.ui.feed.FeedScreen
+import com.kudo.android.ui.feed.FeedState
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.topic.*
 import okio.Buffer
@@ -46,6 +49,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 class AvatarProfileTransitionUiTest {
@@ -65,14 +69,18 @@ class AvatarProfileTransitionUiTest {
         val bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.GREEN) }
         val bytes = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
         bitmap.recycle()
+        val background = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF202060.toInt()) }
+        val backgroundBytes = ByteArrayOutputStream().also { background.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        background.recycle()
         loader = ImageLoader.Builder(context).components {
             add(object : Fetcher.Factory<Uri> {
                 override fun create(data: Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
                     if (!data.toString().startsWith("https://avatar-transition.test/")) return null
                     return object : Fetcher {
                         override suspend fun fetch(): SourceFetchResult {
-                            requests.incrementAndGet()
-                            return SourceFetchResult(ImageSource(Buffer().write(bytes), options.fileSystem), "image/png", DataSource.MEMORY)
+                            val isBackground = data.toString().endsWith("/background.png")
+                            if (!isBackground) requests.incrementAndGet()
+                            return SourceFetchResult(ImageSource(Buffer().write(if (isBackground) backgroundBytes else bytes), options.fileSystem), "image/png", DataSource.MEMORY)
                         }
                     }
                 }
@@ -83,7 +91,7 @@ class AvatarProfileTransitionUiTest {
 
     @After fun restore() { SingletonImageLoader.setUnsafe(original); loader.shutdown() }
 
-    private fun showNavigation(duplicate: Boolean = false, topicAuthor: Boolean = false, entryPoint: String = "") {
+    private fun showNavigation(duplicate: Boolean = false, topicAuthor: Boolean = false, entryPoint: String = "", realProfile: Boolean = false, realFeed: Boolean = false) {
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
             val nav = rememberNavController()
             val avatars = remember(nav) { AvatarTransitions(nav) }
@@ -99,7 +107,10 @@ class AvatarProfileTransitionUiTest {
                     popExitTransition = { fadeOut(tween(220)) }) {
                     val source: @Composable androidx.compose.animation.AnimatedContentScope.(androidx.navigation.NavBackStackEntry) -> Unit = {
                         Box(Modifier.fillMaxSize().background(Color.White)) {
-                            if (entryPoint.isNotEmpty()) EntryPoint(entryPoint, avatars, history)
+                            if (realFeed) FeedScreen(FeedState(topics = listOf(Topic(1, "头像来源帖子", "", member, 1,
+                                emptyList(), 0, 0, 0, "", "")), loading = false), null, {}, {}, {}, {},
+                                { avatars.openUser(it) }, {}, {}, {})
+                            else if (entryPoint.isNotEmpty()) EntryPoint(entryPoint, avatars, history)
                             else if (topicAuthor) TopicTopBar(TopicState(detail = TopicDetail(1, "头像入口", 1, emptyList(), emptyList(), false, author = member)),
                                 true, {}, { avatars.openUser(it) }, {}, {})
                             else if (sourceVisible) Avatar(member, 35.dp, Modifier.offset(160.dp, 450.dp).testTag("avatar-source")) {
@@ -111,12 +122,19 @@ class AvatarProfileTransitionUiTest {
                         }
                     }
                     if (entryPoint == "chat" || entryPoint == "history") avatarComposable("list", content = source)
-                    else if (topicAuthor || entryPoint in listOf("reply", "boost", "reaction")) topicDetailComposable("list", emptyList(), content = source)
+                    else if (topicAuthor || entryPoint in listOf("reply", "topicScreen", "boost", "reaction")) topicDetailComposable("list", emptyList(), content = source)
                     else topicListComposable("list", content = source)
                     topicListComposable("user/{username}") { entry ->
-                        Box(Modifier.fillMaxSize().background(Color(0xFF202060))) {
-                            val initial = avatars.seed(entry)?.member ?: member
-                            Avatar(initial, 60.dp, Modifier.offset(20.dp, 80.dp).testTag("avatar-target"), sharedProfileAvatar = true)
+                        val initial = avatars.seed(entry)?.member ?: member
+                        if (realProfile) PublicProfilePage(PublicProfileState(
+                            profile = PublicProfile(initial, 1, 1, "", "", "", "", "", false), loading = false,
+                            cardBackground = "https://avatar-transition.test/background.png", cardLoading = false,
+                            summary = ProfileSummary(emptyMap(), emptyList(), emptyList(), emptyList(), emptyMap(), emptyList(), emptyList()),
+                            summaryLoading = false), 9, { nav.popBackStack() }, {}, {}, {}, {}, {})
+                        else {
+                            Box(Modifier.fillMaxSize().background(Color(0xFF202060))) {
+                                Avatar(initial, 60.dp, Modifier.offset(20.dp, 80.dp).testTag("avatar-target"), sharedProfileAvatar = true)
+                            }
                         }
                     }
                     composable("child") { Text("子页面") }
@@ -132,6 +150,12 @@ class AvatarProfileTransitionUiTest {
         val post = Post(2, 2, member, "<p>回复正文</p>", "", 0, false, null, null, true)
         val detail = TopicDetail(1, "帖子", 1, listOf(post), listOf(post.id), false)
         when (kind) {
+            "topicScreen" -> {
+                val original = post.copy(id = 1, number = 1, author = member.copy(id = 90, username = "original", name = "原帖作者", avatar = ""),
+                    cooked = List(6) { "<p>这是主帖正文，用于恢复滚动位置。</p>" }.joinToString(""))
+                val page = detail.copy(posts = listOf(original, post), stream = listOf(1, 2), author = original.author)
+                TopicScreen(TopicState(detail = page, loading = false), GlassMode.LIQUID, {}, {}, {}, {}, {}, {}, {}, open, {}, {}, {})
+            }
             "reply" -> TopicPost(post, detail, TopicState(detail = detail, loading = false), true, {}, {}, {}, open, {}, {}, {})
             "boost" -> Box(Modifier.padding(top = 400.dp)) {
                 PostBoosts(post.copy(boosts = listOf(PostBoost(10, member, "<p>支持一下</p>"))), true, open, {})
@@ -220,6 +244,72 @@ class AvatarProfileTransitionUiTest {
         val returned = greenBounds()
         assertEquals(source.top, returned.top, 3f)
         assertEquals("List and profile must share the same loaded image", 1, requests.get())
+    }
+
+    @Test fun collapsedProfileToolbarBackMovesTheLoadedAvatarToItsSource() = assertRealProfileReturn(collapsed = true, systemBack = false)
+
+    @Test fun collapsedProfileSystemBackMovesTheLoadedAvatarToItsSource() = assertRealProfileReturn(collapsed = true, systemBack = true)
+
+    @Test fun expandedRealProfileBackMovesTheLoadedAvatarToItsSource() = assertRealProfileReturn(collapsed = false, systemBack = false)
+
+    @Test fun collapsedProfileReturnsToTheRealFeedAvatar() = assertRealProfileReturn(collapsed = true, systemBack = false, realFeed = true)
+
+    @Test fun collapsedProfileReturnsToTheReplyAvatar() = assertRealProfileReturn(collapsed = true, systemBack = false, entryPoint = "reply")
+
+    @Test fun collapsedProfileReturnsToTheScrolledTopicReplyAvatar() = assertRealProfileReturn(collapsed = true, systemBack = false, entryPoint = "topicScreen")
+
+    private fun assertRealProfileReturn(collapsed: Boolean, systemBack: Boolean, realFeed: Boolean = false, entryPoint: String = "") {
+        showNavigation(realProfile = true, realFeed = realFeed, entryPoint = entryPoint)
+        if (entryPoint == "topicScreen") compose.onNodeWithTag("topic-posts").performTouchInput {
+            swipeUp(startY = height * .8f, endY = height * .65f, durationMillis = 600)
+        }
+        val sourceNode = if (realFeed || entryPoint.isNotEmpty()) compose.onNodeWithContentDescription("${member.displayName}的头像") else compose.onNodeWithTag("avatar-source")
+        val source = sourceNode.fetchSemanticsNode().boundsInRoot
+        sourceNode.performTouchInput { click() }
+        compose.waitForIdle()
+        if (collapsed) {
+            repeat(2) { compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput { swipeUp(durationMillis = 600) } }
+            val toolbar = compose.onNodeWithTag("profile-toolbar").fetchSemanticsNode().boundsInRoot
+            val viewport = compose.onNodeWithTag("public-profile-header-viewport").fetchSemanticsNode().boundsInRoot
+            assertEquals("The real profile must be fully collapsed before returning", toolbar.bottom, viewport.bottom, 3f)
+            compose.onNodeWithTag("profile-toolbar-avatar", useUnmergedTree = true).assertIsDisplayed()
+            compose.mainClock.advanceTimeBy(1500)
+            compose.waitForIdle()
+        }
+        val target = greenBounds()
+        val origin = entryPoint.ifEmpty { if (realFeed) "feed" else "fixed" }
+        val scenario = "$origin-${if (collapsed) "collapsed" else "expanded"}-${if (systemBack) "system" else "toolbar"}"
+        capture("profile-return-$scenario-before.png")
+        compose.mainClock.autoAdvance = false
+        if (systemBack) compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        else compose.onNodeWithContentDescription("返回").performClick()
+        compose.mainClock.advanceTimeBy(48)
+        val movement = source.center - target.center
+        assertTrue("The first return frames must start from the currently visible profile avatar",
+            (greenBounds().center - target.center).getDistance() < movement.getDistance() * .1f + 8f)
+        compose.mainClock.advanceTimeBy(96)
+        val returning = greenBounds()
+        capture("profile-return-$scenario-moving.png")
+        if (movement.getDistance() > 20f) {
+            val progress = ((returning.center - target.center).x * movement.x + (returning.center - target.center).y * movement.y) /
+                movement.getDistanceSquared()
+            assertTrue("The $scenario avatar must move continuously from $target towards $source, not disappear or jump: $returning", progress > .02f && progress < .98f)
+        } else {
+            assertEquals("Overlapping toolbar avatars must remain visible", source.center.x, returning.center.x, 10f)
+            assertEquals(source.center.y, returning.center.y, 10f)
+        }
+        compose.mainClock.advanceTimeBy(600)
+        val returned = greenBounds()
+        assertEquals(source.top, returned.top, 3f)
+        assertEquals(source.left, returned.left, 3f)
+        assertEquals("Returning from a real profile must reuse the loaded avatar", 1, requests.get())
+    }
+
+    private fun capture(name: String) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.getExternalFilesDir(null), name).outputStream().use {
+            compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
     }
 
     @Test fun topicAuthorRowSharesItsAvatarWhenTheParentHandlesTheClick() {
