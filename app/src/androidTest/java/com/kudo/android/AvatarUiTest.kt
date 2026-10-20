@@ -44,6 +44,7 @@ import com.kudo.android.ui.topic.TopicScreen
 import com.kudo.android.ui.topic.TopicState
 import com.kudo.android.ui.topic.UserSignature
 import okio.Buffer
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -62,6 +63,7 @@ class AvatarUiTest {
     private lateinit var loader: ImageLoader
     private val requested = CopyOnWriteArrayList<String>()
     private val rendered = CopyOnWriteArrayList<Pair<String, Drawable>>()
+    private var highResolutionGate: CompletableDeferred<Unit>? = null
     private val staticUrl = "https://avatar.test/static.png"
     private val flair = AvatarFlair("测试资质", "https://avatar.test/badge.gif")
     private val status = UserStatus("bili_118", "测试状态")
@@ -79,6 +81,7 @@ class AvatarUiTest {
                     return object : Fetcher {
                         override suspend fun fetch(): SourceFetchResult {
                             requested += url
+                            if (url.contains("/512/")) highResolutionGate?.await()
                             if (url.contains("broken")) throw IOException("fixture image unavailable")
                             val name = when {
                                 url.contains("header") || url.contains("animated.png") -> "three-frame.png"
@@ -113,6 +116,59 @@ class AvatarUiTest {
         val cache = remember { AvatarMetadataCache(scope, { emptyList() }, { mapOf("bili_118" to "https://avatar.test/custom.gif") }) }
         DisposableEffect(cache) { onDispose { cache.close() } }
         KudoTheme(settings) { CompositionLocalProvider(LocalAvatarMetadata provides cache, content = content) }
+    }
+
+    @Test fun aLoadedListAvatarIsReusedByPostAndProfileSizes() {
+        var page by mutableIntStateOf(0)
+        val sameMember = member.copy(avatar = "https://avatar.test/{size}/static.png", flair = null, status = null)
+        compose.setContent {
+            Content {
+                key(page) {
+                    Avatar(sameMember, listOf(35.dp, 40.dp, 60.dp)[page], Modifier.testTag("reused-avatar"))
+                }
+            }
+        }
+        compose.waitUntil(5000) { rendered.isNotEmpty() }
+        compose.runOnIdle { page = 1 }
+        compose.waitForIdle()
+        compose.runOnIdle { page = 2 }
+        compose.waitForIdle()
+        val requests = requested.filter { it.endsWith("/static.png") }
+        assertEquals("All ordinary avatar sizes must reuse the loaded list image", 1, requests.size)
+        assertEquals("https://avatar.test/256/static.png", requests.single())
+        val pixels = compose.onNodeWithTag("reused-avatar").captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("The profile avatar must still show the loaded red fixture", center.red > .7f && center.green < .5f)
+    }
+
+    @Test fun highResolutionAvatarKeepsTheLoadedImageWhileWaiting() {
+        var large by mutableStateOf(false)
+        highResolutionGate = CompletableDeferred()
+        val sameMember = member.copy(avatar = "https://avatar.test/{size}/static.png", flair = null, status = null)
+        compose.setContent { Content {
+            key(large) { Avatar(sameMember, if (large) 180.dp else 35.dp, Modifier.testTag("high-resolution-avatar")) }
+        } }
+        compose.waitUntil(5000) { rendered.any { it.first.contains("/256/") } }
+        compose.runOnIdle { large = true }
+        compose.waitUntil(5000) { requested.any { it.contains("/512/") } }
+        val pixels = compose.onNodeWithTag("high-resolution-avatar").captureToImage().toPixelMap()
+        val center = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("The cached image must remain visible while the larger request is suspended",
+            center.red > .7f && center.green < .5f)
+        highResolutionGate?.complete(Unit)
+        compose.waitUntil(5000) { rendered.any { it.first.contains("/512/") } }
+    }
+
+    @Test fun changingTheAvatarAssetDoesNotReuseAnOldIdentityKey() {
+        var updated by mutableStateOf(false)
+        compose.setContent { Content {
+            Avatar(member.copy(avatar = "https://avatar.test/${if (updated) "updated/" else ""}{size}/static.png",
+                flair = null, status = null), 35.dp)
+        } }
+        compose.waitUntil(5000) { rendered.isNotEmpty() }
+        compose.runOnIdle { updated = true }
+        compose.waitUntil(5000) { rendered.any { it.first.contains("/updated/") } }
+        assertEquals(2, requested.count { it.endsWith("/static.png") })
     }
 
     @Test fun ownerHasRoundedSquareOthersHaveCirclesAndBadgeIsNotClipped() {

@@ -24,6 +24,7 @@ internal fun AvatarImage(
     animate: Boolean,
     modifier: Modifier = Modifier,
     cacheKey: String? = null,
+    placeholderCacheKey: String? = null,
     fallbackUrl: String? = null,
     contentScale: ContentScale = ContentScale.Crop,
     onLoaded: (Boolean) -> Unit = {},
@@ -37,10 +38,11 @@ internal fun AvatarImage(
     val source = if (primaryFailed) fallbackUrl else url ?: fallbackUrl
     var loaded by remember(source) { mutableStateOf(false) }
     var animation by remember(source) { mutableStateOf<Animatable?>(null) }
-    val request = remember(context, source, pixels, cacheKey) {
+    val request = remember(context, source, pixels, cacheKey, placeholderCacheKey, primaryFailed) {
         source?.let {
-            val stableKey = cacheKey?.let { key -> "$key@$pixels" }
+            val stableKey = cacheKey?.takeUnless { primaryFailed }?.let { key -> "$key@$pixels" }
             ImageRequest.Builder(context).data(it).size(pixels).apply {
+                if (placeholderCacheKey != null) placeholderMemoryCacheKey(placeholderCacheKey)
                 if (stableKey != null) {
                     memoryCacheKey(stableKey)
                     diskCacheKey(stableKey)

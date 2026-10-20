@@ -65,6 +65,9 @@ internal fun memberNameDecorations(member: Member, now: Instant): List<AvatarDec
 
 internal val LocalAvatarMetadata = staticCompositionLocalOf<AvatarMetadataCache?> { null }
 
+internal fun avatarCacheKey(member: Member): String? =
+    member.animatedAvatar.ifBlank { member.avatar }.let(::mediaUrl)
+
 @Composable
 internal fun AvatarEnvironment(repository: CommunityRepository, accountId: Int?, content: @Composable () -> Unit) {
     val parentScope = rememberCoroutineScope()
@@ -105,7 +108,8 @@ fun Avatar(
     }
     val decoration = avatarDecoration(shown, presentation, now)
     val shape = if (shown?.isSiteOwner == true) RoundedCornerShape(percent = 10) else CircleShape
-    val pixels = with(LocalDensity.current) { size.roundToPx().coerceIn(24, 512) }
+    val displayPixels = with(LocalDensity.current) { size.roundToPx() }
+    val pixels = if (displayPixels <= 256) 256 else 512
     val staticUrl = shown?.avatar?.replace("{size}", pixels.toString())?.let(::mediaUrl)
     val animatedUrl = shown?.animatedAvatar?.let(::mediaUrl)
     val label = shown?.let { "${it.displayName}的头像" } ?: "用户头像"
@@ -117,6 +121,8 @@ fun Avatar(
         AvatarImage(animatedUrl ?: staticUrl, fallbackUrl = staticUrl, pixels = pixels, animate = active,
             modifier = Modifier.fillMaxSize().clip(shape).background(LogoYellow.copy(alpha = 0.22f))) {
             Text(shown?.displayName?.take(1)?.uppercase() ?: "DO", Modifier.clearAndSetSemantics {},
+            cacheKey = shown?.let(::avatarCacheKey),
+            placeholderCacheKey = shown?.let(::avatarCacheKey)?.let { "$it@256" },
                 color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.34f).sp)
         }
         if (shown != null && decoration != null) {

@@ -18,7 +18,7 @@ Avatar 的展示场景显式区分账户入口和公开内容，不能用“是�
 
 话题详情楼主和完整回复同样使用 PUBLIC 保留头像挂件。昵称后仅显示未由头像展示的有效装饰，具体去重和位置验证见[头像挂件与昵称图标分工](../bug-fix/2026-10-11-topic-avatar-name-decorations.md)；不以消除重复为由把头像挂件迁移到昵称后。
 
-图片优先使用 animated_avatar，失败回退 avatar_template。按内容识别格式，不以 .png 后缀判断；APNG 需要额外解码能力。动画只在前台可见时播放，离开组合或退到后台后停止；资质动图复用同一能力。
+图片优先使用 animated_avatar，失败回退 avatar_template。普通头像请求统一为 256px，超过时使用 512px，不按每个 dp 尺寸生成不同 URL；缓存键包含实际资产模板或动图地址和请求尺寸，避免同一头像在列表、楼层、主页重新读取。较大头像及公开主页背景以同一资产的 256px 内存项占位，高清在后台接管；资源变化不复用旧图，动图失败的静态回退不污染动图缓存键。按内容识别格式，不以 .png 后缀判断；APNG 需要额外解码能力。动画只在前台可见时播放，离开组合或退到后台后停止；资质动图复用同一能力。
 
 共享图片加载器额外识别 ISO BMFF ftyp 的 avis 品牌并使用同版本 AVIF 模块。3004973 的第 2 楼实际是 512×512、44 帧的 AVIF，Android 13 静态解码器只返回封面。接管前限制输入 16MiB，再通过 native 元数据检查边长 4096、4M 像素和最多1000帧；AVIF 不支持采样，因此不能沿用 APNG 的采样假设。正文和查看器均绑定 Drawable 生命周期，正文小附件尺寸规则见[图片布局](../bug-fix/2026-10-09-article-image-layout.md)。
 
@@ -48,6 +48,8 @@ AVIF 模块保持 APNG4Android 3.0.5，直接使用的 native 元数据 API 固�
 - 只由 Compose 状态驱动动画停止：可见性与生命周期都能汇成一个布尔值，调用简单，但 Activity 暂停时重组器可能已停止工作；直接绑定生命周期清理，状态仍负责滚出屏幕后的暂停。
 
 ## Verification
+
+2026-10-20：新增跨列表 35dp、楼层 40dp、主页 60dp 的真机复用用例先复现三次图片读取（`artifacts/avatar-continuity-repro-device.txt`）。统一尺寸后，复用一次读取、512px 请求挂起时保留 256px 实图、资产 URL 变化重新读取三项通过，既有形状、角标、静态回退、动图播放和后台停止等共 9 项通过（`artifacts/avatar-cache-final-device.txt`）。原首页折叠手势用例在下滑后未恢复头像可见性，两轮失败，不把它计为通过或为此修改首页滚动逻辑；后续验证继续单独记录。35 项头像与资料关联 JVM 测试通过（`artifacts/avatar-profile-build.txt`）。
 
 2026-10-10：TopicBoostsUiTest 先复现回应短条内仍有资质角标（artifacts/boost-plain-repro-device.txt），PLAIN 修复后断言资质及状态均隐藏、其他场景保留、正文表情和用户点击继续正常。20项关联JVM、Debug与测试APK构建及Lint通过（boost-plain-final-build.txt）。真机首轮5项中头像形状、场景优先级、Boost输入及新增角标共4项通过（boost-plain-final-device.txt）；旧大字号用例仍假设深链自动打开完整楼中楼面板，与当前只读回复预览不符。用例改为在实际跳转的第3楼验证Boost与输入面板，复验通过（3.226秒，boost-plain-regression-device.txt），没有为旧用例改变产品行为。boost-plain-avatars.png 已人工确认短条头像无右下角图标，外部对照头像仍有资质/状态。
 

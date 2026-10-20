@@ -45,7 +45,8 @@ internal fun PublicProfileHeader(profile: PublicProfile, summary: ProfileSummary
         val pixels = with(LocalDensity.current) { maxWidth.roundToPx().coerceIn(128, 1200) }
         val compact = maxWidth < 340.dp || LocalDensity.current.fontScale > 1.15f || maxHeight < 330.dp
         val minimal = maxHeight < 250.dp
-        AvatarImage(source, pixels, true, Modifier.matchParentSize().testTag("public-profile-background"), fallbackUrl = avatar, placeholder = {})
+        AvatarImage(source, pixels, true, Modifier.matchParentSize().testTag("public-profile-background"), fallbackUrl = avatar,
+            placeholderCacheKey = avatarCacheKey(member)?.let { "$it@256" }, placeholder = {})
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(
             Color.Black.copy(alpha = .24f + .08f * collapseFraction), Color.Black.copy(alpha = .40f + .08f * collapseFraction)))))
         if (collapseFraction < 1f) Column(Modifier.fillMaxSize().graphicsLayer { alpha = (1f - collapseFraction * 2f).coerceIn(0f, 1f) }
