@@ -16,7 +16,7 @@ Status: implemented
 
 [details 折叠](2026-10-10-discourse-details.md)使用独立容器与 open 属性，复用同一不可变路径和相册祖先展开机制；引用仍默认展开。
 
-普通引用的装饰双引号使用 `ic_quote_open` 固定路径的矢量图，不依赖系统字体；保留 `onSurface` 的 28% 透明度和 48sp 首行缩进。装饰层使用 `matchParentSize`，只覆盖正文测量后的区域，不能参与容器高度计算。图标按文字缩放，目标尺寸为 36sp × 28sp，并受可用正文高度约束，不挤占后续行或制造短引用底部空行。带原帖来源的引用仍不显示装饰。
+普通引用的装饰双引号使用 `ic_quote_open` 固定路径的矢量图，不依赖系统字体；保留 `onSurface` 的 28% 透明度和 48sp 首行缩进。装饰层使用 `matchParentSize`，只覆盖正文测量后的区域，不能参与容器高度计算。图标高度为 `bodyLarge.fontSize` 的80%（不是行高），宽度按矢量资源的固有宽高比计算；随系统及应用字号一起缩放，并受可用正文高度约束，视觉上小于文字，不挤占后续行或制造短引用底部空行。带原帖来源的引用仍不显示装饰。
 
 话题 3048781 的「老家 潍坊」等短引用只有一个普通段落，没有额外 `<br>`。旧装饰使用 `displayMedium` 文本，行高超过正文并撑高共同 Box；这里修正测量关系，不裁剪正文换行，也不缩小全局段落间距。
 
@@ -46,6 +46,8 @@ Status: implemented
 短引用高度测试先在 RMX2202 / Android 13 失败：正文 63px，引用内容区域 158px，`artifacts/quote-spacing-repro-device.txt` 与已查看的 `artifacts/quote-short-before.png` 记录装饰文字撑高的现象。改用矢量覆盖层后，同一高度断言通过；34项引用、正文及行内解析单测通过（`artifacts/quote-spacing-fixed-build.txt`），10项引用真机测试通过（`artifacts/quote-spacing-fixed-device.txt`）。用例覆盖短引用、显式换行、多段间距、深色130%字号，以及原有来源跳转、折叠恢复和相册索引；`artifacts/quote-short-after.png`、`artifacts/quote-short-dark-large.png`、`artifacts/quote-paragraphs.png` 均已人工查看，图标形状固定且中文可读。这些是原帖结构的离线夹具，不声称其他手机或真实话题的完整阅读流程已验收。
 
 Lint 与 R8 Release 优化构建通过（`artifacts/quote-spacing-optimized-build.txt`）；同版本 `0.3.0 / 3001` 的开发证书优化包在核对签名后用 `adb install -r` 覆盖真机，首次安装时间仍为 `2026-10-17 01:33:30`，不卸载、不清数据。供真机验证的包为 `artifacts/kodo_0.3.0_quote-spacing_device.apk`，不是正式证书发行包。
+
+80%字号比例的尺寸断言先失败：默认字号下图标实际19dp，目标12.8dp（`artifacts/quote-size-repro-device.txt`）。调整后10项引用真机用例全部通过（`artifacts/quote-size-fixed-device.txt`）；普通及130%字号同时检查图标高度、等比宽度和引用内容高度，保留原有换行、多段、来源引用、折叠及相册回归。`artifacts/quote-size-preview.png` 汇总普通、深色大字号和多段夹具，已查看图标视觉上小于正文且中文可读；解析逻辑未改，不重复执行无关单测。Debug及R8优化构建通过（`artifacts/quote-size-fixed-build.txt`），同版本开发签名优化包为 `artifacts/kodo_0.3.0_quote-size_device.apk`。
 
 ## Consequences
 

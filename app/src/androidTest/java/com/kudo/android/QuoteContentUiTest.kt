@@ -5,9 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -156,7 +158,9 @@ class QuoteContentUiTest {
     }
 
     @Test fun shortQuoteHeightFollowsItsTextWithoutAnExtraLine() {
+        var markHeight = 0.dp
         compose.setContent { KudoTheme(DisplaySettings()) {
+            markHeight = with(LocalDensity.current) { (MaterialTheme.typography.bodyLarge.fontSize * .8f).toDp() }
             Column(Modifier.fillMaxSize().padding(16.dp).testTag("quote-fixture")) {
                 RichContent("<blockquote><p>老家 潍坊</p></blockquote>", {}, {})
             }
@@ -165,10 +169,14 @@ class QuoteContentUiTest {
         val text = compose.onNodeWithTag("article-text-root-0-0").fetchSemanticsNode().boundsInRoot
         capture("quote-short.png")
         assertEquals(text.height, region.height, 1f)
+        compose.onNodeWithTag("article-quote-mark-root-0", useUnmergedTree = true)
+            .assertHeightIsEqualTo(markHeight).assertWidthIsEqualTo(markHeight * (36f / 28f))
     }
 
     @Test fun shortQuoteAtLargeFontKeepsTheVectorInsideItsTextHeight() {
+        var markHeight = 0.dp
         compose.setContent { KudoTheme(DisplaySettings(theme = com.kudo.android.data.ThemeMode.DARK, fontScale = 1.3f)) {
+            markHeight = with(LocalDensity.current) { (MaterialTheme.typography.bodyLarge.fontSize * .8f).toDp() }
             Column(Modifier.fillMaxSize().padding(16.dp).testTag("quote-fixture")) {
                 RichContent("<blockquote><p>老家 潍坊</p></blockquote>", {}, {})
             }
@@ -176,7 +184,8 @@ class QuoteContentUiTest {
         val region = compose.onNodeWithTag("article-quote-root-0").fetchSemanticsNode().boundsInRoot
         val text = compose.onNodeWithTag("article-text-root-0-0").fetchSemanticsNode().boundsInRoot
         val mark = compose.onNodeWithTag("article-quote-mark-root-0", useUnmergedTree = true)
-            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            .assertIsDisplayed().assertHeightIsEqualTo(markHeight).assertWidthIsEqualTo(markHeight * (36f / 28f))
+            .fetchSemanticsNode().boundsInRoot
         capture("quote-short-dark-large.png")
         assertEquals(text.height, region.height, 1f)
         assertTrue(mark.left >= region.left && mark.right <= region.right)

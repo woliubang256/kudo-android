@@ -647,11 +647,13 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                             image = image)
                         if (block.source == null) {
                             val density = LocalDensity.current
+                            val markPainter = painterResource(R.drawable.ic_quote_open)
+                            val markHeight = with(density) { (MaterialTheme.typography.bodyLarge.fontSize * .8f).toDp() }
                             Box(Modifier.matchParentSize()) {
-                                Icon(painterResource(R.drawable.ic_quote_open), null,
+                                Icon(markPainter, null,
                                     Modifier.align(Alignment.TopStart)
                                         .padding(top = with(density) { 2.sp.toDp() })
-                                        .size(width = with(density) { 36.sp.toDp() }, height = with(density) { 28.sp.toDp() })
+                                        .size(width = markHeight * (markPainter.intrinsicSize.width / markPainter.intrinsicSize.height), height = markHeight)
                                         .testTag("article-quote-mark-$path"),
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .28f))
                             }
