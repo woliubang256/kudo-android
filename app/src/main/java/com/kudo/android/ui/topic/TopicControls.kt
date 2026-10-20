@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.Avatar
+import com.kudo.android.ui.components.AvatarProfileLink
 import com.kudo.android.ui.components.AvatarPresentation
 import com.kudo.android.ui.components.CategoryIcons
 import com.kudo.android.ui.components.MemberNameDecorations
@@ -68,8 +69,9 @@ internal fun TopicTopBar(
         .testTag("topic-top-bar"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, enabled = enabled)
         if (author == null) Text("话题详情", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-        else Row(Modifier.weight(1f).heightIn(min = 48.dp)
-            .clickable(enabled = enabled, role = Role.Button) { user(author.username) }.testTag("topic-author"),
+        else AvatarProfileLink(author, enabled, { user(author.username) }) { open ->
+        Row(Modifier.weight(1f).heightIn(min = 48.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = open).testTag("topic-author"),
             verticalAlignment = Alignment.CenterVertically) {
             Avatar(author, 32.dp, presentation = AvatarPresentation.PUBLIC)
             Column(Modifier.weight(1f).padding(start = 10.dp, end = 8.dp)) {
@@ -85,6 +87,7 @@ internal fun TopicTopBar(
                         { actions.history(state.detail.id, post) }
                     })
             }
+        }
         }
         if (author != null && author.id != state.viewerId &&
             (state.viewerId == null || profile == null || profile.canFollow || profile.isFollowed)) {

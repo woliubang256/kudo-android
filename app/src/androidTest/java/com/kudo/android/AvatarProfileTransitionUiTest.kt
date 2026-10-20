@@ -35,6 +35,8 @@ import com.kudo.android.ui.account.PublicProfilePage
 import com.kudo.android.ui.account.PublicProfileState
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.KudoTheme
+import com.kudo.android.ui.topic.TopicTopBar
+import com.kudo.android.ui.topic.TopicState
 import okio.Buffer
 import org.junit.After
 import org.junit.Assert.*
@@ -79,7 +81,7 @@ class AvatarProfileTransitionUiTest {
 
     @After fun restore() { SingletonImageLoader.setUnsafe(original); loader.shutdown() }
 
-    private fun showNavigation(duplicate: Boolean = false) {
+    private fun showNavigation(duplicate: Boolean = false, topicAuthor: Boolean = false) {
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
             val nav = rememberNavController()
             val avatars = remember(nav) { AvatarTransitions(nav) }
@@ -91,7 +93,9 @@ class AvatarProfileTransitionUiTest {
                     popExitTransition = { fadeOut(tween(220)) }) {
                     topicListComposable("list") {
                         Box(Modifier.fillMaxSize().background(Color.White)) {
-                            if (sourceVisible) Avatar(member, 35.dp, Modifier.offset(160.dp, 450.dp).testTag("avatar-source")) {
+                            if (topicAuthor) TopicTopBar(TopicState(detail = TopicDetail(1, "头像入口", 1, emptyList(), emptyList(), false, author = member)),
+                                true, {}, { avatars.openUser(it) }, {}, {})
+                            else if (sourceVisible) Avatar(member, 35.dp, Modifier.offset(160.dp, 450.dp).testTag("avatar-source")) {
                                 avatars.openUser(member.username)
                             }
                             if (duplicate) Avatar(member, 35.dp, Modifier.offset(10.dp, 570.dp).testTag("avatar-neighbor")) {
@@ -134,6 +138,26 @@ class AvatarProfileTransitionUiTest {
         val returned = greenBounds()
         assertEquals(source.top, returned.top, 3f)
         assertEquals("List and profile must share the same loaded image", 1, requests.get())
+    }
+
+    @Test fun topicAuthorRowSharesItsAvatarWhenTheParentHandlesTheClick() {
+        showNavigation(topicAuthor = true)
+        val source = greenBounds()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("topic-author").performClick()
+        compose.mainClock.advanceTimeBy(144)
+        compose.runOnIdle { assertNotNull("The topic author row must carry its displayed avatar", transitions.seed(navigation.currentBackStackEntry!!)) }
+        val opening = greenBounds()
+        assertTrue("The actual avatar must move down towards the profile: $opening", opening.top > source.top + 4)
+        compose.mainClock.advanceTimeBy(600)
+        val target = greenBounds()
+        assertTrue(opening.top < target.top - 4)
+        compose.runOnIdle { navigation.popBackStack() }
+        compose.mainClock.advanceTimeBy(144)
+        val closing = greenBounds()
+        assertTrue(closing.top < target.top - 4 && closing.top > source.top + 4)
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals(source.top, greenBounds().top, 3f)
     }
 
     @Test fun repeatedAuthorOnlySharesTheClickedInstanceAndIgnoresASecondTap() {

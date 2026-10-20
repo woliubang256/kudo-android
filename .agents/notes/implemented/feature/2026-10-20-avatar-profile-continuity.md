@@ -14,6 +14,8 @@ Status: implemented
 
 点击携带 Avatar 实际显示、经过元数据补全的 Member；来源必须是当前且 RESUMED 的回栈项，防止连点重复跳转。只有同步的同名 openUser 调用接收 seed，直接链接不继承旧来源。seed 按目标回栈项保留，销毁时清理，子页返回不重播列表动画。返回使用真实恢复位置；来源缺失、进程恢复或身份不匹配时退回普通页面过渡。头像本体保留裁切和角标，动图生命周期规则不变，既有整卡快照动画不改变。
 
+外层身份行通过 AvatarProfileLink 与内部 Avatar 共用来源键和点击回调，头像把实际显示的补全 Member 写回来源；点击名字或头像都从同一个实际头像出发，不共享整行。明确传入自身 onClick 的头像保持独立来源，禁用状态和空用户名不新增导航。普通非列表路由通过 avatarComposable 接入相同场景，不改变该路由原有过渡。
+
 公开主页的三接口仍立即独立读取；完整资料到达前使用已知身份绘制只读头部，未知统计保持未知，不开放关注、私信、关注列表或资料操作。真实资料接管显示和权限，不把摘要当作完整资料。无真实资料且请求失败时显示已有错误页，不保留伪完整资料。
 
 ## Existing note audit
@@ -31,6 +33,8 @@ Status: implemented
 - 把整张帖子卡片缩放成个人主页：可复用帖子快照，但头像点击的语义目标是头像而不是帖子内容；本次只共享头像本体。
 
 ## Testing
+
+实际 TopicTopBar 的整行点击首先复现未携带来源（artifacts/avatar-entry-repro-device.txt）。增加统一绑定并接入作者行后，原六项与新增作者进出真实像素用例共七项全部通过（11.293 秒，artifacts/avatar-entry-core-device.txt）。入口扩展分为统一绑定、话题相关、用户列表与聊天通知三个单元；引用头像折叠引用、回复预览头像和参与讨论头像不属于既有个人主页入口，不改变它们的点击语义。
 
 先用真机夹具证明同一头像经过 35/40/60dp 显示会读取三次而非一次（artifacts/avatar-continuity-repro-device.txt）。新增三项缓存测试验证一次读取、512px 请求未完成时显示真实的 256px 缓存像素、资源地址变更重新读取；均通过（artifacts/avatar-cache-final-device.txt）。该轮旧用例 collapsingTheHomeHeaderStopsItsAnimationUntilItIsVisibleAgain 的下滑恢复首页头部断言失败，未修改其滚动逻辑，也未证明它在改动前通过。
 
