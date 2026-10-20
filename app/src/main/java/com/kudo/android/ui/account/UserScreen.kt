@@ -55,7 +55,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun UserScreen(username: String, repository: CommunityRepository, back: () -> Unit, login: () -> Unit,
     openLink: (String) -> Unit, viewerId: Int? = null, statusBarStyle: (Boolean?) -> Unit = {},
-    search: () -> Unit = {}, message: () -> Unit = {}, openWeb: (String) -> Unit = openLink) {
+    search: () -> Unit = {}, message: () -> Unit = {}, openWeb: (String) -> Unit = openLink, initialMember: Member? = null) {
     val vm = viewModel<UserProfileViewModel>(key = "user-$username-$viewerId", factory = viewModelFactory {
         initializer { UserProfileViewModel(repository, username, viewerId) }
     })
@@ -65,7 +65,7 @@ fun UserScreen(username: String, repository: CommunityRepository, back: () -> Un
     LaunchedEffect(vm) { vm.events.collect { showKudoToast(context, it) } }
     Box(Modifier.fillMaxSize()) {
         PublicProfilePage(state, viewerId, back, login, openLink, search, message, openWeb, statusBarStyle,
-            vm::refresh, vm::retrySummary, vm::retryCard, vm::load, vm::follow, vm::showFollows, vm::closeFollows)
+            vm::refresh, vm::retrySummary, vm::retryCard, vm::load, vm::follow, vm::showFollows, vm::closeFollows, initialMember)
     }
 }
 
@@ -75,9 +75,12 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
     openLink: (String) -> Unit, search: () -> Unit, message: () -> Unit, openWeb: (String) -> Unit,
     statusBarStyle: (Boolean?) -> Unit = {}, refresh: () -> Unit = {}, retrySummary: () -> Unit = {}, retryCard: () -> Unit = {},
     load: (ProfileTab, Boolean, Boolean) -> Unit = { _, _, _ -> }, follow: () -> Unit = {},
-    showFollows: (Boolean) -> Unit = {}, closeFollows: () -> Unit = {}) {
+    showFollows: (Boolean) -> Unit = {}, closeFollows: () -> Unit = {}, initialMember: Member? = null) {
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("public-user-page")) {
-        val profile = state.profile
+        val preview = remember(initialMember) { initialMember?.let {
+            PublicProfile(it, null, null, "", "", "", "", "", false)
+        } }
+        val profile = state.profile ?: preview?.takeIf { state.loading && state.error == null }
         val pager = rememberPagerState(pageCount = { ProfileTab.entries.size })
         val scrolls = ProfileTab.entries.map { tab -> key(profile?.member?.id, tab) { rememberLazyListState() } }
         val activeScroll by rememberUpdatedState(scrolls[pager.settledPage])
@@ -151,7 +154,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
                             .offset { IntOffset(0, -visibleCollapse.toInt()) }.wrapContentHeight(Alignment.Top, unbounded = true)
                             .height(expandedHeight), openLink,
                         collapseFraction = fraction,
-                        details = { detailsVisibility.targetState = true })
+                        details = { if (state.profile != null) detailsVisibility.targetState = true }, loading = state.profile == null)
                 }
                 HorizontalPager(pager, Modifier.fillMaxSize().testTag("profile-pager"), key = { ProfileTab.entries[it].name }) { index ->
                     val tab = ProfileTab.entries[index]
@@ -214,7 +217,7 @@ internal fun PublicProfilePage(state: PublicProfileState, viewerId: Int?, back: 
             Box(Modifier.align(Alignment.TopCenter).fillMaxWidth()
                 .screenMaterial(backdrop, fraction = { compactIdentityAlpha }, expandedColor = Color.Transparent)
                 .testTag("public-profile-toolbar-material")) {
-                ProfileToolbar(profile.member, collapsed, viewerId, state.followBusy,
+                ProfileToolbar(profile.member, collapsed, viewerId, state.followBusy || state.profile == null,
                     { if (viewerId == null) login() else follow() }, back, search, { moreVisibility.targetState = true },
                     modifier = Modifier.onSizeChanged { toolbarHeight = it.height }, collapseFraction = fraction,
                     ink = lerp(Color.White, MaterialTheme.colorScheme.onSurface, compactIdentityAlpha), backdrop = backdrop)

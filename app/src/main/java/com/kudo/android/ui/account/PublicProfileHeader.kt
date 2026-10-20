@@ -37,7 +37,7 @@ internal fun profileHeaderImage(member: Member, card: String): String = card.ifB
 @Composable
 internal fun PublicProfileHeader(profile: PublicProfile, summary: ProfileSummary?, card: String, viewerId: Int?,
     busy: Boolean, follow: () -> Unit, message: () -> Unit, follows: (Boolean) -> Unit,
-    modifier: Modifier = Modifier, openLink: (String) -> Unit = {}, collapseFraction: Float = 0f, details: () -> Unit = {}) {
+    modifier: Modifier = Modifier, openLink: (String) -> Unit = {}, collapseFraction: Float = 0f, details: () -> Unit = {}, loading: Boolean = false) {
     val member = profile.member
     val avatar = member.animatedAvatar.ifBlank { member.avatar.replace("{size}", "512") }.let(::mediaUrl)
     val source = profileHeaderImage(member, card).let(::mediaUrl)
@@ -53,9 +53,9 @@ internal fun PublicProfileHeader(profile: PublicProfile, summary: ProfileSummary
             .statusBarsPadding().padding(start = 18.dp, end = 18.dp, top = 52.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)) {
-                Avatar(member, if (compact) 40.dp else 60.dp)
+                Avatar(member, if (compact) 40.dp else 60.dp, Modifier.testTag("public-profile-avatar"), sharedProfileAvatar = collapseFraction < .5f)
                 Spacer(Modifier.weight(1f))
-                if (member.id != viewerId) {
+                if (!loading && member.id != viewerId) {
                     ProfileFollowButton(member, viewerId, busy, follow, Modifier.testTag("profile-follow"))
                     if (viewerId == null || profile.canMessage) Box(Modifier.size(40.dp).clip(CircleShape)
                         .background(Color.White.copy(alpha = .2f)).clickable(role = Role.Button, onClick = message), contentAlignment = Alignment.Center) {
@@ -83,8 +83,8 @@ internal fun PublicProfileHeader(profile: PublicProfile, summary: ProfileSummary
                 color = Color.White.copy(alpha = .92f), fontSize = 13.sp, lineHeight = 20.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!minimal) FlowRow(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                HeaderStat(profile.following, "关注", Modifier.clickable(role = Role.Button) { follows(false) }.testTag("profile-following"))
-                HeaderStat(profile.followers, "粉丝", Modifier.clickable(role = Role.Button) { follows(true) }.testTag("profile-followers"))
+                HeaderStat(profile.following, "关注", Modifier.clickable(enabled = !loading, role = Role.Button) { follows(false) }.testTag("profile-following"))
+                HeaderStat(profile.followers, "粉丝", Modifier.clickable(enabled = !loading, role = Role.Button) { follows(true) }.testTag("profile-followers"))
             }
             if (!minimal) FlowRow(horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf("likes_received" to "获赞", "days_visited" to "访问", "topic_count" to "话题", "post_count" to "回复").forEach { (key, label) ->
@@ -122,7 +122,7 @@ internal fun ProfileToolbar(member: Member, collapsed: Boolean, viewerId: Int?, 
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = backdrop, tint = color)
         Box(Modifier.graphicsLayer { alpha = identityAlpha }) {
-            Avatar(member, 30.dp, Modifier.testTag("profile-toolbar-avatar"))
+            Avatar(member, 30.dp, Modifier.testTag("profile-toolbar-avatar"), sharedProfileAvatar = collapseFraction >= .5f)
         }
         Text(member.displayName, Modifier.weight(1f).padding(horizontal = 6.dp).graphicsLayer { alpha = identityAlpha }, fontSize = 15.sp,
             fontWeight = FontWeight.Medium, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)

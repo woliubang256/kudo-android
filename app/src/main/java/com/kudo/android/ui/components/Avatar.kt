@@ -85,6 +85,7 @@ fun Avatar(
     size: Dp,
     modifier: Modifier = Modifier,
     presentation: AvatarPresentation = AvatarPresentation.PUBLIC,
+    sharedProfileAvatar: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val metadata = LocalAvatarMetadata.current
@@ -113,16 +114,17 @@ fun Avatar(
     val staticUrl = shown?.avatar?.replace("{size}", pixels.toString())?.let(::mediaUrl)
     val animatedUrl = shown?.animatedAvatar?.let(::mediaUrl)
     val label = shown?.let { "${it.displayName}的头像" } ?: "用户头像"
-    Box(modifier.size(size).onGloballyPositioned {
+    val transition = avatarTransitionAnchor(shown, sharedProfileAvatar, onClick)
+    Box(modifier.then(transition.modifier).size(size).onGloballyPositioned {
         val bounds = it.boundsInWindow()
         visible = bounds.width > 0f && bounds.height > 0f
     }.semantics { contentDescription = label }
-        .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))) {
+        .then(if (transition.open == null) Modifier else Modifier.clickable(onClick = transition.open))) {
         AvatarImage(animatedUrl ?: staticUrl, fallbackUrl = staticUrl, pixels = pixels, animate = active,
-            modifier = Modifier.fillMaxSize().clip(shape).background(LogoYellow.copy(alpha = 0.22f))) {
-            Text(shown?.displayName?.take(1)?.uppercase() ?: "DO", Modifier.clearAndSetSemantics {},
             cacheKey = shown?.let(::avatarCacheKey),
             placeholderCacheKey = shown?.let(::avatarCacheKey)?.let { "$it@256" },
+            modifier = Modifier.fillMaxSize().clip(shape).background(LogoYellow.copy(alpha = 0.22f))) {
+            Text(shown?.displayName?.take(1)?.uppercase() ?: "DO", Modifier.clearAndSetSemantics {},
                 color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.34f).sp)
         }
         if (shown != null && decoration != null) {

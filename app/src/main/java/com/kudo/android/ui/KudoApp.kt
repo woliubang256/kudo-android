@@ -89,6 +89,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         val homeUpdate = model("home-update") { HomeUpdateViewModel(GitHubUpdates()::latest) }
         val nav = rememberNavController()
         val topicTransitions = remember(nav, account.user?.id) { TopicTransitions(nav) }
+        val avatarTransitions = remember(nav, account.user?.id) { AvatarTransitions(nav) }
         LaunchedEffect(incomingDownloads, linkSequence) {
             if (incomingDownloads) { nav.navigate("downloads") { launchSingleTop = true }; consumeDownloads() }
         }
@@ -121,7 +122,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         fun login() { nav.navigate("login") { launchSingleTop = true } }
         fun authenticated(action: () -> Unit) { if (account.user == null) login() else action() }
         fun topic(id: Int, number: Int? = null) { topicTransitions.openTopic(id, number) }
-        fun user(username: String) { if (username.isNotBlank()) nav.navigate("user/${Uri.encode(username)}") }
+        fun user(username: String) { avatarTransitions.openUser(username) }
         fun openTag(tag: TopicTag) {
             val slug = tag.slug.ifBlank { tag.name }
             if (slug.isNotBlank()) nav.navigate("tag/${Uri.encode(slug)}?id=${tag.id ?: 0}&name=${Uri.encode(tag.name)}") { launchSingleTop = true }
@@ -181,7 +182,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     nav.currentBackStackEntry?.savedStateHandle?.set("refresh", System.nanoTime())
                 }) {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.TopCenter) {
-                TopicTransitionHost(topicTransitions) {
+                TopicTransitionHost(topicTransitions, avatarTransitions) {
                 NavHost(nav, "root", Modifier.widthIn(max = 840.dp).fillMaxSize(),
                     enterTransition = { fadeIn(tween(280)) }, exitTransition = { fadeOut(tween(180)) },
                     popEnterTransition = { fadeIn(tween(220)) }, popExitTransition = { fadeOut(tween(220)) }) {
@@ -484,7 +485,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         val username = entry.arguments!!.getString("username")!!
                         key(username, account.user?.id) {
                             UserScreen(username, app.repository, { nav.popBackStack() }, ::login, ::openLink,
-                                viewerId = account.user?.id, statusBarStyle = { darkStatusIcons = it },
+                                viewerId = account.user?.id, statusBarStyle = { darkStatusIcons = it }, initialMember = avatarTransitions.seed(entry)?.member,
                                 search = { nav.navigate("user-search/${Uri.encode(username)}") },
                                 message = { authenticated { nav.navigate("new-message?recipient=${Uri.encode(username)}") } }, openWeb = ::openWebPage)
                         }

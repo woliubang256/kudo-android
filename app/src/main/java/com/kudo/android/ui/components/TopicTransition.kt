@@ -130,10 +130,12 @@ private val LocalTopicEntered = staticCompositionLocalOf<State<Boolean>?> { null
 private val LocalTopicPreview = staticCompositionLocalOf<Topic?> { null }
 
 @Composable
-internal fun TopicTransitionHost(transitions: TopicTransitions, content: @Composable () -> Unit) {
+internal fun TopicTransitionHost(transitions: TopicTransitions, avatars: AvatarTransitions? = null, content: @Composable () -> Unit) {
     DisposableEffect(transitions) { onDispose { transitions.clear() } }
     CompositionLocalProvider(LocalTopicTransitions provides transitions) {
+        AvatarTransitionHost(avatars) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) { content() }
+        }
     }
 }
 
@@ -179,7 +181,9 @@ internal fun NavGraphBuilder.topicListComposable(
             }, label = "topic-feed-blur",
         ) { if (blurEnabled && it != EnterExitState.Visible) 6.dp else 0.dp }
         CompositionLocalProvider(LocalTopicTransitionSource provides source) {
+            AvatarTransitionScene(entry, this) {
             Box(Modifier.fillMaxSize().blur(blur)) { content(entry) }
+            }
         }
     }
 }
@@ -201,7 +205,7 @@ internal fun NavGraphBuilder.topicDetailComposable(
             if (initialState.hasTopicTransition()) ExitTransition.None
             else fadeOut(tween(220)) + scaleOut(tween(220, easing = FastOutSlowInEasing), targetScale = 0.98f)
         }) { entry ->
-        TopicTransitionDetail(entry, this) { content(entry) }
+        AvatarTransitionScene(entry, this) { TopicTransitionDetail(entry, this) { content(entry) } }
     }
 }
 
