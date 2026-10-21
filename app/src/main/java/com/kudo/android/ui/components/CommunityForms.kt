@@ -66,10 +66,12 @@ internal fun CommunityTextField(value: String, change: (String) -> Unit, modifie
 @Composable
 internal fun CommunityTextField(value: TextFieldValue, change: (TextFieldValue) -> Unit, modifier: Modifier = Modifier,
     placeholder: String = "", enabled: Boolean = true, minLines: Int = 1, maxLines: Int = Int.MAX_VALUE,
-    textStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp)) {
+    textStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default, keyboardActions: KeyboardActions = KeyboardActions.Default) {
     BasicTextField(value, change, modifier, enabled = enabled, minLines = minLines, maxLines = maxLines,
         textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.4f)),
-        cursorBrush = SolidColor(LogoYellow), decorationBox = { input -> Box(Modifier.fillMaxWidth()) {
+        cursorBrush = SolidColor(LogoYellow), keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
+        decorationBox = { input -> Box(Modifier.fillMaxWidth()) {
             if (value.text.isEmpty()) Text(placeholder, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), style = textStyle)
             input()
         } })

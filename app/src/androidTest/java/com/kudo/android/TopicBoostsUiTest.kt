@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.text.TextRange
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.theme.KudoTheme
@@ -258,6 +259,34 @@ class TopicBoostsUiTest {
         compose.onNodeWithText("2/16字").assertIsDisplayed()
         compose.onNodeWithText("Boost 最多", substring = true).assertDoesNotExist()
         compose.onNodeWithText("发送").assertIsEnabled()
+    }
+
+    @Test fun boostEmojisUseEditorSearchAndReplaceTheSelectionWithoutSending() {
+        var raw by mutableStateOf("前替换后")
+        var sends = 0
+        var sending by mutableStateOf(false)
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            BoostForm(raw, { raw = it }, TopicState(detail, false, boostEmojis = emptySet()),
+                sending, { sends++ }, {}, {}, "author")
+        } }
+        val input = compose.onNodeWithTag("boost-input")
+        input.performTextInputSelection(TextRange(1, 3))
+        val button = compose.onNodeWithContentDescription("表情")
+        assertTrue(button.fetchSemanticsNode().boundsInRoot.right < compose.onNodeWithText("发送").fetchSemanticsNode().boundsInRoot.left)
+        button.performClick()
+        compose.onNodeWithTag("editor-emoji-search").performTextInput("grinning")
+        compose.onNodeWithContentDescription(":grinning:").performClick()
+        input.assertTextEquals("前:grinning:后").assertIsFocused()
+        input.assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.TextSelectionRange, TextRange(11)))
+        compose.onNodeWithText("3/16字").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, sends) }
+        compose.onNodeWithContentDescription("表情").performClick()
+        compose.onNodeWithTag("editor-emoji-tab-recent").performClick()
+        compose.onNodeWithContentDescription(":grinning:").performClick()
+        input.assertTextEquals("前:grinning::grinning:后")
+        compose.runOnIdle { sending = true }
+        compose.onNodeWithContentDescription("表情").assertIsNotEnabled()
+        compose.onNodeWithText("发送中…").assertIsNotEnabled()
     }
 
     @Test fun boostInputEnforcesBothLimitsAndOnlyClearsAfterConfirmation() {

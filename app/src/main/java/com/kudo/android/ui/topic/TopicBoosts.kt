@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.*
@@ -27,15 +28,24 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.*
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
+import com.kudo.android.ui.editor.EditorEmojis
+import com.kudo.android.ui.editor.EditorToolSheet
+import com.kudo.android.ui.editor.replaceMarkdown
+import com.kudo.android.ui.editor.syncMarkdown
 
 @Composable
 internal fun BoostForm(raw: String, change: (String) -> Unit, state: TopicState, sending: Boolean,
     send: () -> Unit, close: () -> Unit, retry: () -> Unit, username: String) {
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    var body by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(raw, TextRange(raw.length))) }
+    body = body.syncMarkdown(raw)
+    var emojis by remember { mutableStateOf(false) }
+    fun changeBody(value: TextFieldValue) { body = value; if (value.text != raw) change(value.text) }
     val names = state.boostEmojis
     val count = remember(raw, names) { BoostRules.count(raw, names.orEmpty()) }
     val limitError = count.problem.takeIf { count.length > 16 || count.emojis > 5 }
@@ -46,7 +56,7 @@ internal fun BoostForm(raw: String, change: (String) -> Unit, state: TopicState,
             Text("Boost", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             CommunityIconButton(Icons.Rounded.Close, "关闭 Boost", close, enabled = !sending)
         }
-        CommunityTextField(raw, change, Modifier.fillMaxWidth().heightIn(min = 80.dp).focusRequester(focus).testTag("boost-input"),
+        CommunityTextField(body, ::changeBody, Modifier.fillMaxWidth().heightIn(min = 80.dp).focusRequester(focus).testTag("boost-input"),
             placeholder = if (username.isBlank()) "boost" else "boost $username", enabled = !sending, maxLines = 4,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { if (ready) send() }))
@@ -58,10 +68,20 @@ internal fun BoostForm(raw: String, change: (String) -> Unit, state: TopicState,
             Text(if (names == null) "正在读取表情规则…" else "${count.length}/16字",
                 Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
                 color = if (limitError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            CommunityIconButton(Icons.Rounded.EmojiEmotions, "表情", { keyboard?.hide(); emojis = true }, enabled = !sending)
             CommunityButton(if (sending) "发送中…" else "发送", send, enabled = ready, compact = true)
         }
         if (names != null && limitError != null) Text(limitError, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error)
+    }
+    if (emojis) EditorToolSheet("表情", {
+        emojis = false
+        if (!sending) { focus.requestFocus(); keyboard?.show() }
+    }, showTitle = false) { closePanel ->
+        EditorEmojis { emoji ->
+            if (!sending) changeBody(body.replaceMarkdown(emoji))
+            closePanel()
+        }
     }
 }
 
