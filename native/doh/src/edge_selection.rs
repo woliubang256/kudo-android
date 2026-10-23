@@ -29,6 +29,7 @@ const VENDORS: &[&str] = &[
     "icook.tw",
 ];
 const PUBLIC_DNS: &[&str] = &["223.5.5.5", "1.12.12.12", "1.1.1.1", "8.8.8.8"];
+const KEY_SOURCES: &[&str] = &["cloudflare-ech.com", "crypto.cloudflare.com"];
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Winner {
@@ -60,6 +61,8 @@ impl Winner {
 struct State {
     winner: Option<Winner>,
     verified: bool,
+    cache_revalidated: bool,
+    cache_error: Option<&'static str>,
     phase: &'static str,
     races: VecDeque<Instant>,
     failures: VecDeque<Instant>,
@@ -122,7 +125,7 @@ impl Selector {
     }
     pub fn status(&self) -> serde_json::Value {
         let state = self.state.lock().unwrap();
-        serde_json::json!({"phase": state.phase, "winner": state.winner})
+        serde_json::json!({"phase": state.phase, "winner": state.winner, "cache_revalidated": state.cache_revalidated, "cache_error": state.cache_error})
     }
     pub fn failed(&self, ip: IpAddr) {
         self.state.lock().unwrap().failure(ip, Instant::now());
@@ -182,8 +185,12 @@ impl Selector {
         };
         if let Some(saved) = saved {
             if let Some(key) = saved.key() {
-                if let Ok((latency, key)) = edge_probe::probe(saved.ip, &key).await {
-                    return self.install(saved.ip, latency, key);
+                match edge_probe::probe(saved.ip, &key).await {
+                    Ok((latency, key)) => {
+                        self.state.lock().unwrap().cache_revalidated = true;
+                        return self.install(saved.ip, latency, key);
+                    }
+                    Err(reason) => self.state.lock().unwrap().cache_error = Some(reason),
                 }
             }
         }
@@ -260,21 +267,36 @@ fn now() -> u64 {
 }
 
 async fn gather() -> (Vec<IpAddr>, Vec<Vec<u8>>) {
+    gather_with(|host, endpoint| async move {
+        let config = serde_json::json!({"url":format!("https://{endpoint}/dns-query"),"bootstrap":[endpoint]});
+        let resolver = Resolver::new(&config.to_string()).ok()?;
+        tokio::time::timeout(Duration::from_millis(1600), resolver.resolve_dns(host)).await.ok()?.ok()
+    }, Duration::from_millis(4500)).await
+}
+
+async fn gather_with<F, Fut>(lookup: F, budget: Duration) -> (Vec<IpAddr>, Vec<Vec<u8>>)
+where
+    F: Fn(&'static str, &'static str) -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = Option<Answer>> + Send,
+{
     let mut tasks = JoinSet::new();
-    // Each DNS lookup does A/AAAA/HTTPS in parallel: two lookups = six HTTP requests.
-    let semaphore = Arc::new(Semaphore::new(2));
-    for host in VENDORS {
+    let lookup = Arc::new(lookup);
+    // Reserve one lookup per lane so unreachable address sources cannot starve keys.
+    // Each lookup does A/AAAA/HTTPS in parallel: two lanes = six HTTP requests.
+    for hosts in [VENDORS, KEY_SOURCES] {
+        let semaphore = Arc::new(Semaphore::new(1));
         for endpoint in PUBLIC_DNS {
-            let semaphore = semaphore.clone();
-            tasks.spawn(async move {
-                let _permit = semaphore.acquire().await.ok()?;
-                let config = serde_json::json!({"url":format!("https://{endpoint}/dns-query"),"bootstrap":[endpoint]});
-                let resolver = Resolver::new(&config.to_string()).ok()?;
-                tokio::time::timeout(Duration::from_millis(1600), resolver.resolve_dns(host)).await.ok()?.ok()
-            });
+            for host in hosts {
+                let semaphore = semaphore.clone();
+                let lookup = lookup.clone();
+                tasks.spawn(async move {
+                    let _permit = semaphore.acquire().await.ok()?;
+                    lookup(host, endpoint).await
+                });
+            }
         }
     }
-    let deadline = tokio::time::Instant::now() + Duration::from_millis(4500);
+    let deadline = tokio::time::Instant::now() + budget;
     let mut ips = Vec::new();
     let mut keys = Vec::new();
     while let Ok(Some(result)) = tokio::time::timeout_at(deadline, tasks.join_next()).await {
@@ -397,6 +419,21 @@ fn atlas_candidates(body: &[u8]) -> (Vec<IpAddr>, Option<Vec<u8>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn unreachable_address_sources_do_not_starve_the_ech_key_source() {
+        let (_, keys) = gather_with(|host, _| async move {
+            if !KEY_SOURCES.contains(&host) { std::future::pending::<()>().await; }
+            Some(Answer {
+                ips: vec!["104.16.0.1".parse().unwrap()],
+                ech: STANDARD.decode("AEX+DQBBvgAgACAnc+9IO/WWQSMj7W2mLvaFlY3UbvRlOsLeK+qbQ6pgVwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=").unwrap(),
+                expires: Instant::now() + Duration::from_secs(60),
+            })
+        }, Duration::from_millis(80)).await;
+        assert!(
+            !keys.is_empty(),
+            "Key discovery must get a slot before the shared deadline"
+        );
+    }
     #[test]
     fn race_budget_recovers_after_cooldown_and_hour_limit() {
         let start = Instant::now();

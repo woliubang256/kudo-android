@@ -48,6 +48,16 @@ class EdgeSelectionDeviceTest {
             val addresses = transport.dns.lookup("linux.do")
             val status = JSONObject(transport.selectionState())
             report.put("phase", status.optString("phase"))
+            if (status.optString("phase") != "ready") {
+                val discovery = JSONObject()
+                for (endpoint in listOf("223.5.5.5", "1.12.12.12")) for (host in listOf("www.visa.com.hk", "cloudflare-ech.com", "crypto.cloudflare.com")) {
+                    val profile = NativeDoh.createProfile("""{"url":"https://$endpoint/dns-query","bootstrap":["$endpoint"]}""")
+                    try { discovery.put("$endpoint/$host", JSONObject(NativeDoh.lookup(profile, host))) }
+                    catch (e: java.io.IOException) { discovery.put("$endpoint/$host", e.message) }
+                    finally { NativeDoh.destroyProfile(profile) }
+                }
+                report.put("discovery", discovery)
+            }
             assertEquals("ready", status.getString("phase"))
             assertEquals(1, addresses.size)
             assertEquals(addresses, transport.dns.lookup("connect.linux.do"))
@@ -70,8 +80,12 @@ class EdgeSelectionDeviceTest {
             saved.put("ech", Base64.getEncoder().encodeToString(bytes))
             val restored = DohTransport(BuiltInDohServer, localSelection = true, cachedWinner = saved.toString())
             try {
-                assertEquals(addresses, restored.dns.lookup("linux.do"))
+                val restoredAddresses = restored.dns.lookup("linux.do")
                 val fresh = JSONObject(restored.selectionState())
+                report.put("cacheRevalidated", fresh.optBoolean("cache_revalidated"))
+                report.put("cacheError", fresh.opt("cache_error"))
+                assertTrue("Must recover during cache verification, not through a new race", fresh.getBoolean("cache_revalidated"))
+                assertEquals(addresses, restoredAddresses)
                 assertEquals("ready", fresh.getString("phase"))
                 assertNotEquals(saved.getString("ech"), fresh.getJSONObject("winner").getString("ech"))
                 report.put("obsoleteKeyRecovered", true)

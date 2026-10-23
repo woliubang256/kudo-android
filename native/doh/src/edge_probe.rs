@@ -56,7 +56,21 @@ pub async fn get(ip: IpAddr, host: &str, path: &str, key: &[u8], limit: usize) -
                             continue;
                         }
                     }
-                    return Err("probe_tls_failed");
+                    return Err(
+                        match error
+                            .get_ref()
+                            .and_then(|inner| inner.downcast_ref::<rustls::Error>())
+                        {
+                            Some(rustls::Error::PeerIncompatible(
+                                rustls::PeerIncompatible::ServerRejectedEncryptedClientHello(_),
+                            )) => "probe_ech_rejected",
+                            Some(rustls::Error::InvalidCertificate(_)) => {
+                                "probe_certificate_failed"
+                            }
+                            _ if attempt == 1 => "probe_retry_tls_failed",
+                            _ => "probe_tls_failed",
+                        },
+                    );
                 }
             };
             if tls.get_ref().1.ech_status() != EchStatus::Accepted {
