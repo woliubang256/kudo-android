@@ -8,7 +8,7 @@
 
 从 [GitHub Releases](https://github.com/woliubang256/kudo-android/releases/latest) 下载 `kodo_<version>_release_arm64-v8a.apk`，在手机上打开安装。当前仅支持 arm64-v8a，最低 Android 8.0。
 
-覆盖安装需要包名和签名一致。开发版与正式版签名不同；需要保留开发版数据时，请继续使用原签名构建并通过 `adb install -r` 更新，不要为解决签名冲突卸载应用或清除数据。
+正式版包名为 `com.kudo.android`，开发版为 `com.kudo.android.debug`，桌面名称为“酷DO 开发版”，两者可并存且数据独立。覆盖更新各自应用时需要包名和签名一致，请继续使用原签名构建并通过 `adb install -r` 更新，不要为解决签名冲突卸载应用或清除数据。独立开发版首次使用需要单独登录。
 
 ## 本地构建
 
@@ -17,10 +17,12 @@
 先运行 `rustup target add aarch64-linux-android`。Gradle 自动以锁定依赖编译 `native/doh` 的 arm64 库、校验 16KB 对齐与随包许可；源码未变时复用生成库。原生代码及产物均只支持 arm64-v8a，手机不需要 Rust 环境。更新原生依赖后运行 `python scripts/native_notices.py` 同步许可。
 
 ```powershell
-.\gradlew.bat :app:assembleDebug
 adb devices -l
+adb -s <真机序列号> shell dumpsys package com.kudo.android.debug | Select-String 'versionCode=|versionName='
+# 按实际已安装版本调整参数，不能降低版本。
+.\gradlew.bat :app:assembleDebug "-PversionName=0.3.1-dev" "-PversionCode=3002"
 adb -s <真机序列号> install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s <真机序列号> shell am start -n com.kudo.android/.MainActivity
+adb -s <真机序列号> shell am start -n com.kudo.android.debug/com.kudo.android.MainActivity
 ```
 
 输出：`app/build/outputs/apk/debug/app-debug.apk`。没有私有签名配置时，源码克隆使用 Android 默认 Debug 证书。
@@ -28,8 +30,8 @@ adb -s <真机序列号> shell am start -n com.kudo.android/.MainActivity
 覆盖安装或运行真机测试前，先核对版本和签名。`app/build.gradle.kts` 的本地默认值是 `versionName=0.1.0`、`versionCode=1`；如果真机已安装更高版本，必须用不低于已安装版本的参数构建，例如：
 
 ```powershell
-adb -s <真机序列号> shell dumpsys package com.kudo.android | Select-String 'versionCode=|versionName='
-.\gradlew.bat :app:assembleDebug "-PversionName=0.2.4-dev" "-PversionCode=2005"
+adb -s <真机序列号> shell dumpsys package com.kudo.android.debug | Select-String 'versionCode=|versionName='
+.\gradlew.bat :app:assembleDebug "-PversionName=0.3.1-dev" "-PversionCode=3002"
 adb -s <真机序列号> install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -142,17 +144,30 @@ python scripts/release_version.py v0.2.1
 ```powershell
 npm run verify-notes
 python -m unittest discover -s scripts/tests -v
-cargo test --locked --manifest-path native/doh/Cargo.toml --lib
-.\gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
+cargo test --locked --manifest-path native/doh/Cargo.toml --target-dir app/build/doh-host --lib
+.\gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest "-PversionName=0.3.1-dev" "-PversionCode=3002"
+adb -s <真机序列号> install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s <真机序列号> install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 # 使用 Android CLI 检查过布局时，先停止它的辅助测试进程，避免 UiAutomation 冲突。
 adb -s <真机序列号> shell am force-stop com.android.cli.interact.instrumentation
-adb -s <真机序列号> shell am instrument -w -r -e class 'com.kudo.android.CategoriesUiTest,com.kudo.android.HomeRefreshUiTest,com.kudo.android.FeedHeaderUiTest,com.kudo.android.CommunityUiTest,com.kudo.android.SurfaceLiquidUiTest,com.kudo.android.SettingsModalUiTest,com.kudo.android.NavigationMaterialUiTest' com.kudo.android.test/androidx.test.runner.AndroidJUnitRunner
+adb -s <真机序列号> shell am instrument -w -r -e class 'com.kudo.android.CategoriesUiTest,com.kudo.android.HomeRefreshUiTest,com.kudo.android.FeedHeaderUiTest,com.kudo.android.CommunityUiTest,com.kudo.android.SurfaceLiquidUiTest,com.kudo.android.SettingsModalUiTest,com.kudo.android.NavigationMaterialUiTest' com.kudo.android.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 2026-10-08：37项 JVM 测试、37项 RMX2202 / Android13 真机界面测试通过（79.933秒），包括分类图标元数据、23种矢量与默认图标、分类跳转/重试、深色130%窄屏，以及既有首页和底栏回归。真实分类图标、页面清理及开发调优列表跳转已检查。Debug / 测试 APK、Lint 与笔记检查通过，Lint 为0 errors / 27 warnings。此前首页线上只读探针通过（21.297秒），真实访客推送与刷新已验证；登录私有频道仍需账号验收。此前材质慢拖录屏与关闭动画的28项结果保留。真机检查记录与手动验收用例见 [TASKS.md](../TASKS.md)。真实社区只做只读检查，自动化帖子与互动使用夹具。
 
 线上探针 `LiveUpdatesProbeTest` 默认跳过，手动运行需同时传 `-e liveReadOnlyProbe true -e class com.kudo.android.LiveUpdatesProbeTest`。它等待最多60秒的真实可见更新，不作为离线回归或CI门禁。
+
+本地优选位于“设置 → 网络管理 → 本地优选”，默认关闭；需同时开启 DoH + ECH 才生效。冷启动验证缓存节点，网络变化或连续建连失败后按需重选，支持手动重新优选。可选 atlas 补充表默认关闭，不上传测速结果。失败继续所选 DoH/ECH，WebView 保持系统网络。
+
+`EdgeSelectionDeviceTest` 的在线用例须显式传 `-e edgeLive true`，只读取公共 trace 和话题列表，验证主站/Connect 共用节点、真实 ECH 与过期密钥恢复，不读取应用 Cookie。用例的 `edge-live-result.json` 只含诊断布尔值、状态、计数与公开 DNS 地址，不含 ECH 密钥。离线 UI/配置/传输回归与在线线路结论分别记录，不能把 trace 成功当成免过盾或已登录。
+
+```powershell
+adb -s <真机序列号> shell am force-stop com.android.cli.interact.instrumentation
+adb -s <真机序列号> shell am instrument -w -r -e edgeLive true -e class com.kudo.android.EdgeSelectionDeviceTest com.kudo.android.debug.test/androidx.test.runner.AndroidJUnitRunner
+adb -s <真机序列号> shell run-as com.kudo.android.debug cat files/edge-live-result.json
+```
+
+2026-10-23：31 项 Rust、28 项 JVM 测试通过；真机离线 20 项通过、3 项在线用例跳过。最终在线用例通过，主站和 Connect 的 ECH 均被接受，列表 HTTP 200 / 30 条话题，旧密钥在缓存节点上恢复。过程中也出现重选与 HTTP 403，网络和站点策略仍可能使请求失败。开发设置入口及中文文案已目视验收；系统代理自动暂停有效。完整证据和测试边界见[本地优选记录](../.agents/notes/implemented/feature/2026-10-23-local-edge-selection.md)。
 
 ## 项目结构与实现记录
 
