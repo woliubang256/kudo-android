@@ -50,6 +50,8 @@ android {
     compileSdk = 36
     defaultConfig {
         applicationId = "com.kudo.android"
+        manifestPlaceholders["appLabel"] = "@string/app_name"
+        manifestPlaceholders["linkHost"] = "linux.do"
         minSdk = 26
         targetSdk = 36
         versionCode = providers.gradleProperty("versionCode").orElse("1").get()
@@ -79,6 +81,11 @@ android {
         }
     }
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "酷DO 开发版"
+            manifestPlaceholders["linkHost"] = "debug.kudo.invalid"
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true

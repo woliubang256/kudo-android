@@ -8,6 +8,12 @@ Debug 依赖开发机器的默认证书，Release 没有签名配置，仓库没
 
 ## Decision
 
+Debug 使用独立包名 `com.kudo.android.debug`、桌面名称“酷DO 开发版”，Release 保持 `com.kudo.android`。两者的应用目录、Cookie、FileProvider authority 和测试包身份分别隔离；固定开发签名继续沿用。Debug 的网页链接过滤器使用保留域名 `debug.kudo.invalid`，不参与 linux.do 链接关联。真机开发安装显式传入不低于当前安装的版本，核对目标包名与签名后使用 `adb install -r`，不卸载或清除任一应用数据。此项属于原构建身份决定的补充，不归档既有签名与发布规则。
+
+独立包名允许与正式版共存，代价是开发版首次使用需要独立登录。继续同包名能直接复用会话，但无法满足用户保留正式版并行验收的要求；临时修改 applicationId 只对一次构建生效，容易在下一次安装误覆盖，因此使用固定 debug 构建类型。
+
+2026-10-23 使用显式 `0.3.1-dev / 3002` 构建 `processDebugMainManifest` 通过；安装前真机正式版为 `0.3.1 / 3002`，尚无 `.debug` 应用。APK 安装与共存检查随本地优选单元集中验收。
+
 当前本地正式打包版本为 `0.2.2` / `2003`；最新已公开正式 Release 仍为 `v0.2.0`，`v0.2.1` 已有本地和远端 Tag，但没有已公开 Release。本次只打包，不创建 `v0.2.2` Tag 或发布远端附件。Release APK 只打包 `arm64-v8a`，发布脚本将验证 APK 的 `native-code` 清单只包含该 ABI；公开产物统一命名为 `kodo_<version>_release_arm64-v8a.apk` 及对应的 `.sha256` 文件。
 
 0.2.2 本地验收：使用 `-PversionName=0.2.2 -PversionCode=2003` 完成 Release R8 构建与 Lint，默认 Gradle 版本保持不变。产物为 `artifacts/release/0.2.2/kodo_0.2.2_release_arm64-v8a.apk`，9138426 字节，SHA256 为 `30cf6e9762d89192647e1b9db5489c9a8b75669323897eb09cd90a9874671d88`。正式证书与既有版本一致，包名、版本、单 arm64-v8a、非 debuggable、16KB ZIP 和三份 native ELF LOAD 对齐全部通过，详情为同目录 `verification.json` / `verification.txt`，源码提交为 `188e09e48f212abfd6461e65a261ad7b06d45687`。构建日志为 `artifacts/release-0.2.2-build.txt`；Release Lint 为 0 errors / 44 warnings / 1 hint，96篇笔记门禁通过。此前楼层与置顶、签名改动的19项相关 JVM 和29项不同真机用例已通过，本轮未重复无关 UI 测试，未把构建和验签视为正式包真机运行验收。手机保留 `0.2.2-dev / 2005` 开发版和数据，未安装正式包。通过认证 API 核对实际已公开基线为 `v0.2.0`，重新提取并归并26条 App 提交为16条更新说明；`release-notes/v0.2.2.md` 通过 HEAD 来源校验，原始候选和最终正文保存在产物目录。

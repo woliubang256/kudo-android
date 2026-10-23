@@ -23,7 +23,7 @@
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/ic_kudo"
-        android:label="@string/app_name"
+        android:label="${appLabel}"
         android:supportsRtl="true"
         android:theme="@style/Theme.Kudo"
         android:usesCleartextTraffic="true">
@@ -44,7 +44,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="linux.do" />
+                <data android:scheme="https" android:host="${linkHost}" />
                 <data android:scheme="http" />
             </intent-filter>
         </activity>
