@@ -71,7 +71,9 @@ fun AboutScreen(openLink: (String) -> Unit = {}, openExternal: (String) -> Unit 
                 }
                 item {
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface)) {
-                        SettingRow("检查更新", BuildConfig.VERSION_NAME, !showing) { show("update") }
+                        if (BuildConfig.DEBUG && checkUpdate == null) {
+                            SettingRow("开发版", BuildConfig.VERSION_NAME, false) {}
+                        } else SettingRow("检查更新", BuildConfig.VERSION_NAME, !showing) { show("update") }
                         SettingRow("查看源码", "GitHub", !showing) { openExternal(KudoSourceUrl) }
                         SettingRow("开源致谢", "", !showing) { show("licenses") }
                         SettingRow("社区指南", "", !showing) { openLink("https://linux.do/guidelines") }

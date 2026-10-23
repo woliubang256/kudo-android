@@ -206,7 +206,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         }
                         CompositionLocalProvider(LocalQuickScrollBottomPadding provides
                             (WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 88.dp)) {
-                        HomeUpdateHost(homeUpdate, selected == 0, ::openBrowser) {
+                        HomeUpdateHost(homeUpdate, selected == 0 && !com.kudo.android.BuildConfig.DEBUG, ::openBrowser) {
                         Box(Modifier.fillMaxSize()) {
                             Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)) {
                                 when (selected) {
