@@ -13201,9 +13201,9 @@ OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ========================================================================
-rustls 0.23.45
+rustls 0.23.46
 License: Apache-2.0 OR ISC OR MIT
-Source: https://crates.io/crates/rustls/0.23.45
+Source: https://crates.io/crates/rustls/0.23.46
 
 --- LICENSE-APACHE ---
                               Apache License

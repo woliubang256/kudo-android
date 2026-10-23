@@ -9,6 +9,8 @@ internal object NativeDoh {
     @JvmStatic external fun createProfile(configuration: String): Long
     @JvmStatic external fun destroyProfile(id: Long)
     @JvmStatic external fun lookup(id: Long, host: String): String
+    @JvmStatic external fun selectionState(id: Long): String
+    @JvmStatic external fun reportFailure(id: Long, host: String, ip: String)
     @JvmStatic external fun openSocket(profile: Long): Long
     @JvmStatic external fun connect(id: Long, ip: String, port: Int, millis: Int)
     @JvmStatic external fun handshake(id: Long, host: String, alpn: String): String

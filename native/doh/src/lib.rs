@@ -1,4 +1,7 @@
 mod dns;
+mod edge_pool;
+mod edge_probe;
+mod edge_selection;
 mod jni_api;
 mod socket;
 

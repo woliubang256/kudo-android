@@ -12,6 +12,8 @@ Status: implemented
 
 ## Decision
 
+[本地节点优选](2026-10-23-local-edge-selection.md)增加可选独立候选发现、主站子域节点固定与 ECH 密钥恢复；默认开关、原节点配置、凭据隔离和 WebView 分工继续保持。ECH 被拒后的行为由新篇细化为认证 retry_configs 的一次握手重试，HTTP 请求仍不自动重放。
+
 [网络请求调度](2026-10-15-network-request-scheduling.md)为API、Connect与图片增加独立于DoH的共享请求节奏；修改并发参数不重建DoH通道，本地冷却不改变连接状态，本篇凭据与路由边界继续保留。
 
 应用采用独立编写的 Rust DoH + ECH DNS/TLS 桥接，保留 OkHttp HTTP 与 Android WebView 的既有边界。配置持久化、原生 DNS/TLS、Socket 适配、VPN 策略、客户端接入与界面按小单元提交；纯 OkHttp DoH 仅作对照。

@@ -113,8 +113,35 @@ pub extern "system" fn Java_com_kudo_android_network_NativeDoh_destroyProfile(
     id: jlong,
 ) {
     if let Ok(mut profiles) = profiles().lock() {
-        profiles.remove(&id);
+        if let Some(resolver) = profiles.remove(&id) {
+            resolver.close();
+        }
     }
+}
+#[no_mangle]
+pub extern "system" fn Java_com_kudo_android_network_NativeDoh_selectionState(
+    mut env: JNIEnv,
+    _: JClass,
+    id: jlong,
+) -> jstring {
+    guard(&mut env, "java/io/IOException", |env| {
+        output(env, profile(id)?.selection_status().to_string())
+    })
+}
+#[no_mangle]
+pub extern "system" fn Java_com_kudo_android_network_NativeDoh_reportFailure(
+    mut env: JNIEnv,
+    _: JClass,
+    id: jlong,
+    host: JString,
+    ip: JString,
+) {
+    guard(&mut env, "java/io/IOException", |env| {
+        let host = string(env, &host)?;
+        let ip = string(env, &ip)?.parse().map_err(|_| error("invalid_ip"))?;
+        profile(id)?.failed(&host, ip);
+        Ok(())
+    });
 }
 #[no_mangle]
 pub extern "system" fn Java_com_kudo_android_network_NativeDoh_lookup(

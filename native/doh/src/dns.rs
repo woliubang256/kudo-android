@@ -18,7 +18,7 @@ use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, SocketAddr},
     sync::{
-        atomic::{AtomicU16, Ordering},
+        atomic::{AtomicBool, AtomicU16, Ordering},
         Arc, Mutex,
     },
     time::{Duration, Instant},
@@ -38,6 +38,12 @@ pub struct Configuration {
     pub url: String,
     #[serde(default)]
     pub bootstrap: Vec<IpAddr>,
+    #[serde(default)]
+    pub local_selection: bool,
+    #[serde(default)]
+    pub atlas: bool,
+    #[serde(default)]
+    pub cached_winner: Option<serde_json::Value>,
 }
 
 #[derive(Clone)]
@@ -52,6 +58,10 @@ pub struct Resolver {
     server: Url,
     bootstrap: Vec<IpAddr>,
     entries: Mutex<HashMap<String, Entry>>,
+    selector: Option<crate::edge_selection::Selector>,
+    ech_updates: Mutex<HashMap<String, (Vec<u8>, Instant)>>,
+    closed: AtomicBool,
+    stop: tokio::sync::Notify,
 }
 
 impl Resolver {
@@ -77,10 +87,102 @@ impl Resolver {
             server,
             bootstrap: config.bootstrap,
             entries: Mutex::new(HashMap::new()),
+            selector: config.local_selection.then(|| {
+                crate::edge_selection::Selector::new(
+                    config.atlas,
+                    config
+                        .cached_winner
+                        .and_then(|value| serde_json::from_value(value).ok()),
+                )
+            }),
+            ech_updates: Mutex::new(HashMap::new()),
+            closed: AtomicBool::new(false),
+            stop: tokio::sync::Notify::new(),
         })
     }
 
     pub async fn resolve(&self, host: &str) -> Result<Answer> {
+        let stopped = self.stop.notified();
+        tokio::pin!(stopped);
+        stopped.as_mut().enable();
+        if self.closed.load(Ordering::SeqCst) {
+            return Err("profile_closed");
+        }
+        tokio::select! {
+            _ = stopped => Err("profile_closed"),
+            result = self.resolve_route(host) => result,
+        }
+    }
+    async fn resolve_route(&self, host: &str) -> Result<Answer> {
+        let host = host.trim_end_matches('.').to_ascii_lowercase();
+        let selected = if crate::edge_pool::covered(&host) {
+            if let Some(selector) = &self.selector {
+                selector.answer().await
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let mut answer = match selected {
+            Some(answer) => answer,
+            None => self.resolve_dns(&host).await?,
+        };
+        if let Some((key, until)) = self
+            .ech_updates
+            .lock()
+            .map_err(|_| "resolver_lock")?
+            .get(&host)
+        {
+            if *until > Instant::now() {
+                answer.ech = key.clone();
+            }
+        }
+        Ok(answer)
+    }
+    pub fn selection_status(&self) -> serde_json::Value {
+        self.selector
+            .as_ref()
+            .map(|s| s.status())
+            .unwrap_or_else(|| serde_json::json!({"phase":"off"}))
+    }
+    pub fn failed(&self, host: &str, ip: IpAddr) {
+        if crate::edge_pool::covered(host) {
+            if let Some(selector) = &self.selector {
+                selector.failed(ip);
+            }
+        }
+    }
+    pub fn connected(&self, host: &str, ip: IpAddr) {
+        if crate::edge_pool::covered(host) {
+            if let Some(selector) = &self.selector {
+                selector.connected(ip);
+            }
+        }
+    }
+    pub fn adopt_ech(&self, host: &str, key: Vec<u8>) {
+        let host = host.trim_end_matches('.').to_ascii_lowercase();
+        if crate::edge_pool::covered(&host) {
+            if let Some(selector) = &self.selector {
+                selector.adopt(&key);
+            }
+        }
+        if let Ok(mut updates) = self.ech_updates.lock() {
+            updates.retain(|_, (_, expiry)| *expiry > Instant::now());
+            if updates.len() >= 256 {
+                updates.clear();
+            }
+            updates.insert(host, (key, Instant::now() + Duration::from_secs(3600)));
+        }
+    }
+    pub fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+        if let Some(selector) = &self.selector {
+            selector.close();
+        }
+        self.stop.notify_waiters();
+    }
+    pub async fn resolve_dns(&self, host: &str) -> Result<Answer> {
         let host = host.trim_end_matches('.').to_ascii_lowercase();
         if let Ok(ip) = host.parse::<IpAddr>() {
             return Ok(Answer {

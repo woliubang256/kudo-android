@@ -176,6 +176,21 @@ impl Socket {
         Ok(())
     }
     pub fn handshake(&self, host: &str, alpn: &str) -> io::Result<Value> {
+        let peer = self.tcp()?.tcp.peer_addr()?;
+        let result = self.handshake_with_recovery(host, alpn, peer);
+        match &result {
+            Ok(_) => self.resolver.connected(host, peer.ip()),
+            Err(_) if !self.closed.load(Ordering::SeqCst) => self.resolver.failed(host, peer.ip()),
+            _ => {}
+        }
+        result
+    }
+    fn handshake_with_recovery(
+        &self,
+        host: &str,
+        alpn: &str,
+        peer: SocketAddr,
+    ) -> io::Result<Value> {
         let answer = crate::runtime()
             .block_on(self.resolver.resolve(host))
             .map_err(other)?;
@@ -183,9 +198,7 @@ impl Socket {
         if dns::requires_ech(host) && !use_ech {
             return Err(other("ech_config_missing"));
         }
-        let mut config =
-            dns::tls_config(if use_ech { Some(answer.ech) } else { None }).map_err(other)?;
-        config.alpn_protocols = alpn
+        let protocols: Vec<Vec<u8>> = alpn
             .split(',')
             .map(|value| {
                 if !["h2", "http/1.1"].contains(&value) {
@@ -194,7 +207,33 @@ impl Socket {
                 Ok(value.as_bytes().to_vec())
             })
             .collect::<io::Result<_>>()?;
-        self.finish_handshake(host, config, use_ech)
+        let mut key = answer.ech;
+        for attempt in 0..2 {
+            let mut config =
+                dns::tls_config(if use_ech { Some(key.clone()) } else { None }).map_err(other)?;
+            config.alpn_protocols = protocols.clone();
+            match self.finish_handshake(host, config, use_ech) {
+                Ok(metadata) => return Ok(metadata),
+                Err(error) => {
+                    if attempt == 0 && !self.closed.load(Ordering::SeqCst) {
+                        if let Some(fresh) = crate::edge_probe::retry_config(&error) {
+                            // rustls exposes this error only after authenticating the outer server.
+                            // No HTTP bytes have been sent. Reconnect to the very same peer once.
+                            self.resolver.adopt_ech(host, fresh.clone());
+                            key = fresh;
+                            let _ = self.tcp()?.tcp.shutdown(Shutdown::Both);
+                            self.connect(&peer.ip().to_string(), peer.port(), 10_000)?;
+                            continue;
+                        }
+                    }
+                    if crate::edge_probe::retry_config(&error).is_some() {
+                        return Err(other("ech_rejected"));
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        Err(other("ech_rejected"))
     }
     fn finish_handshake(
         &self,
@@ -216,6 +255,9 @@ impl Socket {
         let mut stream = StreamOwned::new(conn, tcp);
         while stream.conn.is_handshaking() {
             if let Err(e) = stream.conn.complete_io(&mut stream.sock) {
+                if crate::edge_probe::retry_config(&e).is_some() {
+                    return Err(e);
+                }
                 if stream.conn.ech_status() == EchStatus::Rejected {
                     self.resolver.invalidate(host);
                     return Err(other("ech_rejected"));
