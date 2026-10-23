@@ -25,9 +25,13 @@ private val CipherSuites = arrayOf("TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SH
     "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256")
 
 internal class DohTransport(server: DohServer, private val addressLookup: Dns? = null,
+    private val localSelection: Boolean = false, atlas: Boolean = false, cachedWinner: String? = null,
+    private val selectionChanged: (String) -> Unit = {}, private val selectionStarted: () -> Unit = {},
     private val handshake: (String, Boolean) -> Unit = { _, _ -> }) : Closeable {
     init { NativeAlpnPlatform.install() }
-    private val profile = NativeDoh.createProfile(JSONObject().put("url", server.url).put("bootstrap", JSONArray(server.bootstrap)).toString())
+    private val profile = NativeDoh.createProfile(JSONObject().put("url", server.url).put("bootstrap", JSONArray(server.bootstrap))
+        .put("local_selection", localSelection).put("atlas", atlas)
+        .put("cached_winner", cachedWinner?.let { runCatching { JSONObject(it) }.getOrNull() }).toString())
     private val lock = Any()
     private var closed = false
     private val sockets = mutableSetOf<RustSocket>()
@@ -35,16 +39,25 @@ internal class DohTransport(server: DohServer, private val addressLookup: Dns? =
     val dns = object : Dns {
         override fun lookup(hostname: String): List<InetAddress> {
             synchronized(lock) { if (closed) throw UnknownHostException("DoH: profile_closed") }
-            val candidates = addressLookup?.lookup(hostname) ?: run {
-                val ips = JSONObject(NativeDoh.lookup(profile, hostname)).getJSONArray("ips")
-                (0 until ips.length()).map { InetAddress.getByAddress(hostname, InetAddress.getByName(ips.getString(it)).address) }
-            }
-            return addressOrder.order(hostname, candidates)
+            if (localSelection) selectionStarted()
+            try {
+                val candidates = addressLookup?.lookup(hostname) ?: run {
+                    val ips = JSONObject(NativeDoh.lookup(profile, hostname)).getJSONArray("ips")
+                    (0 until ips.length()).map { InetAddress.getByAddress(hostname, InetAddress.getByName(ips.getString(it)).address) }
+                }
+                return addressOrder.order(hostname, candidates)
+            } finally { publishSelection() }
         }
     }
     private fun socket(): RustSocket = synchronized(lock) {
         if (closed) throw SocketException("DoH: profile_closed")
-        RustSocket(NativeDoh.openSocket(profile), dns, addressOrder::failed) { socket ->
+        RustSocket(NativeDoh.openSocket(profile), dns, { host, ip, failure ->
+            addressOrder.failed(host, ip, failure)
+            if (localSelection && failure.message.orEmpty().startsWith("DoH: connect_")) {
+                runCatching { NativeDoh.reportFailure(profile, host, ip.hostAddress.orEmpty()) }
+                publishSelection()
+            }
+        }) { socket ->
             synchronized(lock) { sockets.remove(socket) }
         }.also { sockets += it }
     }
@@ -60,12 +73,19 @@ internal class DohTransport(server: DohServer, private val addressLookup: Dns? =
         override fun getSupportedCipherSuites(): Array<String> = CipherSuites.clone()
         override fun createSocket(socket: Socket, host: String, port: Int, autoClose: Boolean): Socket {
             if (socket !is RustSocket || !autoClose) throw SocketException("DoH: incompatible_socket")
-            return RustTlsSocket(socket, host, port, handshake)
+            return RustTlsSocket(socket, host, port, { name, accepted -> handshake(name, accepted); publishSelection() }, ::publishSelection)
         }
         override fun createSocket(host: String, port: Int): Socket = createSocket(socketFactory.createSocket(host, port), host, port, true)
         override fun createSocket(host: InetAddress, port: Int): Socket = createSocket(socketFactory.createSocket(host, port), host.hostName, port, true)
         override fun createSocket(host: String, port: Int, local: InetAddress, localPort: Int): Socket = throw SocketException("DoH: explicit_bind_unsupported")
         override fun createSocket(host: InetAddress, port: Int, local: InetAddress, localPort: Int): Socket = throw SocketException("DoH: explicit_bind_unsupported")
+    }
+    fun selectionState(): String = synchronized(lock) {
+        if (closed) throw IOException("DoH: profile_closed")
+        NativeDoh.selectionState(profile)
+    }
+    private fun publishSelection() {
+        if (localSelection) runCatching { selectionState() }.getOrNull()?.let(selectionChanged)
     }
     fun configure(builder: OkHttpClient.Builder): OkHttpClient.Builder {
         val managers = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(null as KeyStore?) }.trustManagers
@@ -147,7 +167,7 @@ private fun checkBounds(bytes: ByteArray, offset: Int, length: Int) {
 }
 
 private class RustTlsSocket(private val raw: RustSocket, private val host: String, private val remotePort: Int,
-    private val onHandshake: (String, Boolean) -> Unit) : SSLSocket(), NativeAlpnSocket {
+    private val onHandshake: (String, Boolean) -> Unit, private val onFailure: () -> Unit) : SSLSocket(), NativeAlpnSocket {
     private var offeredAlpn = listOf("h2", "http/1.1")
     override var negotiatedProtocol: String? = null
         private set
@@ -158,7 +178,8 @@ private class RustTlsSocket(private val raw: RustSocket, private val host: Strin
     private val listeners = mutableSetOf<HandshakeCompletedListener>()
     override fun startHandshake() {
         if (activeSession != null) return
-        val metadata = JSONObject(NativeDoh.handshake(raw.handle, host, offeredAlpn.joinToString(",")))
+        val metadata = try { JSONObject(NativeDoh.handshake(raw.handle, host, offeredAlpn.joinToString(","))) }
+        catch (failure: IOException) { onFailure(); throw failure }
         val session = RustSession(metadata, host, remotePort)
         if (session.protocol !in enabledProtocols || session.cipherSuite !in enabledCiphers) {
             raw.close(); throw SSLHandshakeException("DoH: tls_negotiation_mismatch")

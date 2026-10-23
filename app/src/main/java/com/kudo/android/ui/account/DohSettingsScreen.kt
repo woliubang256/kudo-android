@@ -58,6 +58,8 @@ internal fun DohSettingsScreen(network: DohNetwork, requests: RequestSettings, b
     var bootstrap by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf<DohServer?>(null) }
+    var selecting by remember { mutableStateOf(false) }
+    var selectionFeedback by remember { mutableStateOf<String?>(null) }
     val results = remember { mutableStateMapOf<DohServer, String>() }
     val server = configuration.servers.firstOrNull { it.id == serverId }
     val showing = panel.currentState || panel.targetState || reset.currentState || reset.targetState
@@ -109,6 +111,20 @@ internal fun DohSettingsScreen(network: DohNetwork, requests: RequestSettings, b
                             network.settings.update(configuration.copy(vpnAutoSwitch = it)); network.refresh()
                         }, Modifier.testTag("doh-vpn-auto-switch"), enabled = !showing)
                     }
+                }
+                item {
+                    EdgeSelectionCard(configuration, state, {
+                        selectionFeedback = null
+                        network.settings.update(it); network.refresh()
+                    }, reselect = {
+                        if (!selecting) scope.launch {
+                            selecting = true; selectionFeedback = null
+                            try { selectionFeedback = network.reselect() }
+                            catch (e: CancellationException) { throw e }
+                            catch (_: Exception) { selectionFeedback = "优选失败，请检查网络后重试" }
+                            finally { selecting = false }
+                        }
+                    }, selecting = selecting, feedback = selectionFeedback, enabled = !showing)
                 }
                 item {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

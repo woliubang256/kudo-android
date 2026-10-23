@@ -25,7 +25,8 @@ import java.util.IdentityHashMap
 import kotlin.coroutines.resumeWithException
 
 data class DohNetworkState(val enabled: Boolean = false, val vpn: Boolean = false, val proxy: Boolean = false,
-    val echAccepted: Boolean = false, val error: String? = null, val vpnAutoSwitch: Boolean = true) {
+    val echAccepted: Boolean = false, val error: String? = null, val vpnAutoSwitch: Boolean = true,
+    val edge: EdgeSelectionState = EdgeSelectionState()) {
     val pausedByVpnOrProxy: Boolean get() = vpnAutoSwitch && (vpn || proxy)
     val effective: Boolean get() = enabled && !pausedByVpnOrProxy
     val summary: String get() = when {
@@ -52,6 +53,8 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
     private var routeKey: Pair<DohConfiguration, NetworkSnapshot>? = null
     private var generation = 0L
     private var transport: DohTransport? = null
+    private var skipCachedWinner = false
+    private var lastManualSelection = -10_000L
     private val clients = IdentityHashMap<OkHttpClient, OkHttpClient>()
     private val checks = mutableSetOf<DohTransport>()
     private val current = MutableStateFlow(DohNetworkState())
@@ -104,6 +107,7 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
             if (closed) return
             val key = configuration to snapshot
             if (key == routeKey) return
+            if (routeKey != null && routeKey?.second != snapshot) skipCachedWinner = true
             routeKey = key
             generation++
             transport?.close(); transport = null
@@ -114,6 +118,53 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
                 vpnAutoSwitch = configuration.vpnAutoSwitch)
         }
     }
+    /** Called under lock; callbacks run after native operations, never under the transport lock. */
+    private fun nativeTransport(): DohTransport {
+        transport?.let { return it }
+        val configuration = settings.configuration.value
+        val epoch = generation
+        return DohTransport(configuration.selected, localSelection = configuration.localSelection,
+            atlas = configuration.atlas, cachedWinner = if (skipCachedWinner) null else settings.cachedWinner(),
+            selectionChanged = { raw ->
+                synchronized(lock) {
+                    if (!closed && epoch == generation) {
+                        val edge = decodeEdgeSelectionState(raw)
+                        if (current.value.edge.ip != edge.ip) clients.values.forEach { it.connectionPool.evictAll() }
+                        current.value = current.value.copy(edge = edge)
+                        settings.saveSelection(raw)
+                    }
+                }
+            }, selectionStarted = {
+                synchronized(lock) {
+                    if (!closed && epoch == generation && current.value.edge.phase == "idle")
+                        current.value = current.value.copy(edge = EdgeSelectionState("working"))
+                }
+            }) { host, accepted ->
+            if (host == "linux.do") synchronized(lock) {
+                if (!closed && epoch == generation) current.value = current.value.copy(echAccepted = accepted, error = null)
+            }
+        }.also { transport = it; skipCachedWinner = false }
+    }
+    /** Rebuilds the shared route, then performs only credential-free DNS and edge probes. */
+    suspend fun reselect(): String = withContext(Dispatchers.IO) {
+        refresh()
+        val native = synchronized(lock) {
+            if (closed) return@withContext "网络组件已关闭"
+            if (!current.value.effective || !settings.configuration.value.localSelection)
+                return@withContext "请先开启本地优选，并检查 VPN 暂停状态"
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastManualSelection < 10_000) return@withContext "请稍候再重新优选"
+            lastManualSelection = now
+            routeKey = null; skipCachedWinner = true
+            refresh()
+            nativeTransport()
+        }
+        try {
+            native.dns.lookup("linux.do")
+            currentCoroutineContext().ensureActive()
+            state.value.edge.summary
+        } catch (e: IOException) { currentCoroutineContext().ensureActive(); dohErrorMessage(e) }
+    }
     fun client(base: OkHttpClient): Call.Factory = object : Call.Factory {
         override fun newCall(request: Request): Call {
             refresh() // Also covers startup/foreground races before the first request.
@@ -122,11 +173,7 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
                 if (!current.value.effective) base else clients.getOrPut(base) {
                     val epoch = generation
                     val native = transport ?: try {
-                        DohTransport(settings.configuration.value.selected) { host, accepted ->
-                            if (host == "linux.do") synchronized(lock) {
-                                if (epoch == generation) current.value = current.value.copy(echAccepted = accepted, error = null)
-                            }
-                        }.also { transport = it }
+                        nativeTransport()
                     } catch (e: LinkageError) {
                         current.value = current.value.copy(error = "原生网络组件不可用")
                         throw IOException("DoH: native_unavailable", e)

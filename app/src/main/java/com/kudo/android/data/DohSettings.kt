@@ -19,7 +19,8 @@ val ShihuangDohServer = DohServer("shihuang-doh", "始皇DoH", "https://kudo.ddd
 val BuiltInDohServers = listOf(BuiltInDohServer, ShihuangDohServer)
 
 data class DohConfiguration(val enabled: Boolean = false, val selectedId: String = BuiltInDohServer.id,
-    val customServers: List<DohServer> = emptyList(), val vpnAutoSwitch: Boolean = true) {
+    val customServers: List<DohServer> = emptyList(), val vpnAutoSwitch: Boolean = true,
+    val localSelection: Boolean = false, val atlas: Boolean = false) {
     val servers: List<DohServer> get() = BuiltInDohServers + customServers
     val selected: DohServer get() = servers.firstOrNull { it.id == selectedId } ?: BuiltInDohServer
     fun select(id: String): DohConfiguration = copy(selectedId = servers.firstOrNull { it.id == id }?.id ?: BuiltInDohServer.id)
@@ -57,6 +58,7 @@ private fun isBootstrapIp(value: String): Boolean {
 
 internal fun encodeDohConfiguration(value: DohConfiguration): String = JSONObject().put("version", 1)
     .put("enabled", value.enabled).put("selectedId", value.selected.id).put("vpnAutoSwitch", value.vpnAutoSwitch)
+    .put("localSelection", value.localSelection).put("atlas", value.atlas)
     .put("servers", JSONArray().apply { value.customServers.forEach { server ->
         put(JSONObject().put("id", server.id).put("name", server.name).put("url", server.url)
             .put("bootstrap", JSONArray(server.bootstrap)))
@@ -74,13 +76,25 @@ internal fun decodeDohConfiguration(raw: String?): DohConfiguration = runCatchin
             (0 until ips.length()).joinToString(",") { ips.getString(it) }, item.getString("id"))
     }.getOrNull() }.distinctBy { it.id }
     DohConfiguration(json.optBoolean("enabled", false), customServers = servers,
-        vpnAutoSwitch = json.opt("vpnAutoSwitch") as? Boolean ?: true).select(json.optString("selectedId"))
+        vpnAutoSwitch = json.opt("vpnAutoSwitch") as? Boolean ?: true,
+        localSelection = json.opt("localSelection") as? Boolean ?: false,
+        atlas = json.opt("atlas") as? Boolean ?: false).select(json.optString("selectedId"))
 }.getOrDefault(DohConfiguration())
 
 class DohSettings(context: Context) {
     private val prefs = context.getSharedPreferences("kudo_network", Context.MODE_PRIVATE)
     private val state = MutableStateFlow(decodeDohConfiguration(prefs.getString("doh", null)))
     val configuration = state.asStateFlow()
+    internal fun cachedWinner(): String? = prefs.getString("edge_winner", null)?.takeIf { it.length <= 6500 }
+    internal fun saveSelection(raw: String) {
+        val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        when (json.optString("phase")) {
+            "ready" -> json.optJSONObject("winner")?.toString()?.takeIf { it.length <= 6500 }?.let {
+                if (prefs.getString("edge_winner", null) != it) prefs.edit().putString("edge_winner", it).apply()
+            }
+            "fallback" -> prefs.edit().remove("edge_winner").apply()
+        }
+    }
     fun update(value: DohConfiguration) {
         val normalized = decodeDohConfiguration(encodeDohConfiguration(value))
         prefs.edit().putString("doh", encodeDohConfiguration(normalized)).apply()

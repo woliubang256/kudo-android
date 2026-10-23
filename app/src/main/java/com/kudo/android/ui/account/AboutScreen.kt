@@ -91,7 +91,7 @@ fun AboutScreen(openLink: (String) -> Unit = {}, openExternal: (String) -> Unit 
             maxDialogHeightFraction = if (dialog == "licenses") .7f else 1f,
             actions = { LiquidModalAction("知道了", ::dismiss, Modifier.fillMaxWidth(), primary = true) }) {
             if (dialog == "privacy") {
-                Text("酷DO 直接连接 Linux.do。登录在官网页面完成；应用不收集密码，不接入统计或广告服务。Cookie 与草稿保存在应用私有目录，禁用系统备份，退出登录后清除。帖子中的外部图片会向其来源站点发起请求。DoH 默认关闭；开启后所选解析服务器可看到查询域名，应用不会向其发送社区登录凭据。",
+                Text("酷DO 直接连接 Linux.do。登录在官网页面完成；应用不收集密码，不接入统计或广告服务。Cookie 与草稿保存在应用私有目录，禁用系统备份，退出登录后清除。帖子中的外部图片会向其来源站点发起请求。DoH 默认关闭；开启后所选解析服务器可看到查询域名。可选本地优选通过公共加密 DNS 查询其他站点，再检测 Cloudflare 候选节点；开启补充社区节点后还会获取 atlas 公开表。服务方可见来源 IP，以上请求不携带社区登录凭据，测速结果只保存在本机。",
                     style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = 0.8f))
             } else {
                 ModalLink("Backdrop 项目与许可") { openLink("https://github.com/Kyant0/AndroidLiquidGlass") }

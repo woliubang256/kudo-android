@@ -32,7 +32,9 @@ ECH 拒绝只在 TLS 完成服务端身份验证后采纳 retry_configs，限定
 
 30 项 Rust 离线测试通过，覆盖非 CF/私网地址、trace 假阳性、认证的 ECH retry_configs 与证书错误区分、赢家缓存校验、冷却、取消等待、连续失败与域名边界，以及既有 TLS 流式读写。`cargo test --locked --manifest-path native/doh/Cargo.toml --target-dir app/build/edge-host`；许可生成仍为 118 组件，原生 arm64 构建通过 16KB 对齐检查。
 
-Android 配置、状态与界面接入和真机验收随下一提交记录；当前离线结果不能代替真实网络可用性结论。
+Android 设置继续使用兼容的 version 1 JSON，新增 `localSelection` / `atlas` 默认 false。赢家单独存入私有 SharedPreferences，不发配置 Flow 更新；状态只展示 IP、延迟、时间与受控原因。`DohNetwork` 在网络变化或用户重新优选时关闭旧代并拒收迟到回调，旧空闲连接池随赢家变化释放。手动优选只做无凭据探测，10 秒防连点，VPN 暂停期间不能开始。网络管理使用既有黄色开关与按钮；关于页同步隐私说明。
+
+Android 定向单测通过，覆盖旧配置、非法配置不隐式启用、状态脱敏、原地址恢复、VPN策略、写入不重放与更新 ViewModel；Debug 和独立测试 APK 构建成功。真机离线与在线结果继续在本节记录，离线测试不能代替真实网络可用性结论。
 
 ## Consequences
 
