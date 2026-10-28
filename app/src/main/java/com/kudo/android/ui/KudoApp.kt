@@ -165,6 +165,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         com.kudo.android.notifications.NotificationPermission(account.user?.id)
         IncomingNotification(nav, incomingNotification, account.sessionReady, account.user?.id, linkSequence,
             { selected = 3 }, account::readNotificationTarget, { app.notifications.consume(it); consumeNotification() })
+        com.kudo.android.ui.library.ImageLibraryEnvironment(app.imageLibrary, account.user?.id, sessionStable) {
         TopicPresentationEnvironment(app.repository, account.user?.id) {
         AvatarEnvironment(app.repository, account.user?.id) {
             ImageGalleryHost(loadAlbum = { id ->
@@ -536,6 +537,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }
             }
             }
+        }
         }
         }
         }

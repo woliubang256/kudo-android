@@ -92,6 +92,7 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                 PostQuoteSelection(detail.id, post, quote?.takeIf { enabled && !state.loading && !detail.closed && !detail.archived }
                     ?.let { action -> { markdown -> action(post, markdown) } }) {
                 RichContent(post.cooked, image, openLink, galleryKey = "post-${post.id}", galleryBottomInset = 110.dp,
+                    imageSource = ImageSource(detail.id, post.number, detail.title),
                     poll = { name ->
                         val poll = post.polls.firstOrNull { it.name == name }
                         val web = { openLink("https://linux.do/t/topic/${detail.id}/${post.number}") }
@@ -350,7 +351,8 @@ internal fun ThreadPreviewPost(post: Post, enabled: Boolean, image: (String) -> 
             else PostQuoteSelection(state.detail?.id, post,
                 quote?.takeIf { enabled && !state.loading && state.detail?.closed == false && !state.detail.archived }
                     ?.let { action -> { markdown -> action(post, markdown) } }) {
-                RichContent(post.cooked, image, openLink, galleryKey = "thread-preview-${post.id}")
+                RichContent(post.cooked, image, openLink, galleryKey = "thread-preview-${post.id}",
+                    imageSource = state.detail?.let { ImageSource(it.id, post.number, it.title) })
             }
             Box(Modifier.fillMaxWidth().testTag("thread-metadata-${post.number}")) {
                     val historyActions = LocalTopicActions.current

@@ -14,6 +14,9 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import com.kudo.android.data.ImageSource
+import com.kudo.android.ui.library.LocalImageLibrary
+import com.kudo.android.ui.library.LocalImageSource
 import androidx.compose.material.icons.rounded.Mood
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -519,7 +522,7 @@ internal fun SiteEmoji(name: String, modifier: Modifier = Modifier, source: Stri
 
 @Composable
 fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Unit,
-                galleryKey: String = "article", galleryBottomInset: Dp = 0.dp,
+                galleryKey: String = "article", galleryBottomInset: Dp = 0.dp, imageSource: ImageSource? = LocalImageSource.current,
                 poll: @Composable (String) -> Unit = { Text("投票，请打开原帖查看") }) {
     val blocks = remember(html) { parseArticle(html) }
     val footnotes = remember(html) { articleFootnotes(html) }
@@ -546,6 +549,9 @@ fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Uni
         mutableStateOf(closedDetails(blocks))
     }
     val gallery = LocalImageGallery.current
+    val library = LocalImageLibrary.current
+    var actionTarget by remember(html, library) { mutableStateOf<ImageActionTarget?>(null) }
+    var exporting by remember { mutableStateOf(false) }
     val origin = rememberSaveable { UUID.randomUUID().toString() }
     val bottomInset = with(LocalDensity.current) { galleryBottomInset.toPx() }
     RegisterGalleryOrigin(origin) { image, index ->
@@ -561,17 +567,20 @@ fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Uni
             withFrameNanos { }
         }
     }
-    CompositionLocalProvider(LocalArticleFootnoteReference provides onFootnote) {
+    CompositionLocalProvider(LocalArticleFootnoteReference provides onFootnote, LocalImageSource provides imageSource) {
     ArticleBlocks(blocks, "root", collapsed, { path ->
         collapsed = if (path in collapsed) collapsed - path else collapsed + path
     }, onLink, linkHandler, poll, onImage) { block, path ->
         val index = imageIndices.getValue(path)
-        ArticleImage(block, anchors[index], "article-image-$galleryKey-$index") {
+        ArticleImage(block, anchors[index], "article-image-$galleryKey-$index", longPress = {
+            if (!exporting) actionTarget = ImageActionTarget(block, images.toList(), imageSource)
+        }) {
             if (gallery == null) onImage(block.originalUrl)
-            else gallery.open(images, index, origin, anchors[index])
+            else gallery.open(images, index, origin, anchors[index], source = imageSource)
         }
     }
     }
+    ImageActions(actionTarget, { actionTarget = null }, { exporting = it })
 }
 
 @Composable
@@ -793,6 +802,10 @@ private fun CodeBlock(code: String) {
 @Composable
 private fun SpoilerArticleImage(image: ArticleBlock.Image, tag: String, revealed: Boolean, toggle: () -> Unit, onImage: (String) -> Unit) {
     val gallery = LocalImageGallery.current
+    val source = LocalImageSource.current
+    val library = LocalImageLibrary.current
+    var actionTarget by remember(image, library, revealed) { mutableStateOf<ImageActionTarget?>(null) }
+    var exporting by remember { mutableStateOf(false) }
     val anchor = remember(image) { GalleryThumbnailAnchor() }
     val origin = rememberSaveable(image) { UUID.randomUUID().toString() }
     RegisterGalleryOrigin(origin) { current, _ ->
@@ -802,16 +815,18 @@ private fun SpoilerArticleImage(image: ArticleBlock.Image, tag: String, revealed
             anchor
         }
     }
-    ArticleImage(image, anchor, tag, hideSpoiler = if (revealed) toggle else null) {
+    ArticleImage(image, anchor, tag, hideSpoiler = if (revealed) toggle else null,
+        longPress = if (revealed) ({ if (!exporting) actionTarget = ImageActionTarget(image, listOf(image), source) }) else null) {
         if (!revealed) toggle()
         else if (gallery == null) onImage(image.originalUrl)
-        else gallery.open(listOf(image), 0, origin, anchor)
+        else gallery.open(listOf(image), 0, origin, anchor, source = source)
     }
+    ImageActions(actionTarget, { actionTarget = null }, { exporting = it })
 }
 
 @Composable
 private fun ArticleImage(image: ArticleBlock.Image, anchor: GalleryThumbnailAnchor, tag: String,
-    hideSpoiler: (() -> Unit)? = null, open: () -> Unit) {
+    hideSpoiler: (() -> Unit)? = null, longPress: (() -> Unit)? = null, open: () -> Unit) {
     val gallery = LocalImageGallery.current
     val resources = LocalResources.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -835,7 +850,8 @@ private fun ArticleImage(image: ArticleBlock.Image, anchor: GalleryThumbnailAnch
             .graphicsLayer { alpha = if (gallery?.hiddenAnchor === anchor) 0f else 1f }
             .clip(RoundedCornerShape(11.dp))
             .then(if (loading || failed) Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) else Modifier)
-            .clickable(onClick = { if (failed) { loading = true; failed = false; retry++ } else open() })) {
+            .combinedClickable(onLongClickLabel = "图片操作", onLongClick = longPress,
+                onClick = { if (failed) { loading = true; failed = false; retry++ } else open() })) {
         key(retry) { AsyncImage(image.url, image.alt.ifBlank { "帖子图片，点击放大" }, Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit,
             onLoading = { loading = true; failed = false },

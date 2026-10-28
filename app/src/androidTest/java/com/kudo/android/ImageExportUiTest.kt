@@ -48,9 +48,9 @@ class ImageExportUiTest {
                 ImageActions(ImageActionTarget(current, listOf(current, other)), {}, {})
             }
         } }
-        compose.waitUntil { compose.onAllNodesWithText("保存原图（2.3 MB）").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("保存原图（2.3 MB）").assertIsDisplayed()
-        compose.onNodeWithText("保存所有图片").assertIsDisplayed()
+        compose.waitUntil { compose.onAllNodesWithText("下载图片（2.3 MB）").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("下载图片（2.3 MB）").assertIsDisplayed()
+        compose.onNodeWithText("下载全部").assertIsDisplayed()
         compose.onNodeWithText("容量未知", substring = true).assertDoesNotExist()
         captureMenu("image-capacity-from-head.png")
         compose.runOnIdle { assertEquals(1, requests.get()) }
@@ -75,9 +75,9 @@ class ImageExportUiTest {
             compose.setContent { KudoTheme(DisplaySettings()) {
                 ImageActions(ImageActionTarget(image, listOf(image)), {}, {})
             } }
-            compose.waitUntil { compose.onAllNodesWithText("保存原图（4 KB）").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("保存原图（4 KB）").assertIsDisplayed()
-            compose.onNodeWithText("保存原图（1 KB）").assertDoesNotExist()
+            compose.waitUntil { compose.onAllNodesWithText("下载图片（4 KB）").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("下载图片（4 KB）").assertIsDisplayed()
+            compose.onNodeWithText("下载图片（1 KB）").assertDoesNotExist()
         } finally { cache.remove(original); cache.remove(preview) }
     }
 
@@ -85,15 +85,15 @@ class ImageExportUiTest {
         val unknown = ArticleBlock.Image("https://image.test/animation.webp", "")
         var target by mutableStateOf(ImageActionTarget(unknown, listOf(unknown)))
         compose.setContent { KudoTheme(DisplaySettings()) { ImageActionMenu(target, {}, {}) } }
-        compose.onNodeWithText("保存原图").assertIsDisplayed()
+        compose.onNodeWithText("下载图片").assertIsDisplayed()
         compose.onNodeWithText("容量未知", substring = true).assertDoesNotExist()
         captureMenu("image-capacity-omitted.png")
         compose.runOnIdle {
             val known = unknown.copy(originalUrl = "https://image.test/known.png", sizeLabel = "512 KB")
             target = ImageActionTarget(known, listOf(known, unknown))
         }
-        compose.onNodeWithText("保存原图（512 KB）").assertIsDisplayed()
-        compose.onNodeWithText("保存所有图片").assertIsDisplayed()
+        compose.onNodeWithText("下载图片（512 KB）").assertIsDisplayed()
+        compose.onNodeWithText("下载全部").assertIsDisplayed()
         compose.onNodeWithText("容量未知", substring = true).assertDoesNotExist()
     }
 
@@ -107,11 +107,11 @@ class ImageExportUiTest {
             ImageActionMenu(ImageActionTarget(current, if (multiple) listOf(current, second) else listOf(current)),
                 { dismissed = true }, { selected = it })
         } }
-        compose.onNodeWithText("保存原图（512 KB）").assertIsDisplayed()
-        compose.onNodeWithText("保存所有图片", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("下载图片（512 KB）").assertIsDisplayed()
+        compose.onNodeWithText("下载全部", substring = true).assertDoesNotExist()
         compose.onNodeWithText("分享图片").performClick()
         compose.runOnIdle { assertEquals(ImageAction.SHARE, selected); multiple = true }
-        compose.onNodeWithText("保存所有图片（约 1.5 MB）").assertIsDisplayed().performClick()
+        compose.onNodeWithText("下载全部（约 1.5 MB）").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(ImageAction.SAVE_ALL, selected); assertFalse(dismissed) }
         val bitmap = compose.onNodeWithTag("image-action-menu").captureToImage().asAndroidBitmap()
         val directory = File(context.getExternalFilesDir(null), "ui-tests").apply { mkdirs() }

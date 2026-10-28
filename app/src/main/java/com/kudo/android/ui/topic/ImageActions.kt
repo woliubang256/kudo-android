@@ -29,6 +29,10 @@ import coil3.SingletonImageLoader
 import com.kudo.android.KudoApplication
 import com.kudo.android.ui.components.showKudoToast
 import com.kudo.android.media.*
+import com.kudo.android.data.ImageSource
+import com.kudo.android.data.SavedImage
+import com.kudo.android.ui.library.CollectImageSheet
+import com.kudo.android.ui.library.LocalImageLibrary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -37,8 +41,8 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Locale
 
-internal enum class ImageAction { SHARE, SAVE, SAVE_ALL }
-internal data class ImageActionTarget(val current: ArticleBlock.Image, val album: List<ArticleBlock.Image>)
+internal enum class ImageAction { SHARE, SAVE, SAVE_ALL, COLLECT }
+internal data class ImageActionTarget(val current: ArticleBlock.Image, val album: List<ArticleBlock.Image>, val source: ImageSource? = null)
 internal class ImageExportServices(val downloader: ImageDownloader, val saver: ImageSaver, val share: (OriginalImageFile) -> Unit)
 internal val LocalImageExportServices = staticCompositionLocalOf<ImageExportServices?> { null }
 
@@ -78,14 +82,15 @@ internal fun imageActionCapacityLabels(target: ImageActionTarget, capacities: Ma
 /** Deliberately uses flat text rows and a small radius, matching the provided Coolapk menu. */
 @Composable
 internal fun ImageActionMenu(target: ImageActionTarget, dismiss: () -> Unit, select: (ImageAction) -> Unit,
-    capacities: Map<String, Long> = emptyMap()) {
+    capacities: Map<String, Long> = emptyMap(), collectEnabled: Boolean = false) {
     val (currentCapacity, totalCapacity) = remember(target, capacities) { imageActionCapacityLabels(target, capacities) }
     Dialog(onDismissRequest = dismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp).fillMaxWidth()
             .clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)
             .verticalScroll(rememberScrollState()).padding(vertical = 8.dp).testTag("image-action-menu")) {
-            val options = listOf(ImageAction.SHARE to "分享图片", ImageAction.SAVE to ("保存原图" + currentCapacity?.let { "（$it）" }.orEmpty())) +
-                if (target.album.size > 1) listOf(ImageAction.SAVE_ALL to ("保存所有图片" + totalCapacity?.let { "（$it）" }.orEmpty())) else emptyList()
+            val options = listOf(ImageAction.SHARE to "分享图片", ImageAction.SAVE to ("下载图片" + currentCapacity?.let { "（$it）" }.orEmpty())) +
+                (if (target.album.size > 1) listOf(ImageAction.SAVE_ALL to ("下载全部" + totalCapacity?.let { "（$it）" }.orEmpty())) else emptyList()) +
+                (if (collectEnabled) listOf(ImageAction.COLLECT to "收藏图片") else emptyList())
             options.forEach { (action, title) ->
                 Box(Modifier.fillMaxWidth().clickable(role = Role.Button) { select(action) }
                     .heightIn(min = 56.dp).padding(horizontal = 24.dp, vertical = 16.dp)) {
@@ -100,6 +105,12 @@ internal fun ImageActionMenu(target: ImageActionTarget, dismiss: () -> Unit, sel
 internal fun ImageActions(target: ImageActionTarget?, dismiss: () -> Unit, busyChanged: (Boolean) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val library = LocalImageLibrary.current
+    var collecting by remember(library) { mutableStateOf<SavedImage?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<List<ArticleBlock.Image>?>(null) }
+    collecting?.let { CollectImageSheet(it) { collecting = null } }
+    if (target == null && !busy && pending == null) return
     val injected = LocalImageExportServices.current
     val services = remember(context, injected) {
         injected ?: run {
@@ -114,8 +125,6 @@ internal fun ImageActions(target: ImageActionTarget?, dismiss: () -> Unit, busyC
             }
         }
     }
-    var busy by remember { mutableStateOf(false) }
-    var pending by remember { mutableStateOf<List<ArticleBlock.Image>?>(null) }
     var capacities by remember(target) { mutableStateOf<Map<String, Long>>(emptyMap()) }
     LaunchedEffect(target, services) {
         val selected = target ?: return@LaunchedEffect
@@ -153,10 +162,13 @@ internal fun ImageActions(target: ImageActionTarget?, dismiss: () -> Unit, busyC
         else if (images != null) message("未获得存储权限，无法保存图片")
     }
     DisposableEffect(Unit) { onDispose { busyChanged(false) } }
-    if (target != null) ImageActionMenu(target, dismiss, capacities = capacities, select = { action ->
+    if (target != null) ImageActionMenu(target, dismiss, capacities = capacities, collectEnabled = library != null, select = { action ->
         dismiss()
         if (!busy && pending == null) {
-            if (action == ImageAction.SHARE) {
+            if (action == ImageAction.COLLECT) {
+                collecting = SavedImage(originalUrl = target.current.originalUrl, thumbnailUrl = target.current.url,
+                    alt = target.current.alt, filename = target.current.filename, ratio = target.current.ratio, source = target.source)
+            } else if (action == ImageAction.SHARE) {
                 busy = true; busyChanged(true)
                 scope.launch(Dispatchers.Main.immediate) {
                     var file: OriginalImageFile? = null

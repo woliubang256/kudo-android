@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import com.kudo.android.data.ImageSource
 
 internal val LocalImageGallery = staticCompositionLocalOf<ImageGalleryState?> { null }
 
@@ -53,7 +54,7 @@ internal fun sameGalleryImage(first: ArticleBlock.Image, second: ArticleBlock.Im
 @Stable
 internal class GallerySession(
     val origin: String, images: List<ArticleBlock.Image>, index: Int,
-    val topicId: Int? = null, val restored: Boolean = false,
+    val topicId: Int? = null, val restored: Boolean = false, val source: ImageSource? = null,
 ) {
     val openingImage = images[index]
     var images by mutableStateOf(images)
@@ -132,11 +133,11 @@ internal class ImageGalleryState {
         internal set
 
     fun open(images: List<ArticleBlock.Image>, index: Int, origin: String,
-             anchor: GalleryThumbnailAnchor? = null, topicId: Int? = null) {
+             anchor: GalleryThumbnailAnchor? = null, topicId: Int? = null, source: ImageSource? = null) {
         if (session != null || images.isEmpty() || index !in images.indices) return
         openingAnchor = anchor
         openingSnapshot = anchor?.snapshot()
-        session = GallerySession(origin, images, index, topicId)
+        session = GallerySession(origin, images, index, topicId, source = source ?: topicId?.let { ImageSource(it) })
     }
 
     suspend fun loadAlbum(target: GallerySession, load: suspend (Int) -> List<ArticleBlock.Image>) {
@@ -177,12 +178,16 @@ internal class ImageGalleryState {
         val Saver = listSaver<ImageGalleryState, Any>(
             save = { state -> state.session?.let { active ->
                 listOf(active.origin, active.index, active.topicId ?: 0,
-                    ArrayList(active.images.map { ArrayList(it.saveImage()) }), active.albumLoaded)
+                    ArrayList(active.images.map { ArrayList(it.saveImage()) }), active.albumLoaded,
+                    active.source?.topicId ?: 0, active.source?.postNumber ?: 0, active.source?.title.orEmpty())
             }.orEmpty() },
             restore = { saved -> ImageGalleryState().apply {
                 if (saved.isNotEmpty()) session = GallerySession(saved[0] as String,
                     (saved[3] as List<List<Any>>).map(::restoreGalleryImage), saved[1] as Int,
-                    (saved[2] as Int).takeIf { it > 0 }, restored = true).also { it.albumLoaded = saved[4] as Boolean }
+                    (saved[2] as Int).takeIf { it > 0 }, restored = true,
+                    source = (saved.getOrNull(5) as? Int)?.takeIf { it > 0 }?.let {
+                        ImageSource(it, (saved.getOrNull(6) as? Int)?.takeIf { number -> number > 0 } ?: 1, saved.getOrNull(7) as? String ?: "")
+                    }).also { it.albumLoaded = saved[4] as Boolean }
             } },
         )
     }

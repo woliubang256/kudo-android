@@ -473,8 +473,8 @@ class ImageGalleryUiTest {
         third()
         compose.onNodeWithTag("gallery-page-2").performTouchInput { longClick() }
         compose.onNodeWithText("分享图片").assertIsDisplayed()
-        compose.onNodeWithText("保存原图（24 KB）").assertIsDisplayed()
-        compose.onNodeWithText("保存所有图片（约 120 KB）").assertIsDisplayed()
+        compose.onNodeWithText("下载图片（24 KB）").assertIsDisplayed()
+        compose.onNodeWithText("下载全部（约 120 KB）").assertIsDisplayed()
         compose.onNodeWithText("图片信息").assertDoesNotExist()
         capture("gallery-image-action-menu.png")
         InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
@@ -500,7 +500,7 @@ class ImageGalleryUiTest {
             compose.setContent { Detail(exports = exports) }
             openFirst(); third()
             compose.onNodeWithTag("gallery-page-2").performTouchInput { longClick() }
-            compose.onNodeWithText("保存原图（24 KB）").performClick()
+            compose.onNodeWithText("下载图片（24 KB）").performClick()
             compose.waitUntil(5_000) { saved.size == 1 && compose.onAllNodesWithText("正在处理图片…").fetchSemanticsNodes().isEmpty() }
             assertEquals(listOf("figure-3.png"), saved.toList())
             assertEquals(listOf(pictures[2].originalUrl), requests.toList())
@@ -509,7 +509,7 @@ class ImageGalleryUiTest {
             compose.waitUntil(5_000) { shared.size == 1 && compose.onAllNodesWithText("正在处理图片…").fetchSemanticsNodes().isEmpty() }
             assertEquals(listOf("figure-3.png"), shared.toList())
             compose.onNodeWithTag("gallery-page-2").performTouchInput { longClick() }
-            compose.onNodeWithText("保存所有图片（约 120 KB）").performClick()
+            compose.onNodeWithText("下载全部（约 120 KB）").performClick()
             compose.waitUntil(10_000) { saved.size == 6 && compose.onAllNodesWithText("正在处理图片…").fetchSemanticsNodes().isEmpty() }
             assertEquals(pictures.map { it.filename }, saved.drop(1))
             assertEquals(pictures.map { it.originalUrl }, requests.drop(2))
