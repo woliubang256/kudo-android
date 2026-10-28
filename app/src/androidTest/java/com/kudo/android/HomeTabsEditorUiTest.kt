@@ -83,7 +83,8 @@ class HomeTabsEditorUiTest {
         compose.onNodeWithTag("home-tabs-add-category:4").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithTag("home-tabs-add-category:20").assertDoesNotExist()
         compose.onNodeWithTag("home-tabs-source-TAG").performScrollTo().performClick()
-        compose.onNodeWithTag("home-tabs-tag-search-hint").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("搜索标签").assertIsDisplayed()
+        compose.onNodeWithText("输入关键词搜索标签").assertDoesNotExist()
         compose.onNodeWithTag("home-tabs-query").performScrollTo().performTextReplacement("公告")
         compose.onNodeWithTag("home-tabs-query").performImeAction()
         compose.waitUntil(5000) { !model!!.state.value.tagsLoading && model!!.state.value.tags.isNotEmpty() }
@@ -108,6 +109,29 @@ class HomeTabsEditorUiTest {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("home-tabs-discard").performClick()
         compose.runOnIdle { assertEquals(1, backCount); assertNull(saved) }
+    }
+
+    @Test fun compactEditorOmitsRepeatedLabelsAndKeepsTouchTargets() {
+        show(listOf(HomeTab.filter(FeedFilter.LATEST)))
+        listOf("定制访客首页", "长按手柄拖动排序，修改只在保存后生效。", "内置筛选", "分类目录", "一级分类", "仅显示一级分类").forEach {
+            compose.onNodeWithText(it).assertDoesNotExist()
+        }
+        val row = compose.onNodeWithTag("home-tabs-selected-latest").getUnclippedBoundsInRoot()
+        assertTrue("Selected rows stay compact", row.bottom - row.top <= 57.dp)
+        compose.onNodeWithTag("home-tabs-drag-latest").assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithTag("home-tabs-remove-latest").assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithTag("home-tabs-add-hot").performScrollTo().assertTouchHeightIsEqualTo(48.dp)
+        capture("home-tabs-editor-compact-light.png")
+    }
+
+    @Test fun compactEditorSupportsCategorySearchInADarkNarrowWindow() {
+        show(listOf(HomeTab.filter(FeedFilter.LATEST)), narrow = true)
+        compose.onNodeWithTag("home-tabs-source-CATEGORY").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("仅显示一级分类").assertDoesNotExist()
+        compose.onNodeWithTag("home-tabs-query").performScrollTo().performTextReplacement("开发")
+        compose.onNodeWithTag("home-tabs-query").performImeAction()
+        compose.onNodeWithTag("home-tabs-add-category:4").performScrollTo().assertIsDisplayed()
+        capture("home-tabs-editor-compact-dark-narrow.png")
     }
 
     @Test fun longPressDragChangesOrderAndAccessibilityCanMoveItBack() {

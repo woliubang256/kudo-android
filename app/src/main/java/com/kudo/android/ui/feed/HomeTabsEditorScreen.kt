@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -30,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -149,17 +151,9 @@ internal fun HomeTabsEditorScreen(
                     modifier = Modifier.fillMaxSize().padding(padding)
                         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                         .imePadding().testTag("home-tabs-list"),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     userScrollEnabled = !dragging && !showingModal,
                 ) {
-                    item(key = "editor-introduction") {
-                        Column(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(if (state.accountId == null) "定制访客首页" else "定制当前账号的首页",
-                                style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                            Text("长按手柄拖动排序，修改只在保存后生效。", style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
                     item(key = "editor-selected-heading") {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -221,15 +215,15 @@ internal fun HomeTabsEditorScreen(
                         )
                     }
                     item(key = "editor-candidates-heading") {
-                        Text("添加首页标签", Modifier.padding(top = 28.dp, bottom = 12.dp).semantics { heading() },
+                        Text("添加", Modifier.padding(top = 16.dp, bottom = 8.dp).semantics { heading() },
                             style = MaterialTheme.typography.titleSmall)
                         HomeTabsEditorSources(state.source, source)
-                        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).clip(CircleShape)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .04f))
-                            .heightIn(min = 52.dp).padding(start = 12.dp),
+                            .heightIn(min = 48.dp).padding(start = 16.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Icon(Icons.Rounded.Search, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            CommunityTextField(state.query, query, Modifier.weight(1f).padding(vertical = 12.dp)
+                            CommunityTextField(state.query, query, Modifier.weight(1f).padding(vertical = 8.dp)
                                 .testTag("home-tabs-query"), placeholder = when (state.source) {
                                     HomeTabType.CATEGORY -> "搜索一级分类"
                                     HomeTabType.TAG -> "搜索标签"
@@ -244,14 +238,8 @@ internal fun HomeTabsEditorScreen(
                                 Modifier.testTag("home-tabs-clear-query"))
                             else Spacer(Modifier.width(12.dp))
                         }
-                        if (state.source == HomeTabType.CATEGORY) Text("仅显示一级分类", Modifier.padding(bottom = 12.dp),
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (state.source == HomeTabType.TAG && state.query.isBlank()) {
-                        item(key = "editor-tag-search-hint") {
-                            HomeTabsEditorHint("输入关键词搜索标签", "home-tabs-tag-search-hint")
-                        }
-                    } else {
+                    if (state.source != HomeTabType.TAG || state.query.isNotBlank()) {
                         if (state.loading) item(key = "editor-loading") {
                             Row(Modifier.fillMaxWidth().padding(vertical = 20.dp).testTag("home-tabs-loading"),
                                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -306,7 +294,7 @@ private fun HomeTabsEditorSelectedRow(
         customActions = actions
         stateDescription = "第 ${index + 1} 项，共 $count 项"
     }) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp), verticalAlignment = Alignment.CenterVertically,
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(handle.size(48.dp).semantics {
                 contentDescription = "长按拖动${tab.label}排序"
@@ -314,7 +302,7 @@ private fun HomeTabsEditorSelectedRow(
             }.focusable().testTag("home-tabs-drag-${tab.key}"), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.DragHandle, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            HomeTabsEditorTabLabel(tab, Modifier.weight(1f).padding(vertical = 12.dp))
+            HomeTabsEditorTabLabel(tab, Modifier.weight(1f).padding(vertical = 8.dp))
             CommunityIconButton(Icons.Rounded.Close, "移除${tab.label}", remove,
                 Modifier.testTag("home-tabs-remove-${tab.key}"), enabled = removeEnabled)
         }
@@ -325,11 +313,11 @@ private fun HomeTabsEditorSelectedRow(
 @Composable
 private fun HomeTabsEditorCandidateRow(tab: HomeTab, added: Boolean, enabled: Boolean, add: () -> Unit) {
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 72.dp), verticalAlignment = Alignment.CenterVertically,
+        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            HomeTabsEditorTabLabel(tab, Modifier.weight(1f).padding(vertical = 12.dp))
+            HomeTabsEditorTabLabel(tab, Modifier.weight(1f).padding(vertical = 8.dp))
             CommunityButton(if (added) "已添加" else "添加", add,
-                Modifier.heightIn(min = 48.dp).testTag("home-tabs-add-${tab.key}").semantics {
+                Modifier.heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("home-tabs-add-${tab.key}").semantics {
                     stateDescription = if (added) "已添加" else "未添加"
                 }, enabled = enabled && !added, compact = true)
         }
@@ -339,15 +327,7 @@ private fun HomeTabsEditorCandidateRow(tab: HomeTab, added: Boolean, enabled: Bo
 
 @Composable
 private fun HomeTabsEditorTabLabel(tab: HomeTab, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(tab.label, style = MaterialTheme.typography.bodyLarge)
-        Text(when (tab.type) {
-            HomeTabType.FILTER -> "内置筛选"
-            HomeTabType.DIRECTORY -> "分类目录"
-            HomeTabType.CATEGORY -> "一级分类"
-            HomeTabType.TAG -> "标签"
-        }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    Text(tab.label, modifier, style = MaterialTheme.typography.bodyLarge)
 }
 
 @Composable
@@ -357,9 +337,10 @@ private fun HomeTabsEditorSources(source: HomeTabType, change: (HomeTabType) -> 
         listOf(HomeTabType.FILTER to "内置", HomeTabType.CATEGORY to "分类", HomeTabType.TAG to "标签").forEach { (type, title) ->
             val selected = source == type || type == HomeTabType.FILTER && source == HomeTabType.DIRECTORY
             Box(Modifier.widthIn(min = 72.dp).heightIn(min = 48.dp)
+                .padding(vertical = 6.dp).clip(CircleShape)
                 .background(if (selected) LogoYellow else Color.Transparent)
                 .selectable(selected, role = Role.Tab, onClick = { change(type) })
-                .padding(horizontal = 18.dp, vertical = 12.dp).testTag("home-tabs-source-${type.name}"),
+                .padding(horizontal = 18.dp, vertical = 6.dp).testTag("home-tabs-source-${type.name}"),
                 contentAlignment = Alignment.Center) {
                 Text(title, color = if (selected) Ink else MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
