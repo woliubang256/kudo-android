@@ -39,6 +39,7 @@ internal fun EditorPreviewDialog(raw: String, dismiss: () -> Unit) {
         }
     }
     Dialog(dismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        EditorToolBackdropHost {
         CompositionLocalProvider(LocalArticleHeadingCollector provides null, LocalArticleFootnotes provides null, LocalReadingBlocked provides true) {
             ImageGalleryHost({ emptyList() }, { link = it }) {
                 BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), contentAlignment = Alignment.Center) {
@@ -67,6 +68,7 @@ internal fun EditorPreviewDialog(raw: String, dismiss: () -> Unit) {
                     }
                 }
             }
+        }
         }
     }
 }

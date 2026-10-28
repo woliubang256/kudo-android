@@ -14,6 +14,8 @@ Status: implemented
 
 脚注宿主在账号图库环境外，不能只依赖显示位置的 CompositionLocal。脚注请求携带点击时的组合上下文及明确的帖子来源，根部显示时恢复该上下文；来源账号变化使原脚注关闭，避免遗留旧账号入口。先用 `footnoteImagesCanBeCollectedWithTheirOriginalPostSource` 真机复现缺少“收藏图片”（`artifacts/image-library-edge-repro-device.txt`），再补齐此契约。
 
+Markdown 预览是独立 Dialog 窗口，内部单独提供 EditorToolBackdropHost，使图片收藏目录面板属于预览窗口而不是被它遮挡的 Activity 窗口。`previewImageCollectionUsesThePreviewWindowRatherThanTheCoveredAppWindow` 比较两者实际语义根 ID，先复现 root 2 / root 1 不一致（`artifacts/image-library-preview-window-repro-device.txt`）；不能只靠 isDialog 匹配器，因为同窗口 CommunitySheet 也有 dialog 语义。预览内收藏没有虚构原帖来源，也不改变草稿或触发上传。
+
 收藏使用现有全窗口工具面板选择目录，提供新建并收藏的单次原子更新。只有打开菜单时才创建导出依赖，不为每个正文预先创建下载器。目录模型支持重命名、删除目录并把图片移入默认目录，不删除原图。
 
 “我的”页设置下的图库管理由访客与登录布局同时提供。上方横向目录（含全部）过滤下方自适应惰性图片网格，每项提供具体来源楼层和移除按钮；管理目录支持新建、重命名、删除，删除有确认并保留图片。图片单独进入查看器，避免跨不同帖子浏览组时把第一张来源错误用于其他图片。读取失败显示重试，不把坏数据展示成空图库。
@@ -38,7 +40,9 @@ Status: implemented
 
 66 项定向 JVM 用例通过，涵盖上述模型和既有图片导出、相册变换、Markdown、脚注、编辑草稿（`artifacts/image-library-final-validation.txt`）。Debug 和 AndroidTest APK 构建通过；Lint 为 0 errors / 60 warnings / 1 hint，新增一条存储的 UseKtx 建议，保留 commit 的布尔返回以检查实际写盘结果。
 
-RMX2202 / Android 13 上，新增存储 5 项、图库 UI 14 项，以及导出、相册、工具栏、脚注、剧透、访客布局的定向回归共 74 项全部通过（`artifacts/image-library-final-device.txt`）。UI 覆盖正文和全屏当前图片、新建目录收藏、取消不写、目录筛选及管理、移除确认、原帖楼层、多图插入、不发布不上传、窄屏深色大字、真实键盘和换号关闭旧选择器。测试图片与请求为离线夹具，不向真实站点上传或发帖。
+RMX2202 / Android 13 上，首批新增存储 5 项、图库 UI 14 项，以及导出、相册、工具栏、脚注、剧透、访客布局的定向回归共 74 项全部通过（`artifacts/image-library-final-device.txt`）。UI 覆盖正文和全屏当前图片、新建目录收藏、取消不写、目录筛选及管理、移除确认、原帖楼层、多图插入、不发布不上传、窄屏深色大字、真实键盘和换号关闭旧选择器。测试图片与请求为离线夹具，不向真实站点上传或发帖。
+
+独立预览窗口修复后，图库 UI 增至 15 项，与工具栏 10 项、回复预览图片 6 项合计 31 项专项回归全部通过（`artifacts/image-library-preview-fixed-device.txt`）；包含预览内收藏、窗口归属、回到预览及未虚构帖子来源。与前批去重后累计 81 个不同真机用例通过。最终 APK、AndroidTest 构建和 Lint 通过（`artifacts/image-library-preview-fixed-build.txt`），无关已测用例不重复跑全量。
 
 首次扩大到 77 项回归时有 4 项失败、1 项可选联网探针跳过（`artifacts/image-library-regression-device.txt`）。与新增行相关的访客惰性列表定位改用 item 索引；导出选图断言不再绑定下载后可能变化的缓存容量，两个定向复测通过。未修改的两个旧断言分别期待 Debug About 的“检查更新”（当前为“开发版”）及加载圈黄白深色三段（当前为白色百分比圈），最终 74 项定向集合明确排除这两个不匹配断言和可选联网探针，不把整个扩展集报告为全绿。对应复测为 `artifacts/image-library-regression-retest-device.txt`。
 

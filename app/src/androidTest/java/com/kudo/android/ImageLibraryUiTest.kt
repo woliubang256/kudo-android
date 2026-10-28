@@ -16,6 +16,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -300,5 +301,24 @@ class ImageLibraryUiTest {
         assertTrue(settings < gallery && gallery < downloads)
         compose.onNodeWithText("图库管理").performClick()
         assertTrue(opened)
+    }
+
+    @Test fun previewImageCollectionUsesThePreviewWindowRatherThanTheCoveredAppWindow() {
+        fun windowRoot(node: SemanticsNode): Int {
+            var current = node
+            while (current.parent != null) current = requireNotNull(current.parent)
+            return current.id
+        }
+        screen { EditorPreviewDialog("![第一张](${first.originalUrl})") {} }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("article-image-editor-preview-0").fetchSemanticsNodes().isNotEmpty() }
+        val previewWindow = windowRoot(compose.onNodeWithTag("markdown-preview", useUnmergedTree = true).fetchSemanticsNode())
+        compose.onNodeWithTag("article-image-editor-preview-0").performTouchInput { longClick() }
+        compose.onNodeWithText("收藏图片").performClick()
+        assertEquals(previewWindow, windowRoot(compose.onNodeWithTag("collect-folder-default", useUnmergedTree = true).fetchSemanticsNode()))
+        compose.onNodeWithTag("collect-folder-default").performClick()
+        compose.waitUntil(5_000) { runBlocking { store.load(101).images.isNotEmpty() } }
+        assertEquals(first.originalUrl, runBlocking { store.load(101) }.images.single().originalUrl)
+        assertNull(runBlocking { store.load(101) }.images.single().source)
+        compose.onNodeWithTag("markdown-preview").assertIsDisplayed()
     }
 }
