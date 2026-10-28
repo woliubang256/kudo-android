@@ -149,6 +149,16 @@ class ImageLibraryUiTest {
         assertEquals(ImageLibrary(), runBlocking { store.load(101) })
     }
 
+    @Test fun collectionSheetUsesCompactRowsWithoutSecondaryInstructions() {
+        seed()
+        screen { CollectImageSheet(first) {} }
+        compose.waitUntil { compose.onAllNodesWithTag("collect-folder-default").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("选择收藏目录").assertDoesNotExist()
+        compose.onNodeWithTag("collect-folder-default").assertHeightIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
+        compose.onNodeWithTag("collect-new-folder").assertHeightIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
+        capture("image-library-compact-collect.png")
+    }
+
     @Test fun libraryFiltersDirectoriesAndOpensExactSourceFloor() {
         seed()
         var source: ImageSource? = null
@@ -198,6 +208,8 @@ class ImageLibraryUiTest {
         compose.onNodeWithTag("editor-body").performTextInputSelection(TextRange(1, 3))
         openTool()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("library-image-first").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("使用原图链接，不重新上传").assertDoesNotExist()
+        compose.onNodeWithText("插入图片").assertIsNotEnabled()
         compose.onNodeWithTag("library-image-first").performClick()
         compose.onNodeWithTag("library-folder-emoji").performClick()
         compose.onNodeWithTag("library-image-second").performClick()
@@ -218,6 +230,7 @@ class ImageLibraryUiTest {
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("library-image-first").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("library-image-first").performClick()
         compose.onNodeWithText("插入 1 张图片").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("editor-library-insert").assertTouchHeightIsEqualTo(48.dp)
         capture("image-library-picker-dark-large.png")
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.waitUntil { compose.onAllNodesWithTag("editor-library-picker").fetchSemanticsNodes().isEmpty() }

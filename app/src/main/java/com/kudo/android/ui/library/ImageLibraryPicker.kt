@@ -1,7 +1,6 @@
 package com.kudo.android.ui.library
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -31,8 +30,8 @@ internal fun ImageLibraryPicker(enabled: Boolean, insert: (List<SavedImage>) -> 
         ImageLibraryBrowser(library, folder, { folder = it }, { image ->
             if (enabled) chosen = if (image.id in chosen) chosen - image.id else chosen + image.id
         }, Modifier.fillMaxWidth().height(height).testTag("editor-library-picker"), selection = chosen.toSet())
-        Text("使用原图链接，不重新上传", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        CommunityButton(if (selected.isEmpty()) "选择图片后插入" else "插入 ${selected.size} 张图片", { insert(selected) },
-            Modifier.fillMaxWidth().testTag("editor-library-insert"), enabled = enabled && selected.isNotEmpty())
+        CommunityButton(if (selected.isEmpty()) "插入图片" else "插入 ${selected.size} 张图片", { insert(selected) },
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("editor-library-insert"),
+            enabled = enabled && selected.isNotEmpty(), compact = true)
     }
 }

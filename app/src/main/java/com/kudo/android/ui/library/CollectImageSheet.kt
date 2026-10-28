@@ -31,35 +31,36 @@ internal fun CollectImageSheet(image: SavedImage, dismiss: () -> Unit) {
         var name by remember { mutableStateOf("") }
         var error by remember { mutableStateOf<String?>(null) }
         EditorToolSheet("收藏图片", { dismiss() }) { close ->
-            Text("选择收藏目录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (state.error != null) {
                 Text(state.error!!)
                 CommunityButton("重试", { scope.launch { state.reload() } })
             } else if (state.library == null) CommunityLoadingIndicator(Modifier.padding(16.dp))
-            state.library?.folders?.forEach { folder ->
-                Row(Modifier.fillMaxWidth().clickable(enabled = !busy, role = Role.Button) {
-                    busy = true
-                    scope.launch {
-                        try {
-                            val duplicate = state.library?.images?.any { it.folderId == folder.id && it.originalUrl == image.originalUrl } == true
-                            state.update { it.save(image.copy(folderId = folder.id)) }
-                            showKudoToast(context, if (duplicate) "此目录已收藏该图片" else "已收藏到${folder.name}")
-                            close()
-                        } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (failure: Exception) { error = failure.message ?: "收藏失败，请重试" }
-                        finally { busy = false }
+            Column(Modifier.fillMaxWidth()) {
+                state.library?.folders?.forEach { folder ->
+                    Row(Modifier.fillMaxWidth().clickable(enabled = !busy, role = Role.Button) {
+                        busy = true
+                        scope.launch {
+                            try {
+                                val duplicate = state.library?.images?.any { it.folderId == folder.id && it.originalUrl == image.originalUrl } == true
+                                state.update { it.save(image.copy(folderId = folder.id)) }
+                                showKudoToast(context, if (duplicate) "此目录已收藏该图片" else "已收藏到${folder.name}")
+                                close()
+                            } catch (cancelled: CancellationException) { throw cancelled }
+                            catch (failure: Exception) { error = failure.message ?: "收藏失败，请重试" }
+                            finally { busy = false }
+                        }
+                    }.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp).testTag("collect-folder-${folder.id}"),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Rounded.Folder, null)
+                        Text(folder.name, Modifier.weight(1f))
+                        Text((state.library?.images?.count { it.folderId == folder.id } ?: 0).toString(), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                }.heightIn(min = 56.dp).padding(horizontal = 12.dp).testTag("collect-folder-${folder.id}"),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Rounded.Folder, null)
-                    Text(folder.name, Modifier.weight(1f))
-                    Text((state.library?.images?.count { it.folderId == folder.id } ?: 0).toString(), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-            Row(Modifier.fillMaxWidth().clickable(enabled = !busy, role = Role.Button) { creating = !creating }
-                .heightIn(min = 52.dp).padding(horizontal = 12.dp).testTag("collect-new-folder"), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Add, null)
-                Text("新建目录", Modifier.padding(start = 12.dp))
+                Row(Modifier.fillMaxWidth().clickable(enabled = !busy, role = Role.Button) { creating = !creating }
+                    .heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 8.dp).testTag("collect-new-folder"), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Add, null)
+                    Text("新建目录", Modifier.padding(start = 12.dp))
+                }
             }
             if (creating) {
                 CommunityTextField(name, { name = it; error = null }, Modifier.fillMaxWidth().testTag("collect-folder-name"), placeholder = "目录名称", singleLine = true, enabled = !busy)
@@ -75,7 +76,8 @@ internal fun CollectImageSheet(image: SavedImage, dismiss: () -> Unit) {
                         catch (failure: Exception) { error = failure.message ?: "收藏失败，请重试" }
                         finally { busy = false }
                     }
-                }, enabled = !busy && name.isNotBlank(), modifier = Modifier.fillMaxWidth())
+                }, enabled = !busy && name.isNotBlank(), compact = true,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp))
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
