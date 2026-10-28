@@ -151,11 +151,16 @@ class ImageLibraryUiTest {
 
     @Test fun collectionSheetUsesCompactRowsWithoutSecondaryInstructions() {
         seed()
-        screen { CollectImageSheet(first) {} }
+        screen { Column { RichContent(html, {}, {}, imageSource = first.source) } }
+        compose.onNodeWithTag("article-image-article-0").performTouchInput { longClick() }
+        compose.onNodeWithText("收藏图片").performClick()
         compose.waitUntil { compose.onAllNodesWithTag("collect-folder-default").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("选择收藏目录").assertDoesNotExist()
         compose.onNodeWithTag("collect-folder-default").assertHeightIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
         compose.onNodeWithTag("collect-new-folder").assertHeightIsEqualTo(48.dp).assertTouchHeightIsEqualTo(48.dp)
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 2_000)
         capture("image-library-compact-collect.png")
     }
 
@@ -320,6 +325,7 @@ class ImageLibraryUiTest {
     @Test fun guestProfilePlacesGalleryBetweenSettingsAndDownloads() {
         var opened = false
         screen(account = null) { ProfileScreen(null, {}, {}, {}, {}, imageLibrary = { opened = true }) }
+        compose.onNodeWithText("按目录管理收藏图片").assertDoesNotExist()
         val settings = compose.onNodeWithText("设置").fetchSemanticsNode().boundsInRoot.top
         val gallery = compose.onNodeWithText("图库管理").fetchSemanticsNode().boundsInRoot.top
         val downloads = compose.onNodeWithText("下载管理").fetchSemanticsNode().boundsInRoot.top

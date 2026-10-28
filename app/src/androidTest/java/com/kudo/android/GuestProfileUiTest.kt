@@ -41,6 +41,8 @@ class GuestProfileUiTest {
         compose.onNodeWithText("夜间模式").assertDoesNotExist()
         compose.onNodeWithText("你好，DO 友").assertDoesNotExist()
         compose.onNodeWithText("点击登录").assertIsDisplayed().performClick()
+        compose.onNodeWithText("按目录管理收藏图片").assertDoesNotExist()
+        compose.onNodeWithText("图库管理").assertHeightIsEqualTo(56.dp).assertTouchHeightIsEqualTo(56.dp)
         compose.onNodeWithContentDescription("设置").assertDoesNotExist()
         compose.onNodeWithText(BuildConfig.VERSION_NAME).assertIsDisplayed()
         compose.onNodeWithText("真诚 · 友善 · 团结 · 专业").assertIsDisplayed()
@@ -85,7 +87,8 @@ class GuestProfileUiTest {
         compose.onNodeWithText("点击登录").assertIsDisplayed()
         compose.onNodeWithText("关于酷DO").performScrollTo().assertIsDisplayed().performClick()
         capture("guest-profile-dark-narrow-large.png", "guest-narrow")
-        for (label in listOf("设置", "图库管理", "按目录管理收藏图片", "关于酷DO", BuildConfig.VERSION_NAME, "一个用心的 Linux.do 原生客户端")) {
+        compose.onNodeWithText("按目录管理收藏图片").assertDoesNotExist()
+        for (label in listOf("设置", "图库管理", "关于酷DO", BuildConfig.VERSION_NAME, "一个用心的 Linux.do 原生客户端")) {
             val layouts = mutableListOf<TextLayoutResult>()
             compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             val layout = layouts.single()

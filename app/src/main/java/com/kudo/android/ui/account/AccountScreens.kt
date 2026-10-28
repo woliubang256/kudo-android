@@ -100,7 +100,7 @@ private fun GuestProfileScreen(login: () -> Unit, settings: () -> Unit, about: (
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)) {
                     GuestMenuRow(Icons.Rounded.Palette, "设置", "主题、字号与液态玻璃", settings)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    GuestMenuRow(Icons.Rounded.PhotoLibrary, "图库管理", "按目录管理收藏图片", imageLibrary)
+                    GuestMenuRow(Icons.Rounded.PhotoLibrary, "图库管理", null, imageLibrary)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                     GuestMenuRow(Icons.Rounded.Download, "下载管理", "查看文件下载进度和历史", downloads)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
@@ -132,14 +132,14 @@ private fun GuestLoginPanel(explanation: String, login: () -> Unit) {
 }
 
 @Composable
-private fun GuestMenuRow(icon: ImageVector, title: String, subtitle: String, click: () -> Unit, value: String? = null) {
+private fun GuestMenuRow(icon: ImageVector, title: String, subtitle: String?, click: () -> Unit, value: String? = null) {
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = click)
-        .heightIn(min = 72.dp).padding(horizontal = 16.dp, vertical = 14.dp),
+        .heightIn(min = if (subtitle == null) 56.dp else 72.dp).padding(horizontal = 16.dp, vertical = if (subtitle == null) 8.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, fontSize = 15.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface)
-            Text(subtitle, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (subtitle != null) Text(subtitle, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (value != null) Text(value, fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
