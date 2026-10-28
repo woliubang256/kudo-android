@@ -70,7 +70,7 @@ import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refresh: () -> Unit, more: () -> Unit, openTopic: (Int) -> Unit, openUser: (String) -> Unit, search: () -> Unit, login: () -> Unit, categories: () -> Unit, modifier: Modifier = Modifier, category: Category? = null, back: () -> Unit = {}, listStyle: TopicListStyle = TopicListStyle.FEED, pages: Map<String, FeedState> = emptyMap(), categoryContent: (@Composable () -> Unit)? = null, createTopic: (Int) -> Unit = {}, glass: GlassMode = LocalDisplaySettings.current.glass) {
+fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refresh: () -> Unit, more: () -> Unit, openTopic: (Int) -> Unit, openUser: (String) -> Unit, search: () -> Unit, login: () -> Unit, categories: () -> Unit, modifier: Modifier = Modifier, category: Category? = null, back: () -> Unit = {}, listStyle: TopicListStyle = TopicListStyle.FEED, pages: Map<String, FeedState> = emptyMap(), categoryContent: (@Composable (Boolean) -> Unit)? = null, createTopic: (Int) -> Unit = {}, glass: GlassMode = LocalDisplaySettings.current.glass, homeTabs: List<HomeTab>? = null, editTabs: (() -> Unit)? = null) {
     if (category != null) {
         CategoryFeedScreen(category, state, user, select, refresh, more, openTopic, openUser, search, login, back, modifier, listStyle, pages, createTopic, glass)
         return
@@ -84,19 +84,25 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
     var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).nestedScroll(scrollBehavior.nestedScrollConnection)) {
-        val tabs = FeedFilter.available(user != null).map {
-            it.value to if (it == FeedFilter.NEW && state.newCount != null) "新 (${state.newCount})" else it.label
-        } + listOf("categories" to "类别")
+        val tabs = normalizeHomeTabs(homeTabs ?: defaultHomeTabs(user != null), user != null).map {
+            it.key to if (it.key == FeedFilter.NEW.value && state.newCount != null) "新 (${state.newCount})" else it.label
+        }
         key(user?.id, user?.unifiedNew) {
             val pager = rememberPagerState(initialPage = tabs.indexOfFirst { it.first == state.filter }.coerceAtLeast(0), pageCount = { tabs.size })
             val scope = rememberCoroutineScope()
             val currentSelect by rememberUpdatedState(select)
             val currentCategories by rememberUpdatedState(categories)
-            LaunchedEffect(pager) {
+            var directoryVisited by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(pager, tabs.map { it.first }) {
+                val selectedIndex = tabs.indexOfFirst { it.first == state.filter }.coerceAtLeast(0)
+                if (pager.currentPage != selectedIndex) pager.scrollToPage(selectedIndex)
                 var previousPage = pager.settledPage
                 snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { index ->
                     val value = tabs.getOrNull(index)?.first ?: return@collect
-                    if (value == "categories") currentCategories() else currentSelect(value)
+                    if (value == "categories") {
+                        if (homeTabs != null) currentSelect(value)
+                        currentCategories()
+                    } else currentSelect(value)
                     if (index != previousPage) {
                         scrollBehavior.state.heightOffset = 0f
                         scrollBehavior.state.contentOffset = 0f
@@ -108,11 +114,14 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
                 val index = tabs.indexOfFirst { it.first == state.filter }
                 if (index >= 0 && pager.currentPage != index && !pager.isScrollInProgress) pager.scrollToPage(index)
             }
-            HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("home-pager"), key = { tabs[it].first }) { index ->
-                val value = tabs[index].first
+            HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("home-pager"), key = { tabs.getOrNull(it)?.first ?: "removed:$it" }) { index ->
+                val value = tabs.getOrNull(index)?.first ?: return@HorizontalPager
                 if (value == "categories") {
+                    val active = pager.settledPage == index
+                    if (active) SideEffect { directoryVisited = true }
                     Box(Modifier.fillMaxSize().padding(top = contentTopPadding)) {
-                        categoryContent?.invoke() ?: EmptyState("社区分类", "按分类浏览话题", actionLabel = "查看分类", action = categories)
+                        if (active || directoryVisited) categoryContent?.invoke(active)
+                            ?: EmptyState("社区分类", "按分类浏览话题", actionLabel = "查看分类", action = categories)
                     }
                 } else {
                     val page = if (value == state.filter) state else pages[value]?.takeIf { it.accountId == user?.id }
@@ -153,9 +162,15 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
                         }
                     }
                 }
-                FeedTabBar(tabs, tabs.getOrNull(pager.currentPage)?.first ?: state.filter, containerColor = Color.Transparent) { value ->
-                    val index = tabs.indexOfFirst { it.first == value }
-                    if (index >= 0) scope.launch { pager.animateScrollToPage(index) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    FeedTabBar(tabs, tabs.getOrNull(pager.currentPage)?.first ?: state.filter, containerColor = Color.Transparent,
+                        modifier = Modifier.weight(1f)) { value ->
+                        val index = tabs.indexOfFirst { it.first == value }
+                        if (index >= 0) scope.launch { pager.animateScrollToPage(index) }
+                    }
+                    if (editTabs != null) TopBarIconButton(Icons.Rounded.EditNote, "编辑首页 Tab", editTabs,
+                        Modifier.testTag("home-tabs-edit").padding(end = 4.dp), backdrop = backdrop,
+                        touchSize = 40.dp, visualSize = 32.dp, iconSize = 21.dp)
                 }
             }
         }

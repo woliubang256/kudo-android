@@ -18,9 +18,12 @@ data class FeedState(val topics: List<Topic> = emptyList(), val categories: List
 
 private fun defaultFeedFilter(user: Member?, inCategory: Boolean) = if (user != null && !inCategory) "unread" else "latest"
 
-class FeedViewModel(private val repository: CommunityRepository, private val categoryId: Int? = null, initialUser: Member? = null, private val updates: FeedUpdates? = null, private val updateIntervalMillis: Long = 15_000, private val tagSlug: String? = null, private val tagId: Int? = null) : ViewModel() {
+class FeedViewModel(private val repository: CommunityRepository, private val categoryId: Int? = null, initialUser: Member? = null, private val updates: FeedUpdates? = null, private val updateIntervalMillis: Long = 15_000, private val tagSlug: String? = null, private val tagId: Int? = null, initialHomeTabs: List<HomeTab>? = null, autoLoad: Boolean = true) : ViewModel() {
     private var user = initialUser
-    private val _state = MutableStateFlow(FeedState(filter = defaultFeedFilter(user, categoryId != null || tagSlug != null), accountId = user?.id))
+    private var homeTabs = initialHomeTabs?.takeIf { categoryId == null && tagSlug == null }?.let { normalizeHomeTabs(it, user != null) }
+    private fun initialFilter() = homeTabs?.firstOrNull()?.key ?: defaultFeedFilter(user, categoryId != null || tagSlug != null)
+    private fun isGlobalFeed(filter: String) = categoryId == null && tagSlug == null && FeedFilter.entries.any { it.value == filter }
+    private val _state = MutableStateFlow(FeedState(filter = initialFilter(), accountId = user?.id))
     val state = _state.asStateFlow()
     private val _pages = MutableStateFlow<Map<String, FeedState>>(emptyMap())
     val pages = _pages.asStateFlow()
@@ -36,25 +39,30 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
     private var lastRefreshEpoch = 0
     private var lastReadingEpoch = 0
     private var readingCountJob: Job? = null
+    private var initialized = false
     private val refreshResults = Channel<Int>(Channel.BUFFERED)
     val refreshEvents = refreshResults.receiveAsFlow()
-    init { refresh(manual = false) }
-    fun setUser(value: Member?): Boolean {
+    init { if (autoLoad) refresh(manual = false) }
+    fun setUser(value: Member?, configuredTabs: List<HomeTab>? = null): Boolean {
+        if (configuredTabs != null) homeTabs = normalizeHomeTabs(configuredTabs, value != null)
         if (value?.id == user?.id && value?.unifiedNew == user?.unifiedNew) return false
+        if (homeTabs != null && configuredTabs == null) homeTabs = defaultHomeTabs(value != null)
         user = value
         _pages.value = emptyMap()
         baseline = null
         acknowledgeOnProbe = false
-        _state.value = FeedState(filter = defaultFeedFilter(value, categoryId != null || tagSlug != null), accountId = value?.id)
+        _state.value = FeedState(filter = initialFilter(), accountId = value?.id)
         refresh(manual = false)
         restartUpdates()
         return true
     }
     fun select(filter: String) {
-        if (FeedFilter.available(user != null).none { it.value == filter }) return
+        if (homeTabs?.none { it.key == filter } ?: FeedFilter.available(user != null).none { it.value == filter }) return
         if (filter == _state.value.filter) return
         val previous = _state.value
-        _pages.update { it + (previous.filter to previous.copy(loading = previous.loading && previous.topics.isEmpty(), loadingMore = false)) }
+        if (homeTabs?.any { it.key == previous.filter } != false) {
+            _pages.update { it + (previous.filter to previous.copy(loading = previous.loading && previous.topics.isEmpty(), loadingMore = false)) }
+        }
         job?.cancel(); moreJob?.cancel(); readingCountJob?.cancel(); generation++
         acknowledgeOnProbe = false
         val cached = _pages.value[filter]?.takeIf { !it.loading }
@@ -63,6 +71,22 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
             ?: FeedState(categories = previous.categories, filter = filter, accountId = user?.id, tag = previous.tag)
         if (cached == null) refresh(manual = false)
         restartUpdates()
+    }
+    fun configureHomeTabs(tabs: List<HomeTab>, value: Member?) {
+        if (categoryId != null || tagSlug != null) return
+        val configured = normalizeHomeTabs(tabs, value != null)
+        val changed = configured != homeTabs
+        homeTabs = configured
+        if (setUser(value, configured)) return
+        val keys = configured.map { it.key }.toSet()
+        if (!initialized) {
+            if (_state.value.filter !in keys) _state.update { it.copy(filter = configured.first().key) }
+            refresh(manual = false)
+            return
+        }
+        if (!changed) return
+        _pages.update { pages -> pages.filterKeys { it in keys } }
+        if (_state.value.filter !in keys) select(configured.first().key)
     }
     fun refreshFromNavigation() {
         _state.update { it.copy(scrollToTopRequest = it.scrollToTopRequest + 1) }
@@ -86,7 +110,7 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
             // Keep the current reading snapshot, including later pages, until an explicit refresh.
             _state.update { it.copy(hasUpdates = true) }
         }
-        if (categoryId == null && tagSlug == null) {
+        if (isGlobalFeed(_state.value.filter)) {
             // Reading must not replace public pages, pagination or their saved scroll positions.
             readingCountJob?.cancel()
             val token = generation
@@ -115,7 +139,7 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
         signals?.close()
         signals = null
         val source = updates ?: return
-        if (!updatesActive) return
+        if (!updatesActive || _state.value.filter == "categories") return
         val channel = Channel<Unit>(Channel.CONFLATED)
         signals = channel
         val account = user
@@ -174,6 +198,7 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
     fun refresh() = refresh(manual = true)
 
     private fun refresh(manual: Boolean) {
+        initialized = true
         job?.cancel()
         moreJob?.cancel()
         readingCountJob?.cancel()
@@ -181,6 +206,11 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
         val refreshRevision = arrivalRevision
         val account = user
         val filter = _state.value.filter
+        if (filter == "categories") {
+            baseline = null
+            _state.update { it.copy(loading = false, loadingMore = false, error = null, moreError = null, hasUpdates = false) }
+            return
+        }
         _state.update { it.copy(loading = true, loadingMore = false, error = null, moreError = null, newCount = null) }
         job = viewModelScope.launch {
             try {
@@ -192,7 +222,7 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
                 baseline = page.topics.associateBy(Topic::id)
                 acknowledgeOnProbe = arrivalRevision != refreshRevision
                 _state.update { it.copy(topics = page.topics.distinctBy(Topic::id), next = page.next, loading = false, hasUpdates = it.hasUpdates && acknowledgeOnProbe, tag = page.tag ?: it.tag) }
-                if (categoryId == null && tagSlug == null) loadedNewCount?.takeIf { it > 0 }?.let(refreshResults::trySend)
+                if (isGlobalFeed(filter)) loadedNewCount?.takeIf { it > 0 }?.let(refreshResults::trySend)
                 if (acknowledgeOnProbe) signals?.trySend(Unit)
                 coroutineScope {
                     if (_state.value.categories.isEmpty()) launch {
@@ -203,7 +233,7 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
                             // Optional metadata must not replace a successful feed with an error.
                         }
                     }
-                    if (account != null && categoryId == null && tagSlug == null) launch {
+                    if (account != null && isGlobalFeed(filter)) launch {
                         try {
                             val count = withContext(Dispatchers.IO) { repository.newTopicCount(account) }
                             if (token == generation) _state.update { it.copy(newCount = count) }
@@ -229,9 +259,15 @@ class FeedViewModel(private val repository: CommunityRepository, private val cat
         }
     }
 
-    private suspend fun loadTopics(filter: String, next: String? = null): TopicPage =
-        if (tagSlug != null) repository.tagTopics(tagSlug, tagId, filter, next)
-        else repository.topics(filter, categoryId, next)
+    private suspend fun loadTopics(filter: String, next: String? = null): TopicPage {
+        val tab = homeTabs?.firstOrNull { it.key == filter }
+        return when {
+            tab?.type == HomeTabType.CATEGORY -> repository.topics("latest", tab.value.toInt(), next)
+            tab?.type == HomeTabType.TAG -> repository.tagTopics(tab.value, tab.tagId, next = next)
+            tagSlug != null -> repository.tagTopics(tagSlug, tagId, filter, next)
+            else -> repository.topics(filter, categoryId, next)
+        }
+    }
 }
 
 private fun Topic.hasNewContentComparedTo(old: Topic): Boolean = bumpedAt != old.bumpedAt || replies != old.replies ||

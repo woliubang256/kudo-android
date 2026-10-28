@@ -55,15 +55,15 @@ import com.kyant.backdrop.effects.vibrancy
 @Composable
 internal fun CommunityDirectoryHost(model: CommunityDirectoryViewModel, accountId: Int?, sessionReady: Boolean,
     login: () -> Unit, openCategory: (Category) -> Unit, openTag: (TopicTag) -> Unit,
-    openWeb: (String) -> Unit, inHome: Boolean = false) {
+    openWeb: (String) -> Unit, inHome: Boolean = false, active: Boolean = true) {
     val state by model.state.collectAsStateWithLifecycle()
-    LaunchedEffect(accountId, sessionReady) {
+    LaunchedEffect(accountId, sessionReady, active) {
         model.useAccount(accountId)
-        if (sessionReady) model.loadIfStale()
+        if (sessionReady && active) model.loadIfStale()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         model.useAccount(accountId)
-        if (sessionReady) model.loadIfStale()
+        if (sessionReady && active) model.loadIfStale()
     }
     CommunityDirectoryScreen(state.forAccount(accountId).let { if (sessionReady) it else it.copy(loading = true) }, { model.load(refresh = true) }, login,
         { model.loadTags() }, { model.loadTags(refresh = true) }, openCategory, { entry ->
@@ -71,14 +71,14 @@ internal fun CommunityDirectoryHost(model: CommunityDirectoryViewModel, accountI
                 val username = state.directory?.username.orEmpty()
                 if (username.isNotBlank()) openWeb("https://linux.do/u/${Uri.encode(username)}/messages/tags/${Uri.encode(entry.tag.name)}")
             } else openTag(entry.tag)
-        }, inHome)
+        }, inHome, parentActive = active)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: () -> Unit, login: () -> Unit,
     loadTags: () -> Unit, refreshTags: () -> Unit, openCategory: (Category) -> Unit, openTag: (DirectoryTag) -> Unit,
-    inHome: Boolean = false) {
+    inHome: Boolean = false, parentActive: Boolean = true) {
     val tabs = listOf("categories", "tags")
     val pager = key(state.accountId) { rememberPagerState(pageCount = { tabs.size }) }
     val scope = rememberCoroutineScope()
@@ -97,8 +97,8 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
         else { allTags = false; tagQuery = "" }
     }
     BackHandler(expanded, ::collapse)
-    LaunchedEffect(state.accountId, pager.settledPage, allTags, directory?.showTags) {
-        if (pager.settledPage == 1 && allTags && directory?.showTags == true) loadTags()
+    LaunchedEffect(state.accountId, pager.settledPage, allTags, directory?.showTags, parentActive) {
+        if (parentActive && pager.settledPage == 1 && allTags && directory?.showTags == true) loadTags()
     }
     val settings = LocalDisplaySettings.current
     val glass = settings.glass
@@ -113,7 +113,7 @@ internal fun CommunityDirectoryScreen(state: CommunityDirectoryState, refresh: (
             .testTag("directory-content-backdrop")) {
             HorizontalPager(pager, Modifier.fillMaxSize().testTag("directory-pager"), key = { tabs[it] }) { index ->
                 val pageTab = tabs[index]
-                val active = pager.settledPage == index
+                val active = parentActive && pager.settledPage == index
                 val refreshing = (state.loading && directory != null) || (pageTab == "tags" && allTags && state.tagsLoading && state.tagGroups != null)
                 val pull = rememberPullToRefreshState()
                 PullToRefreshBox(isRefreshing = refreshing, onRefresh = {

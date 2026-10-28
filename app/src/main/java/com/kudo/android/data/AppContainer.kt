@@ -19,6 +19,7 @@ class AndroidSessionCookies : SessionCookies {
 
 class AppContainer(context: Context) {
     val settings = AppSettings(context.applicationContext)
+    val homeTabs = HomeTabsStore(context.applicationContext)
     val network = com.kudo.android.network.DohNetwork(context.applicationContext, DohSettings(context.applicationContext))
     val requestSettings = RequestSettings(context.applicationContext)
     val notifications = com.kudo.android.notifications.LocalNotifications(context.applicationContext)

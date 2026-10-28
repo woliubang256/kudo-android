@@ -12,6 +12,8 @@ Status: implemented
 
 保留搜索行折叠、下拉刷新和更新提示。更新订阅仅探测当前筛选，切页重建基线；从详情返回不回顶，显式底栏刷新仍回顶。相邻页面不因预组合而额外请求个人列表。
 
+其中固定顺序、类别末页和有限内置集合由[按身份编辑首页 Tab](2026-10-29-editable-home-tabs.md)部分取代。首页可混合系统筛选、目录、一级分类和标签，按稳定来源 key 复用本篇缓存与分页规则；类别目录的组合和回顶目标同时受父页 active 约束。
+
 ## Related decisions
 
 检索 Pager、首页筛选、滚动位置、左右滑动。[会话筛选](../../implemented/feature/2026-10-08-session-feed-filters.md)的类别动作和切筛选清空部分被本篇替代，其权限与账号边界保留；[顶部折叠](../../implemented/feature/2026-10-08-home-tabs-and-collapse.md)和[更新提示](../../implemented/feature/2026-10-08-home-live-refresh.md)部分重叠，保留布局与推送不扰动阅读的决定。无完全吸收或过时提案。

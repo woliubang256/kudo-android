@@ -57,10 +57,11 @@ internal fun RefreshFeedOnResume(feed: FeedViewModel, user: Member?) {
 }
 
 @Composable
-internal fun ObserveHomeUpdates(feed: FeedViewModel, user: Member?, visible: Boolean) {
-    LaunchedEffect(user?.id, user?.unifiedNew) { feed.setUser(user) }
-    if (visible) LifecycleResumeEffect(feed, user?.id, user?.unifiedNew) {
-        feed.setUser(user)
+internal fun ObserveHomeUpdates(feed: FeedViewModel, user: Member?, visible: Boolean, homeTabs: List<HomeTab>? = null, ready: Boolean = true) {
+    fun configure() { if (homeTabs == null) feed.setUser(user) else feed.configureHomeTabs(homeTabs, user) }
+    LaunchedEffect(user?.id, user?.unifiedNew, homeTabs, ready) { if (ready) configure() }
+    if (visible && ready) LifecycleResumeEffect(feed, user?.id, user?.unifiedNew, homeTabs) {
+        configure()
         feed.setUpdatesActive(true)
         onPauseOrDispose { feed.setUpdatesActive(false) }
     }
@@ -86,6 +87,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         ArticleFootnoteHost {
         QuickScrollToTopHost {
         val account = model("account") { AccountViewModel(app) }
+        val homeTabsRevision by app.homeTabs.revision.collectAsStateWithLifecycle()
+        val configuredHomeTabs = remember(homeTabsRevision, account.user?.id) { app.homeTabs.load(account.user?.id) }
+        val sessionStable = account.sessionReady && !account.checkingSession
         val homeUpdate = model("home-update") { HomeUpdateViewModel(GitHubUpdates()::latest) }
         val nav = rememberNavController()
         val topicTransitions = remember(nav, account.user?.id) { TopicTransitions(nav) }
@@ -187,11 +191,11 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     popEnterTransition = { fadeIn(tween(220)) }, popExitTransition = { fadeOut(tween(220)) }) {
                     topicListComposable("root") {
                         val directory = model("community-directory") { CommunityDirectoryViewModel(app.repository) }
-                        val feed = model("feed") { FeedViewModel(app.repository, initialUser = account.user, updates = DiscourseMessageBus(app.client, userAgent = app.userAgent, route = app.network::client)) }
+                        val feed = model("feed") { FeedViewModel(app.repository, initialUser = account.user, updates = DiscourseMessageBus(app.client, userAgent = app.userAgent, route = app.network::client), initialHomeTabs = configuredHomeTabs, autoLoad = sessionStable) }
                         val state by feed.state.collectAsStateWithLifecycle()
                         val pages by feed.pages.collectAsStateWithLifecycle()
                         val backdrop = rememberLayerBackdrop()
-                        ObserveHomeUpdates(feed, account.user, selected == 0)
+                        ObserveHomeUpdates(feed, account.user, selected == 0, configuredHomeTabs, sessionStable)
                         LaunchedEffect(feed) {
                             feed.refreshEvents.collect { count ->
                                 if (count > 0) showMessage("已为你加载${count}条新内容")
@@ -210,9 +214,10 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         Box(Modifier.fillMaxSize()) {
                             Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background)) {
                                 when (selected) {
-                                    0 -> FeedScreen(state.forUser(account.user), account.user, feed::select, feed::refresh, feed::more, { topic(it) }, ::user, { nav.navigate("search") }, { if (account.user == null) login() else user(account.user!!.username) }, { directory.useAccount(account.user?.id); if (account.sessionReady) directory.loadIfStale() }, listStyle = display.topicListStyle, pages = pages,
-                                        categoryContent = { CommunityDirectoryHost(directory, account.user?.id, account.sessionReady, ::login,
-                                            { nav.navigate("category/${it.id}") }, ::openTag, ::openWebPage, inHome = true) })
+                                    0 -> FeedScreen(state.forUser(account.user), account.user, { if (sessionStable) feed.select(it) }, { if (sessionStable) feed.refresh() }, { if (sessionStable) feed.more() }, { topic(it) }, ::user, { nav.navigate("search") }, { if (account.user == null) login() else user(account.user!!.username) }, { directory.useAccount(account.user?.id); if (sessionStable) directory.loadIfStale() }, listStyle = display.topicListStyle, pages = pages,
+                                        categoryContent = { active -> CommunityDirectoryHost(directory, account.user?.id, sessionStable, ::login,
+                                            { nav.navigate("category/${it.id}") }, ::openTag, ::openWebPage, inHome = true, active = active) },
+                                        homeTabs = configuredHomeTabs, editTabs = if (sessionStable) ({ nav.navigate("home-tabs?account=${account.user?.id ?: 0}") }) else null)
                                     1 -> CommunityDirectoryHost(directory, account.user?.id, account.sessionReady, ::login,
                                         { nav.navigate("category/${it.id}") }, ::openTag, ::openWebPage)
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
@@ -237,6 +242,19 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             }, { if (display.navigationAction == NavigationAction.SEARCH) nav.navigate("search") else editor() }, backdrop, display.glass, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp).widthIn(max = 530.dp).fillMaxWidth(), homeHasUpdates = state.forUser(account.user).hasUpdates, action = display.navigationAction, unreadCount = account.unreadCount)
                         }
                         }
+                        }
+                    }
+                    topicListComposable("home-tabs?account={account}", arguments = listOf(navArgument("account") { type = NavType.IntType; defaultValue = 0 })) { entry ->
+                        val owner = entry.arguments!!.getInt("account").takeIf { it > 0 }
+                        if (!sessionStable || owner != account.user?.id) {
+                            MaterialPagePlaceholder("编辑首页 Tab", { nav.popBackStack() }) { LoadingRow() }
+                            LaunchedEffect(owner, account.user?.id, sessionStable) { if (sessionStable && owner != account.user?.id) nav.popBackStack() }
+                        } else {
+                            val vm = model("home-tabs-editor-$owner") { HomeTabsEditorViewModel(app.repository, owner, app.homeTabs.load(owner)) { app.homeTabs.save(owner, it) } }
+                            val state by vm.state.collectAsStateWithLifecycle()
+                            HomeTabsEditorScreen(state, vm::move, vm::add, vm::remove, vm::restore, vm::query, vm::source, vm::retry,
+                                save = { if (account.sessionReady && !account.checkingSession && owner == account.user?.id) { vm.save(); nav.popBackStack() } },
+                                back = { nav.popBackStack() }, login = ::login)
                         }
                     }
                     topicListComposable("category/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
