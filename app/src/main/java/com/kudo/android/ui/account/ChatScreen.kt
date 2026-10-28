@@ -156,7 +156,7 @@ internal fun ChatScreen(vm: ChatViewModel, member: Member, settings: AppSettings
                     PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
                         containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
                 }) {
-            LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scrolled = awayFromTop) {
+            LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scrolled = awayFromTop, scrollingUp = scroll.lastScrolledForward) {
                 scroll.animateScrollToItem((scroll.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
             }, state = scroll, reverseLayout = true,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

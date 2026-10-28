@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +84,14 @@ class QuickScrollToTopUiTest {
         } } }
         button().assertDoesNotExist()
         compose.onNodeWithTag("fixture-list").performScrollToIndex(40)
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("fixture-list").performTouchInput { swipe(center, center + Offset(0f, 120f), 600) }
+        button().assertIsDisplayed()
+        compose.onNodeWithTag("fixture-list").performTouchInput { swipe(center, center - Offset(0f, 120f), 600) }
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("fixture-list").performTouchInput { swipe(center, center + Offset(0f, 120f), 600) }
+        button().assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(1500)
         button().assertIsDisplayed()
         compose.runOnIdle { enabled = false }
         button().assertDoesNotExist()
@@ -107,11 +117,16 @@ class QuickScrollToTopUiTest {
         button().assertDoesNotExist()
         capture("quick-top-threshold-short.png")
         list.performScrollToIndex(6)
+        button().assertDoesNotExist()
+        list.performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed()
         capture("quick-top-threshold-distant.png")
         compose.runOnIdle { height = 560.dp }
         button().assertDoesNotExist()
         list.performScrollToIndex(12)
+        list.performTouchInput { swipe(center, center - Offset(0f, 60f), 600) }
+        button().assertDoesNotExist()
+        list.performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed()
         list.performScrollToIndex(1)
         button().assertDoesNotExist()
@@ -128,8 +143,13 @@ class QuickScrollToTopUiTest {
         list.performTouchInput { swipe(center, center - Offset(0f, 60f), 600) }
         button().assertDoesNotExist()
         list.performScrollToIndex(1)
+        button().assertDoesNotExist()
+        list.performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed()
         list.performScrollToIndex(2)
+        list.performTouchInput { swipe(center, center - Offset(0f, 60f), 600) }
+        button().assertDoesNotExist()
+        list.performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed()
         button().performClick()
         button().assertDoesNotExist()
@@ -148,7 +168,7 @@ class QuickScrollToTopUiTest {
             } else {
                 val scroll = rememberScrollState()
                 val scope = rememberCoroutineScope()
-                Column(Modifier.fillMaxWidth().height(320.dp).verticalScroll(scroll).quickScrollTarget(scroll)) {
+                Column(Modifier.fillMaxWidth().height(320.dp).verticalScroll(scroll).quickScrollTarget(scroll).testTag("threshold-plain")) {
                     Text("长资料", Modifier.height(4000.dp))
                 }
                 SideEffect { plainScroll = { value -> scope.launch { scroll.scrollTo(value) } } }
@@ -158,12 +178,16 @@ class QuickScrollToTopUiTest {
         list.performScrollToIndex(2)
         button().assertDoesNotExist()
         list.performScrollToIndex(16)
+        button().assertDoesNotExist()
+        list.performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed().performClick()
         button().assertDoesNotExist()
         compose.runOnIdle { grid = false }
         compose.runOnIdle { plainScroll(60) }
         button().assertDoesNotExist()
         compose.runOnIdle { plainScroll(2000) }
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("threshold-plain").performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed().performClick()
         button().assertDoesNotExist()
     }
@@ -176,13 +200,16 @@ class QuickScrollToTopUiTest {
                 scroll = rememberLazyListState(initialFirstVisibleItemIndex = if (reverse) 0 else 40)
                 val past = rememberQuickScrollPastViewport(scroll)
                 LazyColumn(Modifier.fillMaxWidth().height(320.dp).testTag("restored-reverse")
-                    .quickScrollTarget(scrolled = past && (!reverse || scroll.canScrollForward)) {
+                    .quickScrollTarget(scrolled = past && (!reverse || scroll.canScrollForward),
+                        scrollingUp = if (reverse) scroll.lastScrolledForward else scroll.lastScrolledBackward) {
                         scroll.animateScrollToItem(if (reverse) 79 else 0)
                     }, state = scroll, reverseLayout = reverse) {
                     items(80) { Text("消息 $it", Modifier.height(64.dp).fillMaxWidth()) }
                 }
             }
         } } }
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("restored-reverse").performTouchInput { swipe(center, center + Offset(0f, 120f), 600) }
         button().assertIsDisplayed().performClick()
         compose.runOnIdle { assertFalse(scroll.canScrollBackward); reverse = true }
         button().assertDoesNotExist()
@@ -190,6 +217,11 @@ class QuickScrollToTopUiTest {
         list.performScrollToIndex(1)
         button().assertDoesNotExist()
         list.performScrollToIndex(10)
+        list.performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
+        button().assertIsDisplayed()
+        list.performTouchInput { swipe(center, center - Offset(0f, 60f), 600) }
+        button().assertDoesNotExist()
+        list.performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed().performClick()
         compose.onNodeWithText("消息 79").assertIsDisplayed()
         compose.runOnIdle { assertFalse(scroll.canScrollForward) }
@@ -210,12 +242,22 @@ class QuickScrollToTopUiTest {
             }
         } } }
         compose.onNodeWithTag("page-0").performScrollToIndex(40)
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("page-0").performTouchInput { swipe(center, center + Offset(0f, 120f), 600) }
         button().assertIsDisplayed()
+        val savedIndex = states[0].firstVisibleItemIndex
+        val savedOffset = states[0].firstVisibleItemScrollOffset
         compose.onNodeWithTag("fixture-pager").performTouchInput { swipeLeft() }
         button().assertDoesNotExist()
         compose.onNodeWithTag("page-1").performScrollToIndex(25)
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("page-1").performTouchInput { swipe(center, center + Offset(0f, 120f), 600) }
         button().assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(40, states[0].firstVisibleItemIndex); assertEquals(0, states[1].firstVisibleItemIndex) }
+        compose.runOnIdle {
+            assertEquals(savedIndex, states[0].firstVisibleItemIndex)
+            assertEquals(savedOffset, states[0].firstVisibleItemScrollOffset)
+            assertEquals(0, states[1].firstVisibleItemIndex)
+        }
     }
 
     @Test fun busyActionCannotRepeatAndCoveredContentCannotExposeItsButton() {
@@ -224,10 +266,10 @@ class QuickScrollToTopUiTest {
         val result = CompletableDeferred<Unit>()
         compose.setContent { KudoTheme(DisplaySettings()) { QuickScrollToTopHost {
             CompositionLocalProvider(LocalReadingBlocked provides covered) {
-                Box(Modifier.fillMaxSize().quickScrollTarget(scrolled = true) { calls++; result.await() })
+                Box(Modifier.fillMaxSize().quickScrollTarget(scrolled = true, scrollingUp = true) { calls++; result.await() })
             }
         } } }
-        button().performClick().assertIsNotEnabled()
+        button().performClick().assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, calls); result.complete(Unit) }
         button().assertIsEnabled()
         compose.runOnIdle { covered = true }
@@ -244,17 +286,39 @@ class QuickScrollToTopUiTest {
         compose.setContent { KudoTheme(DisplaySettings()) { QuickScrollToTopHost {
             PublicProfilePage(state, null, {}, {}, {}, {}, {}, {})
         } } }
-        val list = compose.onNodeWithTag("profile-list-SUMMARY")
-        val expandedTop = list.fetchSemanticsNode().boundsInRoot.top
-        list.performTouchInput { swipe(center, center - Offset(0f, 60f), 600) }
+        val expandedHeight = compose.onNodeWithTag("public-profile-header-viewport").fetchSemanticsNode().boundsInRoot.height
+        compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput {
+            val start = Offset(centerX, height * .8f)
+            swipe(start, start - Offset(0f, 90f), 600)
+        }
         button().assertDoesNotExist()
-        list.performTouchInput { swipeUp(durationMillis = 600) }
-        list.performTouchInput { swipeUp(durationMillis = 600) }
+        repeat(2) {
+            compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput {
+                swipe(Offset(centerX, height * .85f), Offset(centerX, height * .35f), 600)
+            }
+        }
+        compose.onNodeWithTag("profile-list-SUMMARY").performScrollToIndex(25)
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("profile-list-SUMMARY").performTouchInput {
+            val start = Offset(centerX, height * .8f)
+            swipe(start, start + Offset(0f, 120f), 600)
+        }
         button().assertIsDisplayed()
-        assertTrue(list.fetchSemanticsNode().boundsInRoot.top < expandedTop)
+        assertTrue(compose.onNodeWithTag("public-profile-header-viewport").fetchSemanticsNode().boundsInRoot.height < expandedHeight)
         button().performClick()
-        assertEquals(expandedTop, list.fetchSemanticsNode().boundsInRoot.top, 3f)
+        assertEquals(expandedHeight, compose.onNodeWithTag("public-profile-header-viewport").fetchSemanticsNode().boundsInRoot.height, 3f)
         button().assertDoesNotExist()
+    }
+
+    @Test fun accessoryStaysAvailableWhenTheReturnDirectionIsHidden() {
+        var opened = 0
+        compose.setContent { KudoTheme(DisplaySettings()) { QuickScrollToTopHost {
+            Box(Modifier.fillMaxSize().quickScrollTarget(scrolled = true, scrollingUp = false) {}
+                .quickScrollAccessory(true, Icons.Rounded.Menu, "帖子目录") { opened++ })
+        } } }
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("quick-scroll-accessory").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
     }
 
     @Test fun distantTopicReturnsToTheTitleAndFirstFloorAndKeepsTheWindowOnFailure() {
@@ -270,6 +334,8 @@ class QuickScrollToTopUiTest {
             })
         } } }
         compose.onNodeWithTag("post-500").assertIsDisplayed()
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("topic-posts").performTouchInput { swipe(center, center + Offset(0f, 120f), 600) }
         button().performClick()
         compose.runOnIdle { state = state.copy(jumping = false, jumpError = "顶部加载失败，请重试") }
         compose.onNodeWithText("顶部加载失败，请重试").assertIsDisplayed()
@@ -291,6 +357,8 @@ class QuickScrollToTopUiTest {
             TopicScreen(state, GlassMode.LIQUID, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, readingEnabled = !replyShowing)
         } } }
         compose.onNodeWithTag("topic-posts").performScrollToIndex(8)
+        button().assertDoesNotExist()
+        compose.onNodeWithTag("topic-posts").performTouchInput { swipe(center, center + Offset(0f, 60f), 600) }
         button().assertIsDisplayed()
         capture("ui-polish-topic-actions.png")
         compose.runOnIdle { replyShowing = true }
@@ -313,6 +381,9 @@ class QuickScrollToTopUiTest {
         GlassMode.entries.forEach { material ->
             compose.runOnIdle { mode = material }
             compose.onNodeWithTag("fixture-list").performScrollToIndex(30)
+            compose.onNodeWithTag("fixture-list").performTouchInput { swipe(center, center - Offset(0f, 60f), 600) }
+            button().assertDoesNotExist()
+            compose.onNodeWithTag("fixture-list").performTouchInput { swipe(center, center + Offset(0f, 120f), 600) }
             val bounds = button().assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             assertTrue(bounds.bottom < compose.onNodeWithTag("fixture-bottom-bar").fetchSemanticsNode().boundsInRoot.top)
             capture("quick-top-material-${material.name}.png")

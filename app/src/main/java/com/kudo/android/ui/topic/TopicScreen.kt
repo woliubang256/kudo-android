@@ -246,7 +246,8 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("topic-posts").then(viewport)
                     .quickScrollAccessory(tocEntries.isNotEmpty() && !showing && !state.loading && !state.jumping,
                         Icons.Rounded.FormatListBulleted, "目录") { tocVisibility.targetState = true }
-                    .quickScrollTarget(scrolled = listMoved || hasPrevious, enabled = readingEnabled && !showing && !state.loading && !state.jumping,
+                    .quickScrollTarget(scrolled = listMoved || hasPrevious, scrollingUp = listState.lastScrolledBackward,
+                        enabled = readingEnabled && !showing && !state.loading && !state.jumping,
                         bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 80.dp) {
                         previousAnchor = null
                         returnTopError = null

@@ -57,6 +57,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     var error by remember(url) { mutableStateOf<String?>(null) }
     var message by remember(url) { mutableStateOf<String?>(null) }
     var scrollY by remember(url) { mutableIntStateOf(0) }
+    var scrollingUp by remember(url) { mutableStateOf(false) }
     var viewportHeight by remember(url) { mutableIntStateOf(0) }
     var webViewGeneration by remember(url) { mutableIntStateOf(0) }
     val scrolled = viewportHeight > 0 && scrollY >= viewportHeight
@@ -96,7 +97,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             }
             message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall) }
             Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()
-                .quickScrollTarget(scrolled = scrolled, enabled = error == null && !awaitingContent) {
+                .quickScrollTarget(scrolled = scrolled, scrollingUp = scrollingUp, enabled = error == null && !awaitingContent) {
                     page.view?.let { view ->
                         androidx.compose.animation.core.animate(view.scrollY.toFloat(), 0f) { value, _ -> view.scrollTo(0, value.toInt()) }
                     }
@@ -138,6 +139,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 return true
                             }
                             override fun onPageStarted(view: WebView, value: String, favicon: Bitmap?) {
+                                scrollingUp = false
                                 navigationGeneration++
                                 currentUrl = value; progress = 0; awaitingContent = true; error = null; message = null
                             }
@@ -180,7 +182,10 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                             message = "下载文件请使用右上角的浏览器打开"
                         }
                         page.view = this
-                        setOnScrollChangeListener { _, _, y, _, _ -> scrollY = y }
+                        setOnScrollChangeListener { _, _, y, _, oldY ->
+                            if (y != oldY) scrollingUp = y < oldY
+                            scrollY = y
+                        }
                         if (page.saved?.let { restoreState(it) } == null) loadUrl(url)
                     }
                 }, update = { view -> view.setBackgroundColor(surfaceColor) }, onRelease = { view ->

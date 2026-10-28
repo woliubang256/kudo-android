@@ -164,6 +164,12 @@ class WebScreenUiTest {
         compose.runOnUiThread { current().scrollTo(0, current().height / 4) }
         compose.onNodeWithTag("quick-scroll-to-top").assertDoesNotExist()
         compose.runOnUiThread { current().scrollTo(0, current().height * 2) }
+        compose.onNodeWithTag("quick-scroll-to-top").assertDoesNotExist()
+        compose.runOnUiThread { current().scrollTo(0, current().height * 2 - 60) }
+        compose.onNodeWithTag("quick-scroll-to-top").assertIsDisplayed()
+        compose.runOnUiThread { current().scrollBy(0, 30) }
+        compose.onNodeWithTag("quick-scroll-to-top").assertDoesNotExist()
+        compose.runOnUiThread { current().scrollBy(0, -30) }
         compose.onNodeWithTag("quick-scroll-to-top").assertIsDisplayed().performClick()
         compose.waitUntil(5000) { current().scrollY == 0 }
         compose.onNodeWithTag("quick-scroll-to-top").assertDoesNotExist()

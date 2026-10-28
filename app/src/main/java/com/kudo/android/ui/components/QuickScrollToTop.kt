@@ -57,6 +57,7 @@ private class QuickScrollTarget {
     var bounds by mutableStateOf(Rect.Zero)
     var enabled by mutableStateOf(false)
     var scrolled by mutableStateOf(false)
+    var scrollingUp by mutableStateOf(false)
     var bottomPadding by mutableStateOf(12.dp)
     var scrollToTop: suspend () -> Unit = {}
 }
@@ -99,7 +100,7 @@ internal fun QuickScrollToTopHost(content: @Composable () -> Unit) {
                 bounds.bottom - navigation - with(density) { 12.dp.toPx() })
             val x = target.bounds.center.x - bounds.left - size / 2
             val y = bottom - bounds.top - size + touchInset
-            val showTop = settings.showScrollToTop && target.scrolled && ime == 0 && y >= 0
+            val showTop = settings.showScrollToTop && target.scrolled && target.scrollingUp && !scrolling && ime == 0 && y >= 0
             val showAccessory = accessory != null && ime == 0 && y >= 0
             if (showTop || showAccessory) {
                 val topX = target.bounds.center.x - bounds.left - size / 2
@@ -146,7 +147,7 @@ internal fun QuickScrollToTopHost(content: @Composable () -> Unit) {
 }
 
 @Composable
-internal fun Modifier.quickScrollTarget(scrolled: Boolean, enabled: Boolean = true,
+internal fun Modifier.quickScrollTarget(scrolled: Boolean, scrollingUp: Boolean, enabled: Boolean = true,
     bottomPadding: Dp = LocalQuickScrollBottomPadding.current, scrollToTop: suspend () -> Unit): Modifier {
     val targets = LocalQuickScrollTargets.current ?: return this
     val target = remember(targets) { QuickScrollTarget() }
@@ -155,6 +156,7 @@ internal fun Modifier.quickScrollTarget(scrolled: Boolean, enabled: Boolean = tr
     SideEffect {
         target.enabled = enabled && !blocked && lifecycle.isAtLeast(Lifecycle.State.RESUMED)
         target.scrolled = scrolled
+        target.scrollingUp = scrollingUp
         target.bottomPadding = bottomPadding
         target.scrollToTop = scrollToTop
     }
@@ -247,7 +249,7 @@ private fun rememberQuickScrollPastViewport(state: LazyGridState): Boolean = rem
 internal fun Modifier.quickScrollTarget(state: LazyListState, enabled: Boolean = true,
     bottomPadding: Dp = LocalQuickScrollBottomPadding.current, expandHeader: suspend () -> Unit = {}): Modifier {
     val scrolled = rememberQuickScrollPastViewport(state)
-    return quickScrollTarget(scrolled, enabled, bottomPadding) {
+    return quickScrollTarget(scrolled, state.lastScrolledBackward, enabled, bottomPadding) {
         coroutineScope { launch { state.animateScrollToItem(0) }; launch { expandHeader() } }
     }
 }
@@ -255,11 +257,11 @@ internal fun Modifier.quickScrollTarget(state: LazyListState, enabled: Boolean =
 @Composable
 internal fun Modifier.quickScrollTarget(state: LazyGridState, enabled: Boolean = true): Modifier {
     val scrolled = rememberQuickScrollPastViewport(state)
-    return quickScrollTarget(scrolled, enabled) { state.animateScrollToItem(0) }
+    return quickScrollTarget(scrolled, state.lastScrolledBackward, enabled) { state.animateScrollToItem(0) }
 }
 
 @Composable
 internal fun Modifier.quickScrollTarget(state: ScrollState, enabled: Boolean = true): Modifier {
     val scrolled by remember(state) { derivedStateOf { state.viewportSize > 0 && state.value >= state.viewportSize } }
-    return quickScrollTarget(scrolled, enabled) { state.animateScrollTo(0) }
+    return quickScrollTarget(scrolled, state.lastScrolledBackward, enabled) { state.animateScrollTo(0) }
 }
