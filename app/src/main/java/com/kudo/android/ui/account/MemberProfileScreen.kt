@@ -58,7 +58,7 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?, settings: () -> Unit,
     about: () -> Unit, profile: () -> Unit, destination: (AccountDestination) -> Unit, downloads: () -> Unit = {},
-    statusBarStyle: (Boolean?) -> Unit) {
+    statusBarStyle: (Boolean?) -> Unit, imageLibrary: () -> Unit = {}) {
     var member by remember(user.id, user.username) { mutableStateOf(user) }
     var summary by remember(user.id, user.username) { mutableStateOf<UserSummary?>(null) }
     var summaryError by remember(user.id, user.username) { mutableStateOf(false) }
@@ -189,6 +189,7 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                 item(key = "settings") {
                     Column(Modifier.padding(horizontal = 8.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)) {
                         CompactAccountRow(Icons.Rounded.Palette, Color(0xFF9B6FE6), "设置", settings)
+                        CompactAccountRow(Icons.Rounded.PhotoLibrary, Color(0xFFE8A33D), "图库管理", imageLibrary)
                         CompactAccountRow(Icons.Rounded.Download, Color(0xFF00A896), "下载管理", downloads)
                         CompactAccountRow(Icons.Rounded.Info, Color(0xFF328AE5), "关于酷DO", about, BuildConfig.VERSION_NAME)
                     }

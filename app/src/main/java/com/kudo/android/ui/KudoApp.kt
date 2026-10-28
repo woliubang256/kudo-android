@@ -224,7 +224,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
                                         { nav.navigate("personal/${AccountDestination.MESSAGES.name}") },
                                         badges = { badgeId -> nav.navigate("account-records/${AccountDestination.BADGES.name}?badge=${badgeId ?: 0}") }, profile = ::user)
-                                    4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") },
+                                    4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") }, imageLibrary = { nav.navigate("image-library") },
                                         destination = { destination ->
                                             when (destination) {
                                                 AccountDestination.BOOKMARKS -> nav.navigate("bookmarks")
@@ -478,6 +478,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             { nav.navigate("ignored-users") }, "${if (network.enabled) network.summary else "DoH 已关闭"} · ${limits.concurrent} 路并发",
                             { nav.navigate("doh-settings") })
                     }
+                    composable("image-library") { com.kudo.android.ui.library.ImageLibraryScreen({ nav.popBackStack() }) { topic(it.topicId, it.postNumber) } }
                     composable("downloads") { DownloadsScreen(app.downloads) { nav.popBackStack() } }
                     composable("doh-settings") { DohSettingsScreen(app.network, app.requestSettings) { nav.popBackStack() } }
                     composable("about") { AboutScreen(openLink = ::openWebPage, openExternal = ::openBrowser) { nav.popBackStack() } }
