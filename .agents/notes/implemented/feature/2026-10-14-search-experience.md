@@ -48,6 +48,8 @@ SearchScreen 合并返回键、无描边搜索框和搜索动作于同一顶栏�
 
 顶部标签复用[首页标签与吸顶](2026-10-08-home-tabs-and-collapse.md)的 FeedTabBar 样式；只复用标签组件，不把首页滚动折叠行为引入搜索页。
 
+其中“不引入滚动折叠”的决定由[搜索顶部随结果滚动折叠](2026-10-29-search-header-collapse.md)部分取代：返回搜索行与类型标签一起收起，排序筛选和状态栏安全区保留；本文的数据契约、筛选、缓存与阅读位置决定仍成立。
+
 检索 proposed、implemented、rejected 搜索相关笔记，无专属搜索决策。与[数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)、[主题展示](../../implemented/feature/2026-10-09-topic-presentation.md)、[酷安表单](../../implemented/feature/2026-10-10-coolapk-forms.md)、[快速回顶](../../implemented/feature/2026-10-11-quick-scroll-to-top.md)部分重叠：沿用同源凭据隔离、标签 slug、全局列表样式、自绘控件、滚动注册；这些旧篇仍各有独立职责。其余命中是页面布局、导航和过去测试记录，非本方案归属，无完全吸收或过时提案。
 
 ## Alternatives considered

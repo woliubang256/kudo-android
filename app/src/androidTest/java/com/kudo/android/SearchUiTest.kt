@@ -7,17 +7,23 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.feed.*
+import com.kudo.android.ui.components.QuickScrollToTopHost
 import com.kudo.android.ui.theme.KudoTheme
 import kotlinx.coroutines.cancel
 import okhttp3.*
@@ -84,12 +90,14 @@ class SearchUiTest {
         compose.setContent { KudoTheme(settings) {
             val state by vm!!.state.collectAsState()
             LaunchedEffect(accountId) { vm!!.useAccount(accountId) }
-            Box(if (short) Modifier.fillMaxWidth().height(380.dp) else Modifier.fillMaxSize()) {
-                SearchScreen(state.forAccount(accountId), vm!!::search, { backCount++ }, { id, number -> openedTopics += id to number }, openedUsers::add, {},
-                    listStyle = TopicListStyle.TITLE, openCategory = openedCategories::add, openTag = openedTags::add,
-                    changeKind = vm!!::changeKind, changeSort = vm!!::changeSort, clear = vm!!::clear, refreshHistory = vm!!::refreshHistory,
-                    loadMetadata = vm!!::loadMetadata, suggestTags = vm!!::suggestTags, applyFilters = vm!!::applyFilters, clearHistory = vm!!::clearHistory,
-                    initialScrollIndex = vm!!.scrollIndex, initialScrollOffset = vm!!.scrollOffset, saveScrollPosition = vm!!::saveScrollPosition)
+            QuickScrollToTopHost {
+                Box(if (short) Modifier.fillMaxWidth().height(380.dp) else Modifier.fillMaxSize()) {
+                    SearchScreen(state.forAccount(accountId), vm!!::search, { backCount++ }, { id, number -> openedTopics += id to number }, openedUsers::add, {},
+                        listStyle = TopicListStyle.TITLE, openCategory = openedCategories::add, openTag = openedTags::add,
+                        changeKind = vm!!::changeKind, changeSort = vm!!::changeSort, clear = vm!!::clear, refreshHistory = vm!!::refreshHistory,
+                        loadMetadata = vm!!::loadMetadata, suggestTags = vm!!::suggestTags, applyFilters = vm!!::applyFilters, clearHistory = vm!!::clearHistory,
+                        initialScrollIndex = vm!!.scrollIndex, initialScrollOffset = vm!!.scrollOffset, saveScrollPosition = vm!!::saveScrollPosition)
+                }
             }
         } }
         compose.waitUntil(5000) { !vm!!.state.value.historyLoading }
@@ -99,6 +107,137 @@ class SearchUiTest {
         compose.onNodeWithTag("search-query").performTextReplacement("开发")
         compose.onNodeWithTag("search-submit").performClick()
         compose.waitUntil(5000) { vm!!.state.value.searched && !vm!!.state.value.loading }
+    }
+
+    @Test fun resultScrollingHidesBothTopRowsPinsSortingAndReverseRevealsThem() {
+        manyResults = true
+        show(); search()
+        val expanded = compose.onNodeWithTag("search-header").fetchSemanticsNode().boundsInRoot
+        val initialSort = compose.onNodeWithTag("search-sort-RELEVANCE").fetchSemanticsNode().boundsInRoot.top
+        compose.onNodeWithTag("search-results").performScrollToIndex(20)
+        scrollResults(-500f)
+        compose.onNodeWithTag("search-input").assertIsNotDisplayed()
+        compose.onNodeWithText("帖子").assertIsNotDisplayed()
+        val pinnedSort = compose.onNodeWithTag("search-sort-RELEVANCE").assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
+        assertTrue(pinnedSort < initialSort - 100f)
+        assertTrue("状态栏区域不能一起移走", pinnedSort > expanded.top)
+        capture("search-collapse-pinned.png")
+        scrollResults(-400f)
+        assertEquals(pinnedSort, compose.onNodeWithTag("search-sort-RELEVANCE").fetchSemanticsNode().boundsInRoot.top, 1f)
+        scrollResults(400f)
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
+        compose.onNodeWithText("帖子").assertIsDisplayed().assertIsSelected()
+        compose.onNodeWithTag("search-query").assertTextEquals("开发")
+        assertEquals(initialSort, compose.onNodeWithTag("search-sort-RELEVANCE").fetchSemanticsNode().boundsInRoot.top, 1f)
+        compose.onNodeWithTag("search-hit-1").assertDoesNotExist()
+        capture("search-collapse-revealed.png")
+    }
+
+    @Test fun quickReturnExpandsTheCollapsedSearchHeaderAndKeepsTheQuery() {
+        manyResults = true
+        show(); search()
+        compose.onNodeWithTag("search-results").performScrollToIndex(20)
+        scrollResults(-500f)
+        compose.onNodeWithTag("search-input").assertIsNotDisplayed()
+        scrollResults(400f)
+        compose.onNodeWithTag("quick-scroll-to-top").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
+        compose.onNodeWithText("帖子").assertIsDisplayed()
+        compose.onNodeWithTag("search-hit-1").assertIsDisplayed()
+        compose.onNodeWithTag("search-query").assertTextEquals("开发")
+        compose.onNodeWithTag("quick-scroll-to-top").assertDoesNotExist()
+    }
+
+    @Test fun openingFiltersExpandsTheHeaderAndPanelScrollingCannotCollapseIt() {
+        manyResults = true
+        show(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f)); search()
+        compose.onNodeWithTag("search-results").performScrollToIndex(20)
+        scrollResults(-600f)
+        compose.onNodeWithTag("search-input").assertIsNotDisplayed()
+        val viewport = compose.onNodeWithTag("search-results").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("search-filter-toggle").performClick()
+        compose.waitUntil(5000) { vm!!.state.value.metadataLoaded }
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
+        val expandedHeight = compose.onNodeWithTag("search-header").fetchSemanticsNode().boundsInRoot.height
+        compose.onNodeWithTag("search-assigned").performScrollTo()
+        compose.onNodeWithText("有专家回应").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("search-filters-panel").performTouchInput {
+            swipe(Offset(centerX, height * .65f), Offset(centerX, height * .3f), 800)
+        }
+        assertEquals(expandedHeight, compose.onNodeWithTag("search-header").fetchSemanticsNode().boundsInRoot.height, 1f)
+        compose.onNodeWithTag("search-filter-apply").assertIsDisplayed()
+        compose.onNodeWithTag("quick-scroll-to-top").assertDoesNotExist()
+        assertEquals(viewport, compose.onNodeWithTag("search-results").fetchSemanticsNode().boundsInRoot)
+        capture("search-collapse-filter-dark.png")
+        compose.onNodeWithContentDescription("收起高级筛选").performClick()
+        scrollResults(-600f)
+        compose.onNodeWithTag("search-input").assertIsNotDisplayed()
+        compose.onNodeWithTag("search-sort-LIKES").performClick()
+        compose.waitUntil(5000) { !vm!!.state.value.loading && vm!!.state.value.sort == SearchSort.LIKES }
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
+        compose.onNodeWithTag("search-sort-LIKES").assertIsSelected()
+    }
+
+    private fun scrollResults(distance: Float) {
+        compose.onNodeWithTag("search-results").performTouchInput {
+            val start = Offset(centerX, height * if (distance < 0f) .8f else .45f)
+            swipe(start, start + Offset(0f, distance), 800)
+        }
+    }
+
+    @Test fun restoredSearchKeepsItsCollapsedHeaderAndReadingPositionUntilANewQuery() {
+        val hits = (1..40).map { number -> SearchHit(number, 1,
+            Topic(number, "恢复位置话题 $number", "", null, 1, emptyList(), 0, 0, 0, "", "")) }
+        var state by mutableStateOf(SearchState(query = "开发", hits = SearchResults(posts = hits), searched = true))
+        var savedIndex = 0
+        var savedOffset = 0
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { KudoTheme(DisplaySettings()) {
+            SearchScreen(state, { _, _ -> }, {}, { _, _ -> }, {}, {}, listStyle = TopicListStyle.TITLE,
+                initialScrollIndex = savedIndex, initialScrollOffset = savedOffset,
+                saveScrollPosition = { index, offset -> savedIndex = index; savedOffset = offset })
+        } }
+        compose.onNodeWithTag("search-results").performScrollToIndex(20)
+        scrollResults(-500f)
+        compose.onNodeWithTag("search-input").assertIsNotDisplayed()
+        val headerHeight = compose.onNodeWithTag("search-header").fetchSemanticsNode().boundsInRoot.height
+        val position = compose.onNodeWithTag("search-results").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("search-input").assertIsNotDisplayed()
+        assertEquals(headerHeight, compose.onNodeWithTag("search-header").fetchSemanticsNode().boundsInRoot.height, 1f)
+        assertEquals(position, compose.onNodeWithTag("search-results").fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 1f)
+        compose.runOnIdle {
+            savedIndex = 0; savedOffset = 0
+            state = state.copy(query = "新查询", scrollRevision = state.scrollRevision + 1)
+        }
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
+        compose.onNodeWithTag("search-query").assertTextEquals("新查询")
+        compose.onNodeWithTag("search-hit-1").assertIsDisplayed()
+    }
+
+    @Test fun narrowLargeTextUserResultsCollapseAndChangingKindRevealsControls() {
+        val users = (1..40).map { Member(it, "user$it", "搜索用户 $it", "") }
+        var state by mutableStateOf(SearchState(query = "查人", kind = SearchKind.USERS,
+            hits = SearchResults(users = users), searched = true))
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f)) {
+            Box(Modifier.width(280.dp).height(500.dp)) {
+                SearchScreen(state, { _, _ -> }, {}, { _, _ -> }, {}, {}, changeKind = { state = state.copy(kind = it) })
+            }
+        } }
+        val expanded = compose.onNodeWithTag("search-header").fetchSemanticsNode().boundsInRoot.height
+        compose.onNodeWithTag("search-results").performScrollToIndex(20)
+        scrollResults(-500f)
+        compose.onNodeWithTag("search-input").assertIsNotDisplayed()
+        compose.onNodeWithText("用户").assertIsNotDisplayed()
+        assertTrue(compose.onNodeWithTag("search-header").fetchSemanticsNode().boundsInRoot.height < expanded - 100f)
+        capture("search-collapse-users-dark-narrow.png")
+        compose.onNodeWithTag("search-pager").performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
+        compose.onNodeWithText("类别与标签").assertIsSelected().assertIsDisplayed()
+        compose.onNodeWithText("帖子").performClick()
+        compose.onNodeWithTag("search-query").performClick().assertIsFocused()
+        scrollResults(-300f)
+        compose.onNodeWithTag("search-input").assertIsDisplayed()
     }
 
     @Test fun searchAndFilterUseSiblingMaterialsWithSearchActionInsideTheOval() {
@@ -308,7 +447,13 @@ class SearchUiTest {
         compose.onNodeWithContentDescription("高级筛选").performClick()
         compose.onNodeWithTag("search-filter-apply").assertIsDisplayed()
         compose.onNodeWithTag("search-min-posts").performScrollTo().performTextReplacement("20")
+        compose.onNodeWithTag("search-min-posts").assertTextEquals("20")
         compose.onNodeWithTag("search-max-posts").performScrollTo().performTextReplacement("2")
+        compose.onNodeWithTag("search-max-posts").assertTextEquals("2")
+        compose.runOnUiThread { WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView).hide(WindowInsetsCompat.Type.ime()) }
+        compose.waitUntil(5000) { ViewCompat.getRootWindowInsets(compose.activity.window.decorView)?.getInsets(WindowInsetsCompat.Type.ime())?.bottom == 0 }
+        compose.waitUntil(5000) { compose.onNodeWithTag("search-filter-apply").isDisplayed() }
+        compose.onNodeWithTag("search-filter-apply").assertIsDisplayed()
         compose.onNodeWithTag("search-filter-apply").performClick()
         compose.onNodeWithText("帖子数量的最小值不能大于最大值").performScrollTo().assertIsDisplayed()
         assertFalse(vm!!.state.value.searched)

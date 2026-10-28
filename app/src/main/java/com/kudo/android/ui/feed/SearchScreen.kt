@@ -22,12 +22,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -46,7 +50,9 @@ import com.kudo.android.ui.theme.LogoYellow
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import java.util.Locale
+import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     state: SearchState, search: (String, Boolean) -> Unit, back: () -> Unit,
@@ -67,6 +73,10 @@ fun SearchScreen(
     var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val contentTopPadding = with(LocalDensity.current) { headerHeight.toDp() }
     val showing = clearVisibility.currentState || clearVisibility.targetState
+    var queryFocused by remember(state.accountId) { mutableStateOf(false) }
+    val canCollapse by rememberUpdatedState(!filtersOpen && !showing && !queryFocused)
+    val scrollBehavior = key(state.accountId) { TopAppBarDefaults.enterAlwaysScrollBehavior(canScroll = { canCollapse }) }
+    fun expandHeader() { scrollBehavior.state.heightOffset = 0f; scrollBehavior.state.contentOffset = 0f }
     fun dismissClear() { if (!state.historyClearing) clearVisibility.targetState = false }
     androidx.activity.compose.BackHandler(enabled = filtersOpen && !showing) { filtersOpen = false }
     LaunchedEffect(state.accountId, state.searched, state.recent.isEmpty()) {
@@ -93,7 +103,12 @@ fun SearchScreen(
         val owner = state.accountId
         onDispose { if (owner == currentAccount) saveCurrentPosition() }
     }
+    var previousKind by remember(state.accountId) { mutableStateOf(state.kind) }
+    var previousRevision by remember(state.accountId) { mutableIntStateOf(state.scrollRevision) }
     LaunchedEffect(state.kind, state.scrollRevision) {
+        if (previousKind != state.kind || previousRevision != state.scrollRevision) expandHeader()
+        previousKind = state.kind
+        previousRevision = state.scrollRevision
         scrolls.getValue(state.kind).scrollToItem(initialScrollIndex, initialScrollOffset)
     }
     LaunchedEffect(pager) {
@@ -112,6 +127,7 @@ fun SearchScreen(
     val submit = { focus.clearFocus(); keyboard?.hide(); filtersOpen = false; search(query, false) }
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().layerBackdrop(backdrop).background(MaterialTheme.colorScheme.background).imePadding()
+            .nestedScroll(scrollBehavior.nestedScrollConnection)
             .then(if (showing) Modifier.clearAndSetSemantics {} else Modifier)
             .focusProperties { onEnter = { if (showing) cancelFocusChange() } }.focusGroup()) {
             val panelHeight = (maxHeight - contentTopPadding).coerceAtLeast(0.dp) * .72f
@@ -122,7 +138,11 @@ fun SearchScreen(
                 val scroll = scrolls.getValue(kind)
                 val posts = page.hits.posts.filterNot { it.topic.author?.username?.lowercase(Locale.ROOT) in ignored }
                 val users = page.hits.users.filterNot { it.username.lowercase(Locale.ROOT) in ignored }
-                LazyColumn(state = scroll, modifier = Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = active && !showing).testTag(if (active) "search-results" else "search-results-${kind.name}"),
+                LazyColumn(state = scroll, modifier = Modifier.fillMaxSize()
+                    .quickScrollTarget(scroll, enabled = active && !showing && !filtersOpen, expandHeader = {
+                        androidx.compose.animation.core.animate(scrollBehavior.state.heightOffset, 0f) { value, _ -> scrollBehavior.state.heightOffset = value }
+                        scrollBehavior.state.contentOffset = 0f
+                    }).testTag(if (active) "search-results" else "search-results-${kind.name}"),
                     contentPadding = PaddingValues(top = contentTopPadding, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (listStyle == TopicListStyle.FEED) 8.dp else 0.dp)) {
                     if (!page.searched) {
                         if (page.accountId != null && (page.recent.isNotEmpty() || page.historyLoading || page.historyError != null)) {
@@ -194,27 +214,34 @@ fun SearchScreen(
             }
 
             Column(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(contentBackdrop).testTag("search-header")) {
-                    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = contentBackdrop)
-                        Row(Modifier.weight(1f).height(40.dp).clip(CircleShape).testTag("search-input").background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.Search, null, Modifier.padding(start = 12.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                            CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp).testTag("search-query"),
-                                placeholder = "搜索社区", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
-                            if (query.isNotEmpty()) Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button) {
-                                query = ""; clear(); filtersOpen = false
-                            }, contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Close, "清空搜索", Modifier.size(20.dp))
+                Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(contentBackdrop).testTag("search-header").statusBarsPadding()) {
+                    Column(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        scrollBehavior.state.heightOffsetLimit = -placeable.height.toFloat()
+                        val offset = scrollBehavior.state.heightOffset.roundToInt()
+                        layout(placeable.width, (placeable.height + offset).coerceAtLeast(0)) { placeable.placeRelative(0, offset) }
+                    }) {
+                        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, backdrop = contentBackdrop)
+                            Row(Modifier.weight(1f).height(40.dp).clip(CircleShape).testTag("search-input").background(MaterialTheme.colorScheme.onSurface.copy(alpha = .05f)), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Search, null, Modifier.padding(start = 12.dp).size(18.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                                CommunityTextField(query, { query = it }, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 8.dp).testTag("search-query")
+                                    .onFocusChanged { queryFocused = it.isFocused; if (it.isFocused) expandHeader() },
+                                    placeholder = "搜索社区", singleLine = true, textStyle = MaterialTheme.typography.bodyMedium,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }))
+                                if (query.isNotEmpty()) Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button) {
+                                    query = ""; clear(); filtersOpen = false
+                                }, contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Rounded.Close, "清空搜索", Modifier.size(20.dp))
+                                }
+                                Box(Modifier.width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .3f)))
+                                Text("搜索", Modifier.clip(CircleShape).clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.height(40.dp).padding(horizontal = 12.dp, vertical = 10.dp).testTag("search-submit"),
+                                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                             }
-                            Box(Modifier.width(1.dp).height(14.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .3f)))
-                            Text("搜索", Modifier.clip(CircleShape).clickable(enabled = query.isNotBlank(), role = Role.Button) { submit() }.height(40.dp).padding(horizontal = 12.dp, vertical = 10.dp).testTag("search-submit"),
-                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                         }
-
-                    }
-                    FeedTabBar(SearchKind.entries.map { it.name to it.label }, SearchKind.entries[pager.currentPage].name, containerColor = Color.Transparent) { value ->
-                        scope.launch { pager.animateScrollToPage(SearchKind.valueOf(value).ordinal) }
+                        FeedTabBar(SearchKind.entries.map { it.name to it.label }, SearchKind.entries[pager.currentPage].name, containerColor = Color.Transparent) { value ->
+                            scope.launch { pager.animateScrollToPage(SearchKind.valueOf(value).ordinal) }
+                        }
                     }
                     if (state.kind == SearchKind.POSTS) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -228,7 +255,7 @@ fun SearchScreen(
                         Box(Modifier.padding(end = 8.dp, bottom = 2.dp)) {
                             TopBarIconButton(Icons.Rounded.Tune, "高级筛选", {
                                 focus.clearFocus(); keyboard?.hide()
-                                if (!filtersOpen) { draft = parseSearchFilters(query); loadMetadata() }
+                                if (!filtersOpen) { expandHeader(); draft = parseSearchFilters(query); loadMetadata() }
                                 filtersOpen = !filtersOpen
                             }, Modifier.testTag("search-filter-toggle"), backdrop = contentBackdrop,
                                 touchSize = 36.dp, visualSize = 32.dp, iconSize = 20.dp)
