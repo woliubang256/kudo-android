@@ -291,7 +291,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     }
                     composable("trust") {
                         account.user?.let { member ->
-                            TrustScreen(member, app.connect, { nav.popBackStack() }, { openWebPage("https://connect.linux.do/") })
+                            TrustScreen(member, app.connect, { nav.popBackStack() }, {
+                                nav.openWebPage("https://connect.linux.do/", ::invalidLink, nativeConnect = false)
+                            })
                         } ?: MaterialPagePlaceholder("等级要求", { nav.popBackStack() }) { EmptyState("登录后查看等级", "查看当前账号的等级条件与进度。", actionLabel = "登录", action = ::login) }
                     }
                     composable("account-records/{destination}?badge={badge}", arguments = listOf(

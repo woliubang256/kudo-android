@@ -6,6 +6,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LinuxDoLinkTest {
+    @Test fun connectContentLinksHaveANativeDestinationButOtherOriginsDoNot() {
+        listOf("https://connect.linux.do", "https://CONNECT.LINUX.DO:443/?from=topic#level",
+            "http://connect.linux.do:80/", "//connect.linux.do/help", "https://connect.linux.do/t/123").forEach {
+            assertEquals(it, Trust, LinuxDoLink.parseContent(it))
+            assertNull(it, LinuxDoLink.parse(LinuxDoLink.webUrl(it).orEmpty()))
+        }
+        listOf("https://connect.linux.do.evil.test/", "https://notconnect.linux.do/",
+            "https://cdk.linux.do/", "https://connect.linux.do:444/", "http://connect.linux.do:443/",
+            "https://user@connect.linux.do/", "https://connect.linux.do@evil.test/").forEach {
+            assertNull(it, LinuxDoLink.parseContent(it))
+        }
+    }
+
     @Test fun topicsAcceptSlugShortPathAndFloor() {
         assertEquals(Topic(3001000), LinuxDoLink.parse("https://linux.do/t/topic/3001000"))
         assertEquals(Topic(3001000, 8), LinuxDoLink.parse("https://linux.do/t/topic/3001000/8"))

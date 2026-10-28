@@ -5,8 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 
-internal fun NavHostController.openWebPage(value: String, invalid: () -> Unit = {}) {
+internal fun NavHostController.openWebPage(value: String, invalid: () -> Unit = {}, nativeConnect: Boolean = true) {
     val url = LinuxDoLink.webUrl(value) ?: return invalid()
+    if (nativeConnect && LinuxDoLink.parseContent(url) == LinuxDoDestination.Trust) {
+        return openLinuxDoDestination(LinuxDoDestination.Trust, {})
+    }
     navigate("web?url=${Uri.encode(url)}")
 }
 
@@ -23,6 +26,7 @@ internal fun NavHostController.openLinuxDoDestination(target: LinuxDoDestination
         is LinuxDoDestination.Category -> navigate("category/${target.id}") { launchSingleTop = true }
         is LinuxDoDestination.Tag -> navigate("tag/${Uri.encode(target.slug)}?id=${target.id ?: 0}") { launchSingleTop = true }
         LinuxDoDestination.Unavailable -> navigate("unavailable") { launchSingleTop = true }
+        LinuxDoDestination.Trust -> navigate("trust") { launchSingleTop = true }
         LinuxDoDestination.Home -> { home(); popBackStack("root", false) }
     }
 }

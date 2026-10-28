@@ -9,6 +9,7 @@ sealed interface LinuxDoDestination {
     data class Tag(val slug: String, val id: Int? = null) : LinuxDoDestination
     data object Home : LinuxDoDestination
     data object Unavailable : LinuxDoDestination
+    data object Trust : LinuxDoDestination
 }
 
 object LinuxDoLink {
@@ -19,6 +20,7 @@ object LinuxDoLink {
     /** Unknown site pages belong in the web reader, rather than the external-intent home fallback. */
     fun parseContent(value: String): LinuxDoDestination? {
         val url = webUrl(value)?.toHttpUrlOrNull() ?: return null
+        if (url.host == "connect.linux.do" && url.port == if (url.isHttps) 443 else 80) return LinuxDoDestination.Trust
         val target = parse(url.toString()) ?: return null
         return target.takeUnless { it == LinuxDoDestination.Home && url.pathSegments.any(String::isNotEmpty) }
     }

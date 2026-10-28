@@ -11,6 +11,7 @@ import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.kudo.android.ui.IncomingLinuxDoLink
 import com.kudo.android.ui.openContentLink
+import com.kudo.android.ui.openWebPage
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -30,6 +31,7 @@ class DeepLinkUiTest {
             NavHost(nav, "root") {
                 composable("root") { Text("首页") }
                 composable("unavailable") { Text("内容不存在或暂无权限") }
+                composable("trust") { Text("原生等级要求") }
                 composable("user/{username}") { Text("用户：${it.arguments!!.getString("username")}") }
                 composable("category/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
                     Text("分类：${it.arguments!!.getInt("id")}")
@@ -123,7 +125,31 @@ class DeepLinkUiTest {
         compose.onNodeWithText("网页：https://linux.do/guidelines").assertIsDisplayed()
         click("javascript:alert(1)")
         compose.onNodeWithText("网页：https://linux.do/guidelines").assertIsDisplayed()
-        click("https://connect.linux.do/t/123")
-        compose.onNodeWithText("网页：https://connect.linux.do/t/123").assertIsDisplayed()
+        click("https://cdk.linux.do/")
+        compose.onNodeWithText("网页：https://cdk.linux.do/").assertIsDisplayed()
+    }
+
+    @Test fun connectContentLinksUseTheExistingTrustRouteAndKeepTheirSource() {
+        show()
+        compose.runOnIdle { nav.openContentLink("/t/123", {}) }
+        compose.onNodeWithText("帖子：123 楼层：0").assertIsDisplayed()
+        compose.runOnIdle { nav.openContentLink("https://connect.linux.do/?from=topic#level", {}) }
+        compose.onNodeWithText("原生等级要求").assertIsDisplayed()
+        compose.runOnIdle { nav.openContentLink("https://connect.linux.do/help", {}) }
+        compose.onNodeWithText("原生等级要求").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(nav.popBackStack()) }
+        compose.onNodeWithText("帖子：123 楼层：0").assertIsDisplayed()
+    }
+
+    @Test fun ordinaryWebEntryRoutesConnectToTrustButExplicitWebsiteCanBypassIt() {
+        show()
+        compose.runOnIdle { nav.openWebPage("https://connect.linux.do/") }
+        compose.onNodeWithText("原生等级要求").assertIsDisplayed()
+        compose.runOnIdle { nav.openWebPage("https://connect.linux.do/", nativeConnect = false) }
+        compose.onNodeWithText("网页：https://connect.linux.do/").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(nav.popBackStack()) }
+        compose.onNodeWithText("原生等级要求").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(nav.popBackStack()) }
+        compose.onNodeWithText("首页").assertIsDisplayed()
     }
 }
