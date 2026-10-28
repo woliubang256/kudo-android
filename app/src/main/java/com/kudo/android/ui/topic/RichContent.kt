@@ -530,12 +530,15 @@ fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Uni
     val footnoteOwner = remember(html) { Any() }
     val currentImage = rememberUpdatedState(onImage)
     val currentLink = rememberUpdatedState(onLink)
+    val currentSource = rememberUpdatedState(imageSource)
+    val currentLocals = rememberUpdatedState(currentCompositionLocalContext)
+    val library = LocalImageLibrary.current
     val onFootnote = remember(footnotes, footnoteHost, footnoteOwner) { { id: String ->
         footnotes[id]?.let { note -> footnoteHost?.show?.invoke(footnoteOwner, note,
-            { currentImage.value(it) }, { currentLink.value(it) }) }
+            { currentImage.value(it) }, { currentLink.value(it) }, currentSource.value, currentLocals.value) }
         Unit
     } }
-    DisposableEffect(footnoteHost, footnoteOwner) { onDispose { footnoteHost?.dismiss?.invoke(footnoteOwner) } }
+    DisposableEffect(footnoteHost, footnoteOwner, library) { onDispose { footnoteHost?.dismiss?.invoke(footnoteOwner) } }
     val linkHandler = remember(onLink) { object : UriHandler {
         override fun openUri(uri: String) = onLink(uri)
     } }
@@ -549,7 +552,6 @@ fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Uni
         mutableStateOf(closedDetails(blocks))
     }
     val gallery = LocalImageGallery.current
-    val library = LocalImageLibrary.current
     var actionTarget by remember(html, library) { mutableStateOf<ImageActionTarget?>(null) }
     var exporting by remember { mutableStateOf(false) }
     val origin = rememberSaveable { UUID.randomUUID().toString() }

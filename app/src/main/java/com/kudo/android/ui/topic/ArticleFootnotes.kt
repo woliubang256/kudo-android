@@ -14,6 +14,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import com.kudo.android.data.ImageSource
 
 internal data class ArticleFootnote(val id: String, val label: String, val html: String)
 
@@ -30,9 +31,10 @@ internal fun footnoteReferenceId(element: Element): String? = element.attr("href
     ?.removePrefix("#")
 
 private data class FootnoteRequest(val owner: Any, val note: ArticleFootnote,
-    val onImage: (String) -> Unit, val onLink: (String) -> Unit)
+    val onImage: (String) -> Unit, val onLink: (String) -> Unit,
+    val source: ImageSource?, val locals: CompositionLocalContext)
 
-internal class ArticleFootnoteController(val show: (Any, ArticleFootnote, (String) -> Unit, (String) -> Unit) -> Unit,
+internal class ArticleFootnoteController(val show: (Any, ArticleFootnote, (String) -> Unit, (String) -> Unit, ImageSource?, CompositionLocalContext) -> Unit,
     val dismiss: (Any) -> Unit)
 
 internal val LocalArticleFootnotes = staticCompositionLocalOf<ArticleFootnoteController?> { null }
@@ -44,8 +46,8 @@ internal fun ArticleFootnoteHost(content: @Composable () -> Unit) {
     val visibility = remember { MutableTransitionState(false) }
     var request by remember { mutableStateOf<FootnoteRequest?>(null) }
     val controller = remember {
-        ArticleFootnoteController({ owner, note, onImage, onLink ->
-            request = FootnoteRequest(owner, note, onImage, onLink)
+        ArticleFootnoteController({ owner, note, onImage, onLink, source, locals ->
+            request = FootnoteRequest(owner, note, onImage, onLink, source, locals)
             visibility.targetState = true
         }, { owner -> if (request?.owner === owner) visibility.targetState = false })
     }
@@ -66,11 +68,13 @@ internal fun ArticleFootnoteHost(content: @Composable () -> Unit) {
         if (selected != null) LiquidModal(visibility, "脚注 ${selected.note.label}", false, backdrop, glass,
             dismiss = { visibility.targetState = false }, maxDialogHeightFraction = .7f,
             actions = { LiquidModalAction("关闭", { visibility.targetState = false }, Modifier.fillMaxWidth()) }) {
+            CompositionLocalProvider(selected.locals) {
             CompositionLocalProvider(LocalReadingBlocked provides true, LocalArticleHeadingCollector provides null) {
                 RichContent(selected.note.html, selected.onImage, { url ->
                     visibility.targetState = false
                     selected.onLink(url)
-                }, galleryKey = "footnote-${selected.note.id}")
+                }, galleryKey = "footnote-${selected.note.id}", imageSource = selected.source)
+            }
             }
         }
     }

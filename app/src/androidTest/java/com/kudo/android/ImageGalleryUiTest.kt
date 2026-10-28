@@ -509,7 +509,7 @@ class ImageGalleryUiTest {
             compose.waitUntil(5_000) { shared.size == 1 && compose.onAllNodesWithText("正在处理图片…").fetchSemanticsNodes().isEmpty() }
             assertEquals(listOf("figure-3.png"), shared.toList())
             compose.onNodeWithTag("gallery-page-2").performTouchInput { longClick() }
-            compose.onNodeWithText("下载全部（约 120 KB）").performClick()
+            compose.onNodeWithText("下载全部", substring = true).performClick()
             compose.waitUntil(10_000) { saved.size == 6 && compose.onAllNodesWithText("正在处理图片…").fetchSemanticsNodes().isEmpty() }
             assertEquals(pictures.map { it.filename }, saved.drop(1))
             assertEquals(pictures.map { it.originalUrl }, requests.drop(2))

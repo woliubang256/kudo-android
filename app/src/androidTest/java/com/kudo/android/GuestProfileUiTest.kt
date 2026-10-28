@@ -85,7 +85,7 @@ class GuestProfileUiTest {
         compose.onNodeWithText("点击登录").assertIsDisplayed()
         compose.onNodeWithText("关于酷DO").performScrollTo().assertIsDisplayed().performClick()
         capture("guest-profile-dark-narrow-large.png", "guest-narrow")
-        for (label in listOf("设置", "关于酷DO", BuildConfig.VERSION_NAME, "一个用心的 Linux.do 原生客户端")) {
+        for (label in listOf("设置", "图库管理", "按目录管理收藏图片", "关于酷DO", BuildConfig.VERSION_NAME, "一个用心的 Linux.do 原生客户端")) {
             val layouts = mutableListOf<TextLayoutResult>()
             compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             val layout = layouts.single()
@@ -98,8 +98,10 @@ class GuestProfileUiTest {
             }
         }
         compose.runOnIdle { assertEquals(1, about) }
-        compose.onNodeWithText("真诚 · 友善 · 团结 · 专业").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("点击登录").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
+        compose.onNodeWithText("真诚 · 友善 · 团结 · 专业").assertIsDisplayed()
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
+        compose.onNodeWithText("点击登录").assertIsDisplayed()
     }
 
     @Test fun aboutShowsVersionInUpdateRowAndBackReturnsToGuest() {

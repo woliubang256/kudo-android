@@ -53,7 +53,7 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
         }
         if (images.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             EmptyState("暂无收藏图片", "长按帖子里的图片，即可收藏到目录。")
-        } else LazyVerticalGrid(GridCells.Adaptive(148.dp), Modifier.weight(1f).fillMaxWidth().testTag("library-images"),
+        } else LazyVerticalGrid(GridCells.Adaptive(if (selection == null) 148.dp else 112.dp), Modifier.weight(1f).fillMaxWidth().testTag("library-images"),
             contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(images, key = { it.id }) { image ->
                 val checked = selection?.contains(image.id) == true
