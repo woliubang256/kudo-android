@@ -164,10 +164,13 @@ class ImageLibraryUiTest {
         var source: ImageSource? = null
         screen { ImageLibraryScreen({}) { source = it } }
         loaded()
+        compose.onNodeWithTag("library-folder-all").assertHeightIsEqualTo(36.dp).assertTouchHeightIsEqualTo(48.dp)
+        compose.onNodeWithText("来源主题").assertDoesNotExist()
         compose.onNodeWithTag("library-folder-emoji").performClick()
         compose.onNodeWithTag("library-item-first").assertDoesNotExist()
         compose.onNodeWithTag("library-item-second").assertIsDisplayed()
-        compose.onNodeWithTag("library-source-second").performClick()
+        compose.onNodeWithTag("library-source-second").assertHeightIsAtLeast(48.dp)
+            .assertContentDescriptionEquals("打开来源主题，第 8 楼").performClick()
         assertEquals(ImageSource(42, 8, "来源主题"), source)
         compose.onNodeWithTag("library-image-second").performClick()
         compose.onNodeWithTag("gallery-page-0").assertIsDisplayed()
@@ -184,6 +187,7 @@ class ImageLibraryUiTest {
         compose.waitUntil { runBlocking { store.load(101).folders.last().name == "新表情" } }
         compose.onNodeWithContentDescription("管理图库目录").performClick()
         compose.onNodeWithContentDescription("删除新表情").performClick()
+        compose.onNodeWithText("删除目录后，里面的图片会移入默认收藏。").assertIsDisplayed()
         compose.onNodeWithText("删除目录", substring = false).performClick()
         compose.waitUntil { runBlocking { store.load(101).folders.size == 1 } }
         assertEquals(2, runBlocking { store.load(101).images.size })
@@ -195,6 +199,7 @@ class ImageLibraryUiTest {
         screen { ImageLibraryScreen({}) {} }
         loaded()
         compose.onNodeWithTag("library-remove-first").performClick()
+        compose.onNodeWithText("仅从本机图库移除，不删除原帖或原图。").assertIsDisplayed()
         assertEquals(2, runBlocking { store.load(101).images.size })
         compose.onNodeWithTag("library-confirm-remove").performClick()
         compose.waitUntil { runBlocking { store.load(101).images.size == 1 } }
@@ -253,6 +258,13 @@ class ImageLibraryUiTest {
         compose.onNodeWithText("暂无收藏图片").assertIsDisplayed()
         assertEquals(2, runBlocking { store.load(101).images.size })
         assertTrue(runBlocking { store.load(202).images.isEmpty() })
+    }
+
+    @Test fun emptyLibraryUsesOneStatusWithoutSecondaryInstructions() {
+        screen { ImageLibraryScreen({}) {} }
+        compose.waitUntil { compose.onAllNodesWithText("暂无收藏图片").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("长按帖子里的图片，即可收藏到目录。").assertDoesNotExist()
+        capture("image-library-compact-empty.png")
     }
 
     @Test fun replyInsertsImageAndPreservesTheReplyDraftWithoutPublishing() {

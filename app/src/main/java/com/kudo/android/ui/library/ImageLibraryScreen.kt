@@ -61,7 +61,8 @@ internal fun ImageLibraryScreen(back: () -> Unit, source: (ImageSource) -> Unit)
                     catch (failure: Exception) { showKudoToast(context, failure.message ?: "移除失败，请重试") }
                     finally { busy = false }
                 }
-            }, enabled = !busy, modifier = Modifier.fillMaxWidth().testTag("library-confirm-remove"))
+            }, enabled = !busy, compact = true,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("library-confirm-remove"))
         }
     }
 }
@@ -87,22 +88,27 @@ private fun LibraryFolderSheet(state: ImageLibraryState, dismiss: () -> Unit) {
         }
         if (deleting != null) {
             Text("删除目录后，里面的图片会移入默认收藏。")
-            CommunityButton("删除目录", { update { it.deleteFolder(requireNotNull(deleting)) } }, enabled = !busy, modifier = Modifier.fillMaxWidth())
+            CommunityButton("删除目录", { update { it.deleteFolder(requireNotNull(deleting)) } }, enabled = !busy, compact = true,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp))
         } else if (creating || editing != null) {
             CommunityTextField(name, { name = it; error = null }, Modifier.fillMaxWidth().testTag("library-folder-name"), placeholder = "目录名称", singleLine = true, enabled = !busy)
             CommunityButton("保存目录", { update { library -> editing?.let { library.renameFolder(it, name) } ?: library.addFolder(name) } },
-                enabled = !busy && name.isNotBlank(), modifier = Modifier.fillMaxWidth())
+                enabled = !busy && name.isNotBlank(), compact = true,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp))
         } else {
-            state.library?.folders?.forEach { folder ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(folder.name, Modifier.weight(1f))
-                    if (folder.id != DEFAULT_IMAGE_FOLDER) {
-                        CommunityIconButton(Icons.Rounded.Edit, "重命名${folder.name}", { editing = folder.id; name = folder.name }, enabled = !busy)
-                        CommunityIconButton(Icons.Rounded.DeleteOutline, "删除${folder.name}", { deleting = folder.id }, enabled = !busy)
+            Column(Modifier.fillMaxWidth()) {
+                state.library?.folders?.forEach { folder ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(folder.name, Modifier.weight(1f))
+                        if (folder.id != DEFAULT_IMAGE_FOLDER) {
+                            CommunityIconButton(Icons.Rounded.Edit, "重命名${folder.name}", { editing = folder.id; name = folder.name }, enabled = !busy)
+                            CommunityIconButton(Icons.Rounded.DeleteOutline, "删除${folder.name}", { deleting = folder.id }, enabled = !busy)
+                        }
                     }
                 }
             }
-            CommunityButton("新建目录", { creating = true }, Modifier.fillMaxWidth(), enabled = !busy)
+            CommunityButton("新建目录", { creating = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp),
+                enabled = !busy, compact = true)
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }

@@ -19,14 +19,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.CommunityIconButton
-import com.kudo.android.ui.components.EmptyState
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
 import com.kudo.android.ui.topic.ArticleBlock
@@ -39,22 +38,24 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
     source: ((ImageSource) -> Unit)? = null, remove: ((SavedImage) -> Unit)? = null) {
     val images = remember(library, folderId) { library.images.filter { folderId == null || it.folderId == folderId } }
     Column(modifier) {
-        LazyRow(Modifier.fillMaxWidth().testTag("library-folders"), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        LazyRow(Modifier.fillMaxWidth().testTag("library-folders"), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf(ImageFolder("all", "全部")) + library.folders, key = { it.id }) { folder ->
                 val id = folder.id.takeUnless { it == "all" }
                 val active = folderId == id
-                Box(Modifier.clip(RoundedCornerShape(50)).background(if (active) LogoYellow else MaterialTheme.colorScheme.surfaceVariant)
+                Box(Modifier.heightIn(min = 48.dp).padding(vertical = 6.dp)
+                    .clip(RoundedCornerShape(50)).background(if (active) LogoYellow else MaterialTheme.colorScheme.surfaceVariant)
                     .clickable(role = Role.Tab) { selectFolder(id) }.semantics { selected = active }
-                    .heightIn(min = 48.dp).padding(horizontal = 18.dp, vertical = 12.dp).testTag("library-folder-${folder.id}")) {
-                    Text(folder.name, color = if (active) Ink else MaterialTheme.colorScheme.onSurface)
+                    .padding(horizontal = 16.dp, vertical = 6.dp).testTag("library-folder-${folder.id}")) {
+                    Text(folder.name, color = if (active) Ink else MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
         if (images.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            EmptyState("暂无收藏图片", "长按帖子里的图片，即可收藏到目录。")
+            Text("暂无收藏图片", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else LazyVerticalGrid(GridCells.Adaptive(if (selection == null) 148.dp else 112.dp), Modifier.weight(1f).fillMaxWidth().testTag("library-images"),
-            contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(images, key = { it.id }) { image ->
                 val checked = selection?.contains(image.id) == true
                 Column(Modifier.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface).testTag("library-item-${image.id}")) {
@@ -71,12 +72,12 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
                             tint = if (checked) Ink else MaterialTheme.colorScheme.onSurface)
                     }
                     if (selection == null) {
-                        Text(image.source?.title?.ifBlank { "来源帖子" } ?: image.alt.ifBlank { "收藏图片" },
-                            Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             if (image.source != null && source != null) Text("原帖 · ${image.source.postNumber} 楼",
                                 Modifier.weight(1f).clickable(role = Role.Button) { source(image.source) }.heightIn(min = 48.dp)
-                                    .padding(horizontal = 10.dp, vertical = 14.dp).testTag("library-source-${image.id}"),
+                                    .padding(horizontal = 10.dp, vertical = 14.dp).semantics {
+                                        contentDescription = "打开${image.source.title.ifBlank { "来源帖子" }}，第 ${image.source.postNumber} 楼"
+                                    }.testTag("library-source-${image.id}"),
                                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             else Spacer(Modifier.weight(1f))
                             if (remove != null) CommunityIconButton(Icons.Rounded.DeleteOutline, "移除收藏图片", { remove(image) }, Modifier.testTag("library-remove-${image.id}"))
