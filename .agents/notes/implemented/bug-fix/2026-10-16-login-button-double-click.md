@@ -2,6 +2,8 @@
 
 Status: implemented
 
+网页高级模式与偏好段落保留的是 2026-10-17 的历史决定；其可选模式已由[WebView 统一普通材质](2026-10-29-webview-ordinary-material.md)取代。单次完成点击、验证码视口与此前已执行的验收记录继续保留，不将历史测试结果作为新方案的验证证据。
+
 ## Problem
 
 登录页接入玻璃顶部操作后，TopBarTextButton 的外层 Box 和内部 LiquidButton 同时注册点击事件。一次点击会触发两次登录检查，导致会话状态和导航回调发生竞态。

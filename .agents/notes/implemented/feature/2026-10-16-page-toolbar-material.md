@@ -12,7 +12,7 @@ Status: implemented
 
 MaterialPageScaffold 将全屏内容与顶部玻璃置于兄弟节点，实测顶部高度通过 PaddingValues 交给列表或滚动内容；禁止将自身玻璃放进自己的采样源。已有弹窗的整页采样源可包含工具栏，但工具栏另取内部的内容源。保留滚动位置、刷新、分页、键盘及导航逻辑。
 
-网页调用显式传入 `advanced`。关闭时使用普通 Column 顺序放置顶部和内容，向内容传递零顶部留白，不创建 LayerBackdrop、采样图层或玻璃效果，并清空继承的工具栏采样源；开启时才创建现有兄弟采样层。普通模式必须退出整条采样路径，不能只取消前景模糊。开关默认值与持久化见[网页材质偏好](../bug-fix/2026-10-16-login-button-double-click.md)。
+网页统一使用独立 WebPageScaffold，以普通 Column 顺序放置顶部和内容，向内容传递零顶部留白，不创建网页顶部 LayerBackdrop、采样图层或玻璃效果，并清空继承的工具栏采样源。原有可选高级模式与持久化偏好由[WebView 统一普通材质](../bug-fix/2026-10-29-webview-ordinary-material.md)取代；原生页面继续使用 MaterialPageScaffold。
 
 文字 Tab 按最宽标签和当前字号计算是否容得下等分布局，容得下时铺满可用宽度并逐项居中；超出时使用原有横向滚动和选中项可见机制，不截断文字或压缩触控。现有黄色渐变指示器保留，图标式表情分组不属于文字导航 Tab。
 
@@ -36,7 +36,7 @@ FeedTabBar 和 AccountTabs 复用 BalancedTabRow，主页、目录、搜索、�
 
 主题详情的列表同样全屏采样，但 PostReadingViewport 额外扣除实测工具栏高度；玻璃后方的内容不计入阅读曝光。底部操作栏继续从包含顶部的独立源采样，弹窗使用最外层源，三者不互相采样。
 
-登录、验证和应用内网页保留 WebView 在工具栏下方的有界视口，避免改变网页的 CSS 高度、首行可见性和触点映射；独立玻璃操作采样该区域的主题背景，不注入网页留白脚本。网页本身不被放到系统状态栏后方。
+登录、验证和应用内网页使用普通顶部操作，保留 WebView 在工具栏下方的有界视口，避免改变网页的 CSS 高度、首行可见性和触点映射；不注入网页留白脚本。网页本身不被放到系统状态栏后方。
 
 公开主页按 ProfileToolbar 实测高度计算折叠终点，不能继续假设48dp。首轮真机用例复现新60dp操作栏与旧折叠终点重叠36px，修复用例与窄屏导航用例分别保留。
 
@@ -44,7 +44,7 @@ PersonalTopicsScreen 的整个组合以 ViewModel 为 key，分页状态、条�
 
 ## Testing
 
-WebViewMaterialLayoutUiTest 先在真机复现关闭高级材质后仍存在采样层，再验证普通与高级分支切换时采样层和工具栏背景源同时退出或启用。
+WebViewMaterialLayoutUiTest 检查网页固定普通布局在浅深色和三种原生材质下均不创建顶部采样层，并清空继承的工具栏背景源和操作作用域；内容继续位于顶部下方且不重复预留顶部高度。此前普通与高级分支切换的历史决定见上述已被部分取代的网页材质偏好笔记。
 
 RMX2202 / Android13 首轮 PageMaterialUiTest 四项通过，覆盖两/三项等分且文字居中、拥挤标签选中可见、窄屏操作间距及禁用态、浅深色三种材质的真实红蓝列表采样。PublicProfileUiTest 的新增吸顶用例先失败，按实测高度修复后与 TopicReadingUiTest 合计29项通过（artifacts/page-material-profile-reading-device.txt），其中新增玻璃遮挡区不计阅读曝光，窄屏三个导航目标仍为48dp。已人工查看共用浅色液态、窄屏深色及公开主页截图。
 

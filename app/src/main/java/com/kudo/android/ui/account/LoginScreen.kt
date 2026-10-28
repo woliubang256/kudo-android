@@ -13,9 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kudo.android.ui.components.PageTopBar
-import com.kudo.android.ui.components.MaterialPageScaffold
+import com.kudo.android.ui.components.WebPageScaffold
 import com.kudo.android.ui.components.TopBarTextButton
-import com.kudo.android.ui.theme.LocalDisplaySettings
 import com.kudo.android.ui.web.webViewProviderLabel
 import kotlinx.coroutines.launch
 
@@ -28,7 +27,7 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
     var message by remember { mutableStateOf<String?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.destroy(); webView = null } }
-    MaterialPageScaffold(advanced = LocalDisplaySettings.current.advancedWebViewMaterial, header = {
+    WebPageScaffold(header = {
         PageTopBar("登录与网页验证", back) {
             TopBarTextButton(if (vm.checkingSession) "检查中…" else "完成登录", {
                 scope.launch {

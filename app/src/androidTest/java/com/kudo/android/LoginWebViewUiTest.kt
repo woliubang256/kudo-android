@@ -1,6 +1,7 @@
 package com.kudo.android
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
+import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.account.AccountViewModel
 import com.kudo.android.ui.account.LoginScreen
@@ -60,19 +62,19 @@ class LoginWebViewUiTest {
         checkCaptchaViewport(advanced = false)
     }
 
-    @Test fun advancedLoginMaterialKeepsTheCaptchaViewportBounded() {
+    @Test fun legacyAdvancedMaterialCannotEnableLoginSampling() {
         checkCaptchaViewport(advanced = true)
     }
 
     private fun checkCaptchaViewport(advanced: Boolean) {
         var available by mutableStateOf(600.dp)
-        compose.setContent { KudoTheme(DisplaySettings(advancedWebViewMaterial = advanced)) {
+        val settings = legacySettings(advanced)
+        compose.setContent { KudoTheme(settings) {
             Box(Modifier.fillMaxSize()) { Box(Modifier.fillMaxWidth().height(available)) {
                 LoginScreen(vm, {}, {}, { FixtureWebView(it).also { web -> view = web } })
             } }
         } }
-        if (advanced) compose.onNodeWithTag("material-page-content").assertExists()
-        else compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+        compose.onNodeWithTag("material-page-content").assertDoesNotExist()
         compose.waitUntil(10_000) { js("document.getElementById('captcha') !== null") == "true" }
         val original = JSONArray(js("[innerHeight, document.getElementById('vh').offsetHeight, document.getElementById('captcha').offsetHeight]"))
         assertTrue("100vh must reflect the native viewport: $original", original.getDouble(1) > 100)
@@ -89,21 +91,34 @@ class LoginWebViewUiTest {
         checkSingleCompletion(advanced = false)
     }
 
-    @Test fun advancedLoginMaterialRunsSessionCheckOnlyOncePerTap() {
+    @Test fun legacyAdvancedMaterialKeepsSingleLoginCompletion() {
         checkSingleCompletion(advanced = true)
     }
 
     private fun checkSingleCompletion(advanced: Boolean) {
-        compose.setContent { KudoTheme(DisplaySettings(advancedWebViewMaterial = advanced)) {
+        val settings = legacySettings(advanced)
+        compose.setContent { KudoTheme(settings) {
             LoginScreen(vm, {}, {}, { FixtureWebView(it).also { web -> view = web } })
         } }
-        if (advanced) compose.onNodeWithTag("material-page-content").assertExists()
-        else compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+        compose.onNodeWithTag("material-page-content").assertDoesNotExist()
         compose.waitUntil(10_000) { sessionResets == 1 }
         compose.onNodeWithText("完成登录").performClick()
         compose.waitUntil(10_000) { sessionResets == 2 }
         Thread.sleep(100)
         assertEquals("A single tap must not reset the session twice", 2, sessionResets)
+    }
+
+    private fun legacySettings(enabled: Boolean): DisplaySettings {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferenceName = "login_material_fixture_${System.nanoTime()}"
+        val context = object : ContextWrapper(target) {
+            override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences(preferenceName, mode)
+        }
+        return try {
+            context.getSharedPreferences("kudo_preferences", Context.MODE_PRIVATE).edit()
+                .putBoolean("advanced_webview_material", enabled).commit()
+            AppSettings(context).display.value
+        } finally { target.deleteSharedPreferences(preferenceName) }
     }
 
     private inner class FixtureWebView(context: Context) : WebView(context) {

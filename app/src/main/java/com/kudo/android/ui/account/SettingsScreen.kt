@@ -68,15 +68,6 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                         SettingsDivider()
                         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 18.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-                                Text("网页高级材质", style = MaterialTheme.typography.bodyLarge)
-                                Text("打开后如网页发生崩溃请关闭", Modifier.padding(top = 4.dp),
-                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            CommunitySwitch(settings.advancedWebViewMaterial, { update(settings.copy(advancedWebViewMaterial = it)) }, enabled = !showing, modifier = Modifier.testTag("advanced-webview-material"))
-                        }
-                        SettingsDivider()
-                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 18.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
                                 Text("模糊 NSFW 图片", style = MaterialTheme.typography.bodyLarge)
                                 Text("列表中带有 nsfw 标签的话题图片会自动模糊", Modifier.padding(top = 4.dp),
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

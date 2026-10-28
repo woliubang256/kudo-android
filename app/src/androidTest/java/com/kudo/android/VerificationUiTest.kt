@@ -108,27 +108,28 @@ class VerificationUiTest {
         compose.runOnIdle { assertEquals(1, nativeChecks); assertEquals(0, logins); assertEquals(1, retries) }
     }
 
-    @Test fun verificationHostForwardsMaterialPreferenceOnEveryOpen() {
-        var advanced by mutableStateOf(false)
+    @Test fun verificationHostAlwaysUsesOrdinaryLayoutAcrossNativeMaterials() {
+        var settings by mutableStateOf(DisplaySettings())
         val client = DiscourseClient(object : SessionCookies {
             override fun get(url: String) = ""
             override fun set(url: String, cookie: String) = Unit
         })
-        compose.setContent { KudoTheme(DisplaySettings()) {
-            VerificationHost(client, "fixture-agent", ::factory, advancedMaterial = advanced) {
+        compose.setContent { KudoTheme(settings) {
+            VerificationHost(client, "fixture-agent", ::factory) {
                 ErrorState(ApiFailure(FailureKind.VERIFICATION, CloudflareVerificationMessage), {}, {})
             }
         } }
-        listOf(false, true, false).forEach { enabled ->
-            compose.runOnIdle { advanced = enabled }
-            compose.onNodeWithText("完成网页验证").performClick()
-            compose.onNodeWithTag("verification-page").assertIsDisplayed()
-            if (enabled) compose.onNodeWithTag("material-page-content").assertExists()
-            else compose.onNodeWithTag("material-page-content").assertDoesNotExist()
-            compose.onNodeWithContentDescription("返回").performClick()
-            compose.onNodeWithTag("verification-page").assertDoesNotExist()
+        listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
+            GlassMode.entries.forEach { glass ->
+                compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass) }
+                compose.onNodeWithText("完成网页验证").performClick()
+                compose.onNodeWithTag("verification-page").assertIsDisplayed()
+                compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+                compose.onNodeWithContentDescription("返回").performClick()
+                compose.onNodeWithTag("verification-page").assertDoesNotExist()
+            }
         }
-        compose.runOnIdle { assertEquals(List(3) { "https://linux.do/challenge" }, loads) }
+        compose.runOnIdle { assertEquals(List(6) { "https://linux.do/challenge" }, loads) }
     }
 
     @Test fun manualSettingsVerificationReturnsWithoutChangingPreferencesOrOpeningLogin() {

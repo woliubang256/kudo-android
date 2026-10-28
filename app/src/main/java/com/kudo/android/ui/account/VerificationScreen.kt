@@ -21,7 +21,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.CommunityIconButton
 import com.kudo.android.ui.components.PageTopBar
-import com.kudo.android.ui.components.MaterialPageScaffold
+import com.kudo.android.ui.components.WebPageScaffold
 import com.kudo.android.ui.components.TopBarTextButton
 import com.kudo.android.ui.topic.LocalReadingBlocked
 import kotlinx.coroutines.CancellationException
@@ -34,7 +34,7 @@ internal val LocalWebVerification = staticCompositionLocalOf<((() -> Unit) -> Un
 
 @Composable
 internal fun VerificationHost(client: DiscourseClient, userAgent: String,
-    webViewFactory: (Context) -> WebView = { WebView(it) }, advancedMaterial: Boolean = false, content: @Composable () -> Unit) {
+    webViewFactory: (Context) -> WebView = { WebView(it) }, content: @Composable () -> Unit) {
     var pendingRetry by remember { mutableStateOf<(() -> Unit)?>(null) }
     val blocked = LocalReadingBlocked.current || pendingRetry != null
     CompositionLocalProvider(LocalWebVerification provides { retry -> pendingRetry = retry }, LocalReadingBlocked provides blocked) {
@@ -52,20 +52,20 @@ internal fun VerificationHost(client: DiscourseClient, userAgent: String,
             val retry = pendingRetry
             pendingRetry = null
             retry?.invoke()
-        }, webViewFactory, advancedMaterial = advancedMaterial)
+        }, webViewFactory)
     }
 }
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun VerificationScreen(userAgent: String, back: () -> Unit, check: suspend () -> Unit, completed: () -> Unit,
-    webViewFactory: (Context) -> WebView = { WebView(it) }, advancedMaterial: Boolean = false) {
+    webViewFactory: (Context) -> WebView = { WebView(it) }) {
     val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<WebView?>(null) }
     var loading by remember { mutableStateOf(true) }
     var checking by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    MaterialPageScaffold(modifier = Modifier.testTag("verification-page"), advanced = advancedMaterial, header = {
+    WebPageScaffold(modifier = Modifier.testTag("verification-page"), header = {
         PageTopBar("网页验证", back) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新验证页", {
                 message = null

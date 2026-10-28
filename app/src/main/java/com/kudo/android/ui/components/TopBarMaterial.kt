@@ -29,23 +29,27 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 internal val LocalToolbarBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 internal val LocalToolbarActions = staticCompositionLocalOf { false }
 
+@Composable
+internal fun WebPageScaffold(
+    header: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (PaddingValues) -> Unit,
+) {
+    CompositionLocalProvider(LocalToolbarBackdrop provides null, LocalToolbarActions provides false) {
+        Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().testTag("material-page-header")) { header() }
+            Box(Modifier.weight(1f).fillMaxWidth()) { content(PaddingValues()) }
+        }
+    }
+}
+
 /** Content alone is sampled; the header must never be inside its own source. */
 @Composable
 internal fun MaterialPageScaffold(
     header: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    advanced: Boolean = true,
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    if (!advanced) {
-        CompositionLocalProvider(LocalToolbarBackdrop provides null, LocalToolbarActions provides false) {
-            Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().testTag("material-page-header")) { header() }
-                Box(Modifier.weight(1f).fillMaxWidth()) { content(PaddingValues()) }
-            }
-        }
-        return
-    }
     val backdrop = rememberLayerBackdrop()
     var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val top = with(LocalDensity.current) { headerHeight.toDp() }

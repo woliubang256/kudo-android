@@ -19,6 +19,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.AndroidSessionCookies
 import com.kudo.android.data.DisplaySettings
 import com.kudo.android.data.ExternalLinkMode
+import com.kudo.android.data.GlassMode
 import com.kudo.android.data.ThemeMode
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.components.QuickScrollToTopHost
@@ -359,6 +360,26 @@ class WebScreenUiTest {
         val dimensions = JSONArray(javascript("[innerHeight, document.getElementById('vh').offsetHeight, document.getElementById('frame').offsetHeight]"))
         assertEquals("100vh must match the viewport", dimensions.getDouble(0), dimensions.getDouble(1), 2.0)
         assertEquals("Viewport cap must not hide the frame", 76.0, dimensions.getDouble(2), 1.0)
+    }
+
+    @Test fun readerStaysOrdinaryWithoutReloadingWhenNativeMaterialSettingsChange() {
+        var settings by mutableStateOf(DisplaySettings())
+        compose.setContent { KudoTheme(settings) { WebScreen(start, {}, {}, ::create) } }
+        awaitPage("指南")
+        val previous = loads.get()
+        listOf(ThemeMode.LIGHT, ThemeMode.DARK).forEach { theme ->
+            GlassMode.entries.forEach { glass ->
+                compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass) }
+                compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+                val header = compose.onNodeWithTag("material-page-header").fetchSemanticsNode().boundsInRoot
+                val content = compose.onNodeWithTag("web-content").fetchSemanticsNode().boundsInRoot
+                assertTrue(content.top >= header.bottom)
+                compose.runOnIdle {
+                    assertEquals(1, views.size)
+                    assertEquals(previous, loads.get())
+                }
+            }
+        }
     }
 
     private inner class FixtureWebView(context: Context) : WebView(context) {

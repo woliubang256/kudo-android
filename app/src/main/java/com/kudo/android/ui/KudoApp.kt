@@ -82,7 +82,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
     var darkStatusIcons by remember { mutableStateOf<Boolean?>(null) }
     KudoTheme(display, darkStatusIcons) {
         EditorToolBackdropHost {
-        VerificationHost(app.client, app.userAgent, advancedMaterial = display.advancedWebViewMaterial) {
+        VerificationHost(app.client, app.userAgent) {
         ArticleFootnoteHost {
         QuickScrollToTopHost {
         val account = model("account") { AccountViewModel(app) }
@@ -355,7 +355,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         } ?: MaterialPagePlaceholder("聊天", { nav.popBackStack() }) { EmptyState("请先登录", "登录后查看聊天。", actionLabel = "登录", action = ::login) }
                     }
                     composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) { entry ->
-                        WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser, advancedMaterial = display.advancedWebViewMaterial,
+                        WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
                             openApp = { appLinks.open(it) }, externalLinkMode = display.externalLinkMode)
                     }
                     topicDetailComposable("topic/{id}?post={post}",
