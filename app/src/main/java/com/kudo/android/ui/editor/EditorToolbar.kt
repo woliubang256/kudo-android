@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kudo.android.ui.components.*
+import com.kudo.android.ui.library.LocalImageLibrary
+import com.kudo.android.ui.library.ImageLibraryPicker
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -67,7 +69,8 @@ internal fun EditorToolBackdropHost(content: @Composable () -> Unit) {
 internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Unit, pickImage: () -> Unit,
     enabled: Boolean, uploading: Boolean, focus: () -> Unit, rtl: Boolean, direction: () -> Unit,
     modifier: Modifier = Modifier, preview: () -> Unit = {}) {
-    var menu by remember { mutableStateOf<String?>(null) }
+    val library = LocalImageLibrary.current
+    var menu by remember(library) { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val toolbarScroll = rememberScrollState()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -99,11 +102,12 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
         tool(Icons.Rounded.EmojiEmotions, "表情") { open("emoji") }
         tool(Icons.Rounded.Code, "插入代码块") { apply { it.blockMarkdown("```\n", "\n```") } }
         tool(Icons.Rounded.Add, "更多格式") { open("more") }
+        CommunityIconButton(Icons.Rounded.PhotoLibrary, "图库", { open("library") }, enabled = enabled && !uploading && library != null)
     }
     menu?.let { panel ->
         var target by remember(panel) { mutableStateOf(value) }
         target = target.syncMarkdown(value.text)
-        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; "emoji" -> "表情"; else -> "更多格式" }, {
+        EditorToolSheet(when (panel) { "size" -> "文本大小"; "list" -> "列表"; "link" -> "插入链接"; "emoji" -> "表情"; "library" -> "图库"; else -> "更多格式" }, {
             if (enabled) change(target.syncMarkdown(value.text))
             menu = null; focus()
         }, showTitle = panel != "emoji") { close ->
@@ -123,6 +127,7 @@ internal fun EditorToolbar(value: TextFieldValue, change: (TextFieldValue) -> Un
                     "任务列表" to MarkdownLines.TASK).forEach { (label, command) -> EditorToolOption(label) { choose { it.lineMarkdown(command) } } }
                 "link" -> EditorLinkForm(target.text.substring(target.selection.min, target.selection.max)) { label, url -> choose { it.linkMarkdown(label, url) } }
                 "emoji" -> EditorEmojis { emoji -> choose { it.replaceMarkdown(emoji) } }
+                "library" -> ImageLibraryPicker(enabled && !uploading) { images -> choose { it.insertLibraryImages(images) } }
                 else -> {
                     EditorToolOption("行内代码") { choose { it.wrapMarkdown("`", placeholder = "代码") } }
                     EditorToolOption("删除线") { choose { it.wrapMarkdown("~~") } }
