@@ -41,6 +41,8 @@ class EditorViewModel(private val app: AppContainer, userId: Int, val topicId: I
     val published = results.receiveAsFlow()
     suspend fun searchTags(query: String, categoryId: Int, selected: List<TopicTag>): List<TopicTag> =
         app.repository.composerTags(query, categoryId, selected)
+    suspend fun searchMentions(query: String): List<Member> =
+        app.repository.composerMentions(query, topicId, draft.categoryId)
     private val imageInsertion = EditorImageInsertion()
     fun prepareImageUpload(selection: TextRange) { if (!sending && !uploading) imageInsertion.prepare(draft.raw, selection) }
 

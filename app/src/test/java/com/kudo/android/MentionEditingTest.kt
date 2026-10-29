@@ -35,9 +35,17 @@ class MentionEditingTest {
         val query = value.mentionQuery()!!
         val newer = TextFieldValue("@other", TextRange(6))
         assertEquals(newer, newer.completeMention(query, "neo"))
-        assertNull(value.copy(composition = TextRange(1, 3)).mentionQuery())
+        assertNull(TextFieldValue("@小明", TextRange(3), TextRange(1, 3)).mentionQuery())
         assertNull(value.copy(selection = TextRange(0, 3)).mentionQuery())
         assertEquals(value, value.completeMention(query, "bad username"))
+    }
+
+    @Test fun latinKeyboardCompositionCanSearchAndIsOnlyCommittedOnExplicitCompletion() {
+        val composing = TextFieldValue("@ne", TextRange(3), TextRange(1, 3))
+        val query = composing.mentionQuery()
+        assertNotNull("Latin keyboards keep the query in composition while typing", query)
+        assertEquals(TextRange(1, 3), composing.composition)
+        assertEquals("@neo ", composing.completeMention(query!!, "neo").text)
     }
 
     @Test fun scopedSearchKeepsServerOrderAndOnlyReturnsSixSafeUniqueUsers() = runBlocking {

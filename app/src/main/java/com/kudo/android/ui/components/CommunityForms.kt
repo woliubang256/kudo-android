@@ -67,10 +67,11 @@ internal fun CommunityTextField(value: String, change: (String) -> Unit, modifie
 internal fun CommunityTextField(value: TextFieldValue, change: (TextFieldValue) -> Unit, modifier: Modifier = Modifier,
     placeholder: String = "", enabled: Boolean = true, minLines: Int = 1, maxLines: Int = Int.MAX_VALUE,
     textStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default, keyboardActions: KeyboardActions = KeyboardActions.Default) {
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default, keyboardActions: KeyboardActions = KeyboardActions.Default,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}) {
     BasicTextField(value, change, modifier, enabled = enabled, minLines = minLines, maxLines = maxLines,
         textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.4f)),
-        cursorBrush = SolidColor(LogoYellow), keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
+        cursorBrush = SolidColor(LogoYellow), keyboardOptions = keyboardOptions, keyboardActions = keyboardActions, onTextLayout = onTextLayout,
         decorationBox = { input -> Box(Modifier.fillMaxWidth()) {
             if (value.text.isEmpty()) Text(placeholder, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), style = textStyle)
             input()

@@ -36,7 +36,7 @@ private fun protectedMentionRanges(raw: String): List<IntRange> {
 }
 
 internal fun TextFieldValue.mentionQuery(): MentionQuery? {
-    if (!selection.collapsed || composition?.collapsed == false) return null
+    if (!selection.collapsed) return null
     val cursor = selection.start.coerceIn(0, text.length)
     var start = cursor
     while (start > 0 && mentionCharacter(text[start - 1])) start--
@@ -52,6 +52,11 @@ internal fun TextFieldValue.mentionQuery(): MentionQuery? {
     if (ticks != 0) return null
     var end = cursor
     while (end < text.length && mentionCharacter(text[end])) end++
+    composition?.takeUnless { it.collapsed }?.let { composing ->
+        if (composing.min < start || composing.max > end || text.substring(composing.min, composing.max).any {
+                it.code > 127 || (!mentionCharacter(it) && it != '@')
+            }) return null
+    }
     return MentionQuery(start, end, text.substring(start + 1, cursor))
 }
 

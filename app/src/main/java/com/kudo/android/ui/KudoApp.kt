@@ -467,7 +467,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             LaunchedEffect(vm) { vm.saved.collect {
                                 postEditResult = it; refreshEpoch++; nav.popBackStack(); showMessage("修改已保存")
                             } }
-                            PostEditScreen(vm, display.glass, { uri -> uploadEditorImage(app.repository, context, uri) }, { nav.popBackStack() }, ::login)
+                            PostEditScreen(vm, display.glass, { uri -> uploadEditorImage(app.repository, context, uri) }, { nav.popBackStack() }, ::login,
+                                mentionSearch = { app.repository.composerMentions(it, vm.source?.topicId) })
                         }
                     }
                     composable("login") { LoginScreen(account, { refreshEpoch++; nav.popBackStack() }, { refreshEpoch++; nav.popBackStack(); showMessage("欢迎回来，${account.user?.displayName}") }) }

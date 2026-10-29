@@ -10,6 +10,8 @@ EditorForm 被新话题、回复面板及已发布内容编辑共用，目前只
 
 工具栏末尾的“图库”由[本地收藏图库](2026-10-29-local-image-library.md)扩展，按身份从本地目录选择图片并直接插入原图 Markdown；不调用下面的图片上传链路，其余选区、草稿与发布契约不变。
 
+共享正文的 @ 候选由[用户提及](2026-10-29-editor-mentions.md)扩展，补全仍保存原始 @username；预览仅关闭候选，保留输入框的选区和 composition 契约。
+
 新建私信编辑器也直接复用 EditorToolbar、EditorPreviewDialog、TextFieldValue 的光标/选区处理、EditorImageInsertion 和 uploadEditorImage，不复制一套工具定义。保留私信收件人、标题、personalMessageRules 和来源草稿键，不借用普通话题的分类/标签表单或发布校验。正文区域纵向滚动，底部字数、状态和工具栏在键盘上方可达；格式化与预览不发送私信。上传图片期间允许继续编辑正文，插入锚点随编辑重定位，同时禁用发送和返回，避免未完成的上传脱离当前编辑器；上传失败保留原文并允许重新选择。
 
 正文保留 Markdown 原文及既有账号草稿键，光标、选区和输入法 composition 使用 TextFieldValue 单独管理；格式化作用于选区或插入点，多行块处理整行，空选区把光标放到占位内容中。相同正文回传保留 composition，外部正文变化重定位选区，工具操作明确提交 composition。

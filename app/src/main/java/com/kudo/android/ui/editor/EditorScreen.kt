@@ -43,7 +43,7 @@ fun EditorScreen(vm: EditorViewModel, categories: List<Category>, categoryError:
         reply = vm.topicId != null, categoryError = categoryError, reloadCategories = reloadCategories,
         sending = vm.sending, uploading = vm.uploading, error = vm.error,
         replyRules = vm.replyRules, rulesError = vm.rulesError, reloadRules = vm::reloadReplyRules, replyAuthor = replyAuthor,
-        imageSelection = vm::prepareImageUpload, tagSearch = vm::searchTags)
+        imageSelection = vm::prepareImageUpload, tagSearch = vm::searchTags, mentionSearch = vm::searchMentions)
 }
 
 @Composable
@@ -62,6 +62,7 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
     editing: Boolean = false, editingReply: Boolean = false, canSave: Boolean = false,
     editReason: String = "", reasonChange: (String) -> Unit = {}, imageSelection: (TextRange) -> Unit = {},
     tagSearch: suspend (String, Int, List<TopicTag>) -> List<TopicTag> = { _, _, _ -> emptyList() },
+    mentionSearch: suspend (String) -> List<Member> = { emptyList() },
     extra: @Composable ColumnScope.() -> Unit = {}) {
     val categorySheet = remember { MutableTransitionState(false) }
     val tagSheet = remember { MutableTransitionState(false) }
@@ -123,11 +124,11 @@ internal fun EditorForm(draft: Draft, categories: List<Category>, edit: (Draft) 
                             textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold))
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-                    CommunityTextField(body, ::changeBody, Modifier.fillMaxWidth()
+                    EditorMentionField(body, ::changeBody, mentionSearch, Modifier.fillMaxWidth()
                         .then(if (reply) Modifier.heightIn(min = 80.dp, max = 180.dp) else Modifier.heightIn(min = 280.dp))
                         .padding(vertical = 14.dp).focusRequester(bodyFocus).testTag("editor-body"),
                         placeholder = if (reply) replyAuthor?.displayName?.takeIf(String::isNotBlank)?.let { "回复 $it" } ?: "回复" else "正文",
-                        enabled = enabled, minLines = if (reply) 3 else 8,
+                        enabled = enabled, suggestionsEnabled = !preview, minLines = if (reply) 3 else 8,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp, textDirection = if (rtl) TextDirection.ContentOrRtl else TextDirection.ContentOrLtr))
                     if (editing) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
