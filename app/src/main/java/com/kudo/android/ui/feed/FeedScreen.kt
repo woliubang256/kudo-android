@@ -168,9 +168,9 @@ fun FeedScreen(state: FeedState, user: Member?, select: (String) -> Unit, refres
                         val index = tabs.indexOfFirst { it.first == value }
                         if (index >= 0) scope.launch { pager.animateScrollToPage(index) }
                     }
-                    if (editTabs != null) TopBarIconButton(Icons.Rounded.EditNote, "编辑首页 Tab", editTabs,
-                        Modifier.testTag("home-tabs-edit").padding(end = 4.dp), backdrop = backdrop,
-                        touchSize = 40.dp, visualSize = 32.dp, iconSize = 21.dp)
+                    if (editTabs != null) IconButton(editTabs, Modifier.padding(end = 4.dp).size(48.dp).testTag("home-tabs-edit")) {
+                        Icon(Icons.Rounded.EditNote, "编辑首页 Tab", Modifier.size(23.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
             }
         }

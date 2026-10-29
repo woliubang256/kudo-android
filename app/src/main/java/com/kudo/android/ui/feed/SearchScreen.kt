@@ -253,12 +253,13 @@ fun SearchScreen(
                             }
                         }
                         Box(Modifier.padding(end = 8.dp, bottom = 2.dp)) {
-                            TopBarIconButton(Icons.Rounded.Tune, "高级筛选", {
+                            IconButton({
                                 focus.clearFocus(); keyboard?.hide()
                                 if (!filtersOpen) { expandHeader(); draft = parseSearchFilters(query); loadMetadata() }
                                 filtersOpen = !filtersOpen
-                            }, Modifier.testTag("search-filter-toggle"), backdrop = contentBackdrop,
-                                touchSize = 36.dp, visualSize = 32.dp, iconSize = 20.dp)
+                            }, Modifier.size(48.dp).testTag("search-filter-toggle")) {
+                                Icon(Icons.Rounded.Tune, "高级筛选", Modifier.size(23.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            }
                             if (state.filters.count > 0) Text(state.filters.count.toString(), Modifier.align(Alignment.TopEnd).padding(4.dp), color = LogoYellow, style = MaterialTheme.typography.labelSmall)
                         }
                     }
