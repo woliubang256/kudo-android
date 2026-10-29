@@ -91,7 +91,7 @@ class EditorMentionMaterialUiTest {
             val difference = abs(red.red - blue.red) + abs(red.blue - blue.blue)
             if (mode == GlassMode.TRANSLUCENT || Build.VERSION.SDK_INT < 31)
                 assertTrue("$theme/$mode translucent background difference: $difference", difference in .02f.. .15f)
-            else assertTrue("$theme/$mode must sample the real background: $difference", difference > .2f)
+            else assertTrue("$theme/$mode must sample the background without strong colour bleed: $difference", difference in .04f.. .2f)
             compose.onNodeWithTag("material-mention-input").assertIsFocused().assertTextEquals("@me")
             assertTrue(ViewCompat.getRootWindowInsets(compose.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true)
             screenshot("mention-material-${theme.name.lowercase()}-${mode.name.lowercase()}.png").recycle()
@@ -126,8 +126,8 @@ class EditorMentionMaterialUiTest {
                 val y = ((index + .5f) * stripe).toInt()
                 if (y <= top + 30 || y >= bottom - 30) continue
                 val color = Color(bitmap.getPixel(sampleX, y))
-                if (index % 2 == 0) assertTrue("red stripe at $y: $color", color.red - color.blue > .08f)
-                else assertTrue("blue stripe at $y: $color", color.blue - color.red > .08f)
+                if (index % 2 == 0) assertTrue("red stripe at $y: $color", color.red - color.blue > .025f)
+                else assertTrue("blue stripe at $y: $color", color.blue - color.red > .025f)
                 centers++
             }
             for (index in 1..(bitmap.height / stripe).toInt()) {
@@ -136,12 +136,71 @@ class EditorMentionMaterialUiTest {
                 val above = Color(bitmap.getPixel(sampleX, y - 2))
                 val below = Color(bitmap.getPixel(sampleX, y + 2))
                 val difference = abs(above.red - below.red) + abs(above.blue - below.blue)
-                assertTrue("Stripe edge must be blurred: $difference", difference < .06f)
+                assertTrue("Stripe edge must be blurred: $difference", difference < .035f)
                 boundaries++
             }
             assertTrue("Multiple window stripes must be visible", centers >= 2)
             assertTrue("A stripe boundary must be checked", boundaries > 0)
         } finally { bitmap.recycle() }
+    }
+
+    @Test fun liquidSettingUsesTheSameQuietFrostedPanelAsBlurWithoutARefractedRim() {
+        if (Build.VERSION.SDK_INT < 31) return
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT, glass = GlassMode.BLUR))
+        compose.setContent { KudoTheme(settings) { EditorToolBackdropHost {
+            val stripe = with(LocalDensity.current) { 48.dp.toPx() }
+            Canvas(Modifier.fillMaxSize()) {
+                repeat((size.height / stripe).toInt() + 1) { index ->
+                    drawRect(if (index % 2 == 0) Color(0xFFB6314D) else Color(0xFF2564C3),
+                        Offset(0f, index * stripe), Size(size.width, stripe))
+                }
+            }
+            Field()
+        } } }
+        open()
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            compose.runOnIdle { settings = settings.copy(theme = theme, glass = GlassMode.BLUR) }
+            val panel = compose.onNodeWithTag("mention-suggestions").fetchSemanticsNode()
+            val plain = screenshot()
+            compose.runOnIdle { settings = settings.copy(glass = GlassMode.LIQUID) }
+            val liquid = screenshot("mention-frosted-${theme.name.lowercase()}.png")
+            var maximumDifference = 0f
+            try {
+                val x = (panel.positionOnScreen.x + panel.size.width - 12).toInt()
+                val top = (panel.positionOnScreen.y + 60).toInt()
+                val bottom = (panel.positionOnScreen.y + panel.size.height - 60).toInt()
+                for (y in top until bottom) {
+                    val a = Color(plain.getPixel(x, y))
+                    val b = Color(liquid.getPixel(x, y))
+                    maximumDifference = maxOf(maximumDifference, abs(a.red - b.red) + abs(a.green - b.green) + abs(a.blue - b.blue))
+                }
+                assertTrue("$theme candidate rim must not gain a liquid highlight or refraction: $maximumDifference", maximumDifference < .025f)
+            } finally { plain.recycle(); liquid.recycle() }
+        }
+    }
+
+    @Test fun aUniformBackdropHasNoGreyInsetFrameInsideTheCandidatePanel() {
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
+        compose.setContent { KudoTheme(settings) { EditorToolBackdropHost {
+            Box(Modifier.fillMaxSize().background(Color(0xFF2564C3))) { Field() }
+        } } }
+        open()
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (mode in GlassMode.entries) {
+            compose.runOnIdle { settings = settings.copy(theme = theme, glass = mode) }
+            val panel = compose.onNodeWithTag("mention-suggestions").fetchSemanticsNode()
+            val bitmap = screenshot("mention-no-inset-${theme.name.lowercase()}-${mode.name.lowercase()}.png")
+            try {
+                val edgeX = (panel.positionOnScreen.x + panel.size.width - 12).toInt()
+                val innerX = edgeX - 90
+                for (fraction in listOf(.3f, .5f, .7f)) {
+                    val y = (panel.positionOnScreen.y + panel.size.height * fraction).toInt()
+                    val edge = Color(bitmap.getPixel(edgeX, y))
+                    val inner = Color(bitmap.getPixel(innerX, y))
+                    val difference = abs(edge.red - inner.red) + abs(edge.green - inner.green) + abs(edge.blue - inner.blue)
+                    assertTrue("$theme/$mode must not draw an inset grey frame at $fraction: $difference", difference < .035f)
+                }
+            } finally { bitmap.recycle() }
+        }
     }
 
     @Test fun sourceExcludesCandidatesAndReleasesOnOutsideClickOrOwnerDisposal() {

@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -29,11 +30,8 @@ import com.kudo.android.data.GlassMode
 import com.kudo.android.data.Member
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LocalDisplaySettings
-import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.colorControls
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.highlight.Highlight
 import kotlinx.coroutines.*
 import kotlin.math.roundToInt
 
@@ -106,22 +104,17 @@ internal fun EditorMentionField(value: TextFieldValue, change: (TextFieldValue) 
             key(query) { EditorMentionOverlay(position, IntRect(IntOffset(origin.x.roundToInt(), origin.y.roundToInt()), fieldSize),
                 dismiss = { dismissed = true }) { backdrop ->
                 val mode = LocalDisplaySettings.current.glass
-                val surface = MaterialTheme.colorScheme.surface
-                val light = surface.luminance() > .5f
+                val light = MaterialTheme.colorScheme.surface.luminance() > .5f
+                val surface = if (light) Color.White else Color(0xFF202020)
                 val canBlur = mode != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
-                val canRefract = mode == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
                 val shape = RoundedCornerShape(12.dp)
-                Surface(Modifier.width(width).heightIn(max = maxHeight).testTag("mention-suggestions")
-                    .then(if (backdrop != null) Modifier.drawBackdrop(backdrop, shape = { shape }, effects = {
-                        if (canBlur) {
-                            colorControls(brightness = if (light) .2f else 0f, saturation = 1.5f)
-                            blur((if (light) 16.dp else 8.dp).toPx())
-                        }
-                        if (canRefract) lens(24.dp.toPx(), 48.dp.toPx(), depthEffect = true)
-                    }, highlight = { Highlight.Plain }, onDrawSurface = {
-                        drawRect(surface.copy(alpha = if (canBlur) if (light) .6f else .4f else .96f))
+                Surface(Modifier.width(width).heightIn(max = maxHeight).testTag("mention-suggestions").shadow(3.dp, shape, clip = false)
+                    .then(if (backdrop != null) Modifier.drawPlainBackdrop(backdrop, shape = { shape }, effects = {
+                        if (canBlur) blur(24.dp.toPx())
+                    }, onDrawSurface = {
+                        drawRect(surface.copy(alpha = if (canBlur) .82f else .94f))
                     }) else Modifier),
-                    shape = shape, color = if (backdrop != null) Color.Transparent else surface, shadowElevation = 6.dp) {
+                    shape = shape, color = if (backdrop != null) Color.Transparent else surface) {
                     LazyColumn(Modifier.fillMaxWidth()) {
                         if (loading) item {
                             Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) { CommunityLoadingIndicator(Modifier.size(20.dp)) }
