@@ -38,3 +38,4 @@
 6. 真机构建或运行 AndroidTest 前，先读取 app/build.gradle.kts 实际使用的 versionCode/versionName 与真机已安装包版本；构建参数必须显式传入且版本不低于已安装版本，禁止用默认 versionCode=1 覆盖高版本开发版。
 7. 真机 AndroidTest 禁止直接使用会自动管理安装生命周期的 `connectedDebugAndroidTest`；先显式构建，再用 `adb install -r -t` 安装测试 APK，并通过 `adb shell am instrument` 运行，避免测试任务自动卸载开发版或清除登录数据。
 8. 界面遵循“避免不必要的副标题和说明，让布局本身解释功能”（Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.）：不重复展示类型、操作说明或与标题同义的小字，优先用分组、间距和控件状态表达；保留必要的错误、空状态与破坏性操作后果提示。精简视觉间距时保留触控区域和无障碍名称。
+9. 新增原生弹窗与候选浮层须跟随当前材质设置；有明确普通材质要求的场景除外。液态玻璃和背景模糊必须接入不包含自身的采样源，不能用透明底色代替，并检查浅深色及三种材质。

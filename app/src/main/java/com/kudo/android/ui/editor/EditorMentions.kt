@@ -1,5 +1,6 @@
 package com.kudo.android.ui.editor
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.*
@@ -21,11 +24,16 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
+import com.kudo.android.data.GlassMode
 import com.kudo.android.data.Member
 import com.kudo.android.ui.components.*
+import com.kudo.android.ui.theme.LocalDisplaySettings
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.colorControls
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
 import kotlinx.coroutines.*
 import kotlin.math.roundToInt
 
@@ -35,12 +43,12 @@ internal fun EditorMentionField(value: TextFieldValue, change: (TextFieldValue) 
     enabled: Boolean = true, suggestionsEnabled: Boolean = true, minLines: Int = 1,
     textStyle: TextStyle = MaterialTheme.typography.bodyLarge) {
     var focused by remember { mutableStateOf(false) }
-    var dismissed by remember { mutableStateOf<TextFieldValue?>(null) }
+    var dismissed by remember(value) { mutableStateOf(false) }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var origin by remember { mutableStateOf(Offset.Zero) }
     var fieldSize by remember { mutableStateOf(IntSize.Zero) }
     val query = remember(value, focused, enabled, suggestionsEnabled, dismissed) {
-        value.takeIf { focused && enabled && suggestionsEnabled && it != dismissed }?.mentionQuery()
+        value.takeIf { focused && enabled && suggestionsEnabled && !dismissed }?.mentionQuery()
     }
     var results by remember(query) { mutableStateOf(emptyList<Member>()) }
     var loading by remember(query) { mutableStateOf(true) }
@@ -63,7 +71,7 @@ internal fun EditorMentionField(value: TextFieldValue, change: (TextFieldValue) 
             if (isActive) error = failure.message ?: "用户加载失败"
         } finally { if (isActive) loading = false }
     }
-    BackHandler(query != null) { dismissed = value }
+    BackHandler(query != null) { dismissed = true }
     Box {
         CommunityTextField(value, change, modifier.onFocusChanged { focused = it.isFocused }
             .onGloballyPositioned { origin = it.positionInWindow(); fieldSize = it.size }, placeholder, enabled,
@@ -95,10 +103,25 @@ internal fun EditorMentionField(value: TextFieldValue, change: (TextFieldValue) 
                     }
                 }
             }
-            Popup(popupPositionProvider = position, onDismissRequest = { dismissed = currentValue },
-                properties = PopupProperties(focusable = false, dismissOnBackPress = false, clippingEnabled = false)) {
-                Surface(Modifier.width(width).heightIn(max = maxHeight).testTag("mention-suggestions"),
-                    shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+            EditorMentionOverlay(position, IntRect(IntOffset(origin.x.roundToInt(), origin.y.roundToInt()), fieldSize),
+                dismiss = { dismissed = true }) { backdrop ->
+                val mode = LocalDisplaySettings.current.glass
+                val surface = MaterialTheme.colorScheme.surface
+                val light = surface.luminance() > .5f
+                val canBlur = mode != GlassMode.TRANSLUCENT && Build.VERSION.SDK_INT >= 31
+                val canRefract = mode == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33
+                val shape = RoundedCornerShape(12.dp)
+                Surface(Modifier.width(width).heightIn(max = maxHeight).testTag("mention-suggestions")
+                    .then(if (backdrop != null) Modifier.drawBackdrop(backdrop, shape = { shape }, effects = {
+                        if (canBlur) {
+                            colorControls(brightness = if (light) .2f else 0f, saturation = 1.5f)
+                            blur((if (light) 16.dp else 8.dp).toPx())
+                        }
+                        if (canRefract) lens(24.dp.toPx(), 48.dp.toPx(), depthEffect = true)
+                    }, highlight = { Highlight.Plain }, onDrawSurface = {
+                        drawRect(surface.copy(alpha = if (canBlur) if (light) .6f else .4f else .96f))
+                    }) else Modifier),
+                    shape = shape, color = if (backdrop != null) Color.Transparent else surface, shadowElevation = 6.dp) {
                     LazyColumn(Modifier.fillMaxWidth()) {
                         if (loading) item {
                             Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) { CommunityLoadingIndicator(Modifier.size(20.dp)) }

@@ -39,6 +39,10 @@ class EditorMentionsUiTest {
     private val neo = Member(1, "neo", "站长", "")
     private val neyuki = Member(2, "neyuki", "雪", "")
 
+    @Composable private fun HostedTheme(content: @Composable () -> Unit) {
+        KudoTheme(DisplaySettings()) { EditorToolBackdropHost(content) }
+    }
+
     @Before fun window() { compose.runOnUiThread {
         compose.activity.enableEdgeToEdge()
         compose.activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
@@ -59,7 +63,7 @@ class EditorMentionsUiTest {
     @Test fun topicCompletionPreservesSurroundingDraftCursorAndKeyboardWithoutPublishing() {
         var draft by mutableStateOf(Draft(title = "标题", categoryId = 1, raw = "前文  后文"))
         val terms = CopyOnWriteArrayList<String>()
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { HostedTheme {
             EditorForm(draft, emptyList(), { draft = it }, { fail("Unexpected publish") }, {}, {},
                 mentionSearch = { terms.add(it); listOf(neo, neyuki) })
         } }
@@ -120,7 +124,7 @@ class EditorMentionsUiTest {
         val oldStarted = AtomicBoolean()
         val oldFinished = AtomicBoolean()
         val release = CompletableDeferred<Unit>()
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { HostedTheme {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, mentionSearch = { term ->
                 if (term == "n") withContext(NonCancellable) {
                     oldStarted.set(true); release.await(); oldFinished.set(true); listOf(neyuki)
@@ -142,7 +146,7 @@ class EditorMentionsUiTest {
         var draft by mutableStateOf(Draft(title = "标题", categoryId = 1))
         var sending by mutableStateOf(false)
         var requests = 0
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { HostedTheme {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, sending = sending, mentionSearch = {
                 if (++requests == 1) error("离线夹具错误") else listOf(neo)
             })
@@ -163,7 +167,7 @@ class EditorMentionsUiTest {
 
     @Test fun backDismissesCandidatesAndPreviewDoesNotLeaveAListBehind() {
         var draft by mutableStateOf(Draft(title = "标题", categoryId = 1))
-        compose.setContent { KudoTheme(DisplaySettings()) {
+        compose.setContent { HostedTheme {
             EditorForm(draft, emptyList(), { draft = it }, {}, {}, {}, mentionSearch = { listOf(neo) })
         } }
         body().performScrollTo().performClick().performTextInput("@ne")

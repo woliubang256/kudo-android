@@ -2,6 +2,8 @@ package com.kudo.android.ui.editor
 
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -13,14 +15,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.kudo.android.ui.components.*
@@ -37,6 +52,12 @@ private class EditorToolRequest(val dismiss: () -> Unit, val render: @Composable
 
 private class EditorToolHostState {
     var request by mutableStateOf<EditorToolRequest?>(null)
+    var mentions by mutableStateOf<EditorMentionRequest?>(null)
+}
+
+private class EditorMentionRequest(val dismiss: () -> Unit,
+    val render: @Composable (Backdrop, Offset, (Rect) -> Unit) -> Unit) {
+    var bounds = Rect.Zero
 }
 
 private val LocalEditorToolHost = staticCompositionLocalOf<EditorToolHostState?> { null }
@@ -45,13 +66,23 @@ private val LocalEditorToolHost = staticCompositionLocalOf<EditorToolHostState?>
 internal fun EditorToolBackdropHost(content: @Composable () -> Unit) {
     val host = remember { EditorToolHostState() }
     val request = host.request
-    val backdrop = if (request != null) rememberLayerBackdrop() else null
-    Box(Modifier.fillMaxSize()) {
+    val mentions = host.mentions
+    val backdrop = if (request != null || mentions != null) rememberLayerBackdrop() else null
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow() }
+        .then(if (mentions != null) Modifier.pointerInput(mentions) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                if (!mentions.bounds.contains(down.position + origin)) mentions.dismiss()
+            }
+        } else Modifier)) {
         Box(Modifier.fillMaxSize().then(if (backdrop != null)
-            Modifier.layerBackdrop(backdrop).testTag("editor-tool-backdrop-source").clearAndSetSemantics {} else Modifier)
+            Modifier.layerBackdrop(backdrop).testTag("editor-tool-backdrop-source") else Modifier)
+            .then(if (request != null) Modifier.clearAndSetSemantics {} else Modifier)
             .focusProperties { onEnter = { if (host.request != null) cancelFocusChange() } }.focusGroup()) {
             CompositionLocalProvider(LocalEditorToolHost provides host, LocalSheetInputBlocked provides (request != null), content = content)
         }
+        if (mentions != null && backdrop != null) mentions.render(backdrop, origin) { mentions.bounds = it }
         if (request != null && backdrop != null) {
             val visibility = request.visibility
             LaunchedEffect(visibility.isIdle, visibility.currentState, visibility.targetState) {
@@ -62,6 +93,42 @@ internal fun EditorToolBackdropHost(content: @Composable () -> Unit) {
             }
             request.render(backdrop, visibility)
         }
+    }
+}
+
+/** Non-modal sibling of the sampled content: no dim, focus transfer or input isolation. */
+@Composable
+internal fun EditorMentionOverlay(position: PopupPositionProvider, anchor: IntRect, dismiss: () -> Unit,
+    content: @Composable (Backdrop?) -> Unit) {
+    val host = LocalEditorToolHost.current
+    if (host == null) {
+        Popup(popupPositionProvider = position, onDismissRequest = dismiss,
+            properties = PopupProperties(focusable = false, dismissOnBackPress = false, clippingEnabled = false)) { content(null) }
+        return
+    }
+    val currentContent by rememberUpdatedState(content)
+    val currentPosition by rememberUpdatedState(position)
+    val currentAnchor by rememberUpdatedState(anchor)
+    val currentDismiss by rememberUpdatedState(dismiss)
+    val locals by rememberUpdatedState(currentCompositionLocalContext)
+    val request = remember(host) { EditorMentionRequest({ currentDismiss() }) { backdrop, origin, bounds ->
+        CompositionLocalProvider(locals) {
+            val window = LocalWindowInfo.current.containerSize
+            Layout(content = {
+                Box(Modifier.onGloballyPositioned { bounds(it.boundsInWindow()) }) { currentContent(backdrop) }
+            }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
+                val panel = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+                val offset = currentPosition.calculatePosition(currentAnchor, window, layoutDirection,
+                    androidx.compose.ui.unit.IntSize(panel.width, panel.height))
+                layout(constraints.maxWidth, constraints.maxHeight) {
+                    panel.place(offset.x - origin.x.toInt(), offset.y - origin.y.toInt())
+                }
+            }
+        }
+    } }
+    DisposableEffect(host, request) {
+        host.mentions = request
+        onDispose { if (host.mentions === request) host.mentions = null }
     }
 }
 
