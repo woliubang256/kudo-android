@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import com.kudo.android.data.ImageSource
+import com.kudo.android.ui.LinuxDoDestination
 import com.kudo.android.ui.library.LocalImageLibrary
 import com.kudo.android.ui.library.LocalImageSource
 import androidx.compose.material.icons.rounded.Mood
@@ -480,6 +481,10 @@ internal fun parseInlineArticle(html: String, linkColor: Color, onFootnote: ((St
                             if (onFootnote != null) withLink(LinkAnnotation.Clickable("footnote-$footnoteId",
                                 TextLinkStyles(SpanStyle(color = color))) { onFootnote(footnoteId) }, children)
                             else children()
+                        } else if (url != null && node.hasClass("mention") && LinuxDoLink.parseContent(url) is LinuxDoDestination.User) {
+                            pushStringAnnotation("mention", url)
+                            withLink(LinkAnnotation.Url(url, TextLinkStyles(SpanStyle(textDecoration = TextDecoration.None))), children)
+                            pop()
                         } else if (url != null) withStyle(SpanStyle(color = color)) {
                             withLink(LinkAnnotation.Url(url, TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline))), children)
                         }

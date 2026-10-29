@@ -57,7 +57,7 @@ internal object MarkdownPreviewRenderer {
             }
             append(convert(raw.substring(cursor)))
         }
-        val document = parser.parse(converted)
+        val document = parser.parse(mentionPreviewMarkup(converted))
         document.accept(object : AbstractVisitor() {
             override fun visit(node: Image) {
                 val destination = node.destination

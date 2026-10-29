@@ -18,7 +18,7 @@ Status: implemented
 
 预览通过独立的 suggestionsEnabled 关闭候选，不禁用 BasicTextField；否则平台会收拢选区，破坏预览前后的光标契约。
 
-预览转换辅助函数以普通 @username 原文生成用户链接，跳过代码、邮箱、已有链接及转义；它不能保证用户存在或有通知权限，最终由站点解释。
+预览在 Markdown 解析前以普通 @username 原文生成站点 mention 链接，跳过代码、邮箱、已有链接及转义。正文只给站内用户链接且带 a.mention 的节点添加 mention 注解，不改变普通链接或外站链接。预览和正文共用文字布局对应范围的灰色圆角背景，无下划线，保留原始文字、链接、复制和选区，点击沿用用户主页路由。提及换行按行绘制；隐藏剧透不暴露用户名、可点击链接或清晰背景。预览不能保证用户存在或有通知权限，最终由站点解释。
 
 ## Existing note audit
 
@@ -32,13 +32,15 @@ Status: implemented
 
 ## Testing
 
-先用 MentionRenderingTest 复现预览未生成提及、正文仍为下划线的缺口（artifacts/mentions-repro.txt）；渲染接入另一个功能单元。MentionEditingTest 六项 JVM 用例通过（artifacts/mentions-final-build.txt），覆盖词段替换、空格和光标、中文、邮箱、转义、各类代码、链接、选区、输入法 composition、过期结果和上下文请求。搜索使用 MockWebServer，不向真实用户发帖或通知。
+先用 MentionRenderingTest 复现预览未生成提及、正文仍为下划线的两项失败（artifacts/mentions-repro.txt），修复后通过。最终 JVM 共 23 项通过：MentionEditingTest 六项、MentionRenderingTest 三项、MarkdownPreviewTest 五项、MarkdownInlineParserTest 两项、MarkdownEditingTest 七项（artifacts/mentions-final-build.txt）。覆盖词段替换、空格和光标、中文、邮箱、转义、各类代码、链接、选区、输入法 composition、过期结果、上下文请求及提及渲染。搜索使用 MockWebServer，不向真实用户发帖或通知。
 
 补充英文键盘 composition 复现用例先失败（artifacts/mentions-composition-repro.txt），修复后通过，避免把所有组合状态都当作中文组词而使常用键盘永远不能补全。
 
 候选 UI 五项真机用例全部通过（artifacts/mentions-position-fixed-device.txt），覆盖发帖光标与键盘、真实 ReplyEditorSheet 中 280dp 宽度与深色 130% 字号、迟到响应、重试与发布锁定、返回键与预览。回复用例断言候选不覆盖光标且在键盘上方；旧屏幕坐标断言没有抓到系统重定位，必须同时看系统截图。定位修正前后人工截图确认最终输入行和键盘无遮挡（artifacts/mentions-reply-dark-large.png），浅色候选中文也已目视检查（artifacts/mentions-topic-light.png）。
 
-相关回归发现预览关闭候选时禁用输入框会把选区从 (3,5) 收拢为 (5,5)，改用 suggestionsEnabled 后原用例通过。后续回归中旧表情横滑用例一次失败，原样定向重跑与预览选区两项均通过（artifacts/mentions-focused-retest-device.txt）；未改表情代码，间歇性失败原因未确定。
+首轮八项真机测试为七通过、一失败：剧透用例点击到整行中心空白，改用实际提供的无障碍 OnClick 展开，未改生产逻辑（artifacts/mentions-device.txt）。相关 45 项回归为 44 通过、一失败，发现预览关闭候选时禁用输入框会把选区从 (3,5) 收拢为 (5,5)（artifacts/mentions-final-device.txt）。改用 suggestionsEnabled 后的 18 项定向为 17 通过、旧表情横滑一次失败（artifacts/mentions-preview-fixed-device.txt）；原样定向重跑表情横滑与预览选区两项均通过（artifacts/mentions-focused-retest-device.txt）。未改表情代码，间歇性失败原因未确定。
+
+最终定位修正后的九项全部通过：候选五项、正文三项、预览选区一项（artifacts/mentions-position-fixed-device.txt）。正文用例验证浅色与深色的灰色圆角实际像素、原用户名路由、隐藏剧透及预览中的代码和邮箱。人工查看 artifacts/mentions-content-LIGHT.png、mentions-content-DARK.png 及 mentions-preview.png，确认中文、背景和无下划线样式；没有把整批 45 项记为全绿。
 
 当前真实网络路由的只读测试通过一项，验证 typed="ne" 与裸 @ 空查询均返回最多六项候选（artifacts/mentions-live-device.txt）。没有真实发布或提及通知。Debug、AndroidTest 构建成功，最终 lintDebug 为 0 errors、60 warnings、1 hint（artifacts/mentions-position-final-lint.txt）。验证设备为 RMX2202 / Android 13；开发版保留 versionCode=3002、versionName=0.3.1-dev，核对签名后覆盖安装，firstInstallTime 仍为 2026-10-23 14:55:34。
 
@@ -46,4 +48,4 @@ Status: implemented
 
 服务端仍决定用户存在性、提及权限及通知，不在本机伪造这些结果；接口可能遇到站点验证或限流。词段检测仅在光标前存在 @ 时解析 Markdown 源范围，换取代码和链接的边界准确性；超长正文中的频繁提及时需要关注解析开销。
 
-候选额外使用一个非焦点窗口，需要随输入法可见范围更新位置；它不接管正文输入连接，也不隐藏键盘。其他 Android 版本及输入法仍需对应设备验证。
+候选额外使用一个非焦点窗口，需要随输入法可见范围更新位置；它不接管正文输入连接，也不隐藏键盘。其他 Android 版本及输入法仍需对应设备验证。灰色圆角使用额外绘制而不占用正文宽度，收益是保留连续文本，代价是按文字布局而非独立控件表达内边距；真实发布后的提及通知尚未验证。

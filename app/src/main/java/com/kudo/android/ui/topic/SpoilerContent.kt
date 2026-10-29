@@ -87,6 +87,7 @@ internal fun SpoilerArticleText(article: InlineArticle, contentKey: String, tag:
     } }
     fun toggle(id: String) { shown = if (id in shown) shown - id else shown + id }
     val safeText = remember(article, hidden) { redactedSpoilerText(article.text, hidden) }
+    val mentionColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .09f)
     val semantics = if (ranges.isEmpty()) Modifier else Modifier.clearAndSetSemantics {
         text = AnnotatedString(safeText)
         stateDescription = if (hidden.isEmpty()) "剧透已显示" else "剧透已隐藏"
@@ -119,6 +120,7 @@ internal fun SpoilerArticleText(article: InlineArticle, contentKey: String, tag:
         }) {
         val body: @Composable () -> Unit = {
             Text(article.text, Modifier.fillMaxWidth().drawWithContent {
+                drawMentionHighlights(layout, article.text, mentionColor, hidden)
                 if (hidden.isEmpty()) drawContent()
                 else if (layout != null) clipPath(spoilerPath(layout, hidden), ClipOp.Difference) { this@drawWithContent.drawContent() }
             }, inlineContent = inline, style = style.copy(textIndent = textIndent), color = color, onTextLayout = { layout = it })
@@ -134,7 +136,10 @@ internal fun SpoilerArticleText(article: InlineArticle, contentKey: String, tag:
                     article.text.getStringAnnotations(0, article.text.length).forEach { addStringAnnotation(it.tag, it.item, it.start, it.end) }
                 } }
                 Text(blurredText, Modifier.fillMaxWidth().drawWithContent {
-                    if (layout != null) clipPath(spoilerPath(layout, hidden)) { this@drawWithContent.drawContent() }
+                    if (layout != null) clipPath(spoilerPath(layout, hidden)) {
+                        drawMentionHighlights(layout, article.text, mentionColor)
+                        this@drawWithContent.drawContent()
+                    }
                 }.blur(7.dp, BlurredEdgeTreatment.Unbounded).clearAndSetSemantics {},
                     inlineContent = inline, style = style.copy(textIndent = textIndent), color = color)
             } else Box(Modifier.matchParentSize().drawWithContent { drawPath(spoilerPath(layout, hidden), color.copy(alpha = 1f)) })
