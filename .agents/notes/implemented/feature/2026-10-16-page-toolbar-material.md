@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+[个人标签折叠](2026-10-30-personal-tabs-collapse.md)通过 CollapsingPageScaffold 复用私有材质布局，只对私信和话题/回复提供可收起标题与固定标签槽。原 MaterialPageScaffold 签名及默认固定布局保持，不向其他调用者传播 Material3 实验类型。
+
 共用顶部按钮使用独立圆形容器，文字操作使用胶囊，触控区域至少48dp。材质沿用现有 LiquidButton 及用户选择的液态、模糊或半透明模式。工具栏作用域仅影响顶部操作，不改变正文和 Markdown 工具栏的 CommunityIconButton。
 
 MaterialPageScaffold 将全屏内容与顶部玻璃置于兄弟节点，实测顶部高度通过 PaddingValues 交给列表或滚动内容；禁止将自身玻璃放进自己的采样源。已有弹窗的整页采样源可包含工具栏，但工具栏另取内部的内容源。保留滚动位置、刷新、分页、键盘及导航逻辑。

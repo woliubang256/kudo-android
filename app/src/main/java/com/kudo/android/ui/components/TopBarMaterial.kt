@@ -10,9 +10,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -25,6 +28,7 @@ import com.kudo.android.ui.theme.LogoYellow
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import kotlin.math.roundToInt
 
 internal val LocalToolbarBackdrop = staticCompositionLocalOf<Backdrop?> { null }
 internal val LocalToolbarActions = staticCompositionLocalOf { false }
@@ -45,22 +49,53 @@ internal fun WebPageScaffold(
 
 /** Content alone is sampled; the header must never be inside its own source. */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun MaterialPageScaffold(
     header: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    content: @Composable (PaddingValues) -> Unit,
+) = MaterialPageLayout(header, modifier, null, null, content)
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+internal fun CollapsingPageScaffold(
+    header: @Composable () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior?,
+    pinnedHeader: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (PaddingValues) -> Unit,
+) = MaterialPageLayout(header, modifier, scrollBehavior, pinnedHeader, content)
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun MaterialPageLayout(
+    header: @Composable () -> Unit,
+    modifier: Modifier,
+    scrollBehavior: TopAppBarScrollBehavior?,
+    pinnedHeader: (@Composable () -> Unit)?,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val backdrop = rememberLayerBackdrop()
     var headerHeight by rememberSaveable { mutableIntStateOf(0) }
     val top = with(LocalDensity.current) { headerHeight.toDp() }
-    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+        .then(if (scrollBehavior != null) Modifier.nestedScroll(scrollBehavior.nestedScrollConnection) else Modifier)) {
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("material-page-content")) {
             content(PaddingValues(top = top))
         }
         CompositionLocalProvider(LocalToolbarBackdrop provides backdrop, LocalToolbarActions provides true) {
             Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }
                 .screenMaterial(backdrop)
-                .testTag("material-page-header")) { header() }
+                .testTag("material-page-header")
+                .then(if (scrollBehavior != null) Modifier.statusBarsPadding() else Modifier)) {
+                Column(Modifier.fillMaxWidth().then(if (scrollBehavior != null) Modifier.clipToBounds().layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    scrollBehavior.state.heightOffsetLimit = -placeable.height.toFloat()
+                    val offset = scrollBehavior.state.heightOffset.roundToInt()
+                    layout(placeable.width, (placeable.height + offset).coerceAtLeast(0)) { placeable.placeRelative(0, offset) }
+                } else Modifier).testTag("material-page-title")) { header() }
+                pinnedHeader?.invoke()
+            }
         }
     }
 }

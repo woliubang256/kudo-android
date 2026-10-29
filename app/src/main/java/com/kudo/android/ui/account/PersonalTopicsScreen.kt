@@ -158,6 +158,7 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
     }
     val pager = rememberPagerState(initialPage = keys.indexOf(vm.pageKey).coerceAtLeast(0), pageCount = { keys.size })
     val scope = rememberCoroutineScope()
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(canScroll = { keys.size > 1 })
     LaunchedEffect(pager, vm) {
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { index ->
             if (vm.destination == AccountDestination.TOPICS) vm.selectTopicTab(PersonalTopicsTab.entries[index])
@@ -168,12 +169,13 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
         val index = keys.indexOf(vm.pageKey)
         if (index >= 0 && !pager.isScrollInProgress && pager.currentPage != index) pager.scrollToPage(index)
     }
-    MaterialPageScaffold(header = {
+    CollapsingPageScaffold(scrollBehavior = scrollBehavior.takeIf { keys.size > 1 }, header = {
         AccountPageTopBar(vm.destination.title, back) {
             if (vm.destination == AccountDestination.TOPICS) CommunityIconButton(Icons.Rounded.EditNote, "我的草稿", drafts)
             if (vm.destination == AccountDestination.MESSAGES) CommunityIconButton(Icons.Rounded.Edit, "写私信", composeMessage)
             CommunityIconButton(Icons.Rounded.Refresh, "刷新", { vm.load() })
         }
+    }, pinnedHeader = {
         if (vm.destination == AccountDestination.MESSAGES) {
             AccountTabs(listOf("收件箱", "已发送", "归档"), pager.currentPage, containerColor = Color.Transparent) { scope.launch { pager.animateScrollToPage(it) } }
         }
@@ -201,7 +203,12 @@ internal fun PersonalTopicsScreen(vm: PersonalTopicsViewModel, categories: List<
                         PullToRefreshDefaults.IndicatorBox(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter).padding(top = padding.calculateTopPadding()),
                         containerColor = MaterialTheme.colorScheme.surface) { CommunityLoadingIndicator(Modifier.size(16.dp), rotating = refreshing) }
                 }) {
-                LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = active).testTag("personal-list-$pageKey"), state = scroll, contentPadding = PaddingValues(top = padding.calculateTopPadding() + 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                LazyColumn(Modifier.fillMaxSize().quickScrollTarget(scroll, enabled = active, expandHeader = {
+                    if (keys.size > 1) {
+                        androidx.compose.animation.core.animate(scrollBehavior.state.heightOffset, 0f) { value, _ -> scrollBehavior.state.heightOffset = value }
+                        scrollBehavior.state.contentOffset = 0f
+                    }
+                }).testTag("personal-list-$pageKey"), state = scroll, contentPadding = PaddingValues(top = padding.calculateTopPadding() + 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     if (showingReplies) {
                         items(page.replies, key = ProfileEntry::key) { entry -> ProfileEntryRow(entry) { open(entry.topicId, entry.number) } }
                     } else {
