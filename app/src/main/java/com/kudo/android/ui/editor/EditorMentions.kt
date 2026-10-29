@@ -103,7 +103,7 @@ internal fun EditorMentionField(value: TextFieldValue, change: (TextFieldValue) 
                     }
                 }
             }
-            EditorMentionOverlay(position, IntRect(IntOffset(origin.x.roundToInt(), origin.y.roundToInt()), fieldSize),
+            key(query) { EditorMentionOverlay(position, IntRect(IntOffset(origin.x.roundToInt(), origin.y.roundToInt()), fieldSize),
                 dismiss = { dismissed = true }) { backdrop ->
                 val mode = LocalDisplaySettings.current.glass
                 val surface = MaterialTheme.colorScheme.surface
@@ -153,7 +153,7 @@ internal fun EditorMentionField(value: TextFieldValue, change: (TextFieldValue) 
                         }
                     }
                 }
-            }
+            } }
         }
     }
 }

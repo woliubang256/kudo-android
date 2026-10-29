@@ -18,6 +18,8 @@ Status: implemented
 
 输入约 300ms 后请求；光标离开词段、返回键关闭候选、失去焦点、发布中及打开预览使候选关闭，并取消旧查询。取消后再次检查协程活跃状态，不能让不响应取消的旧请求覆盖新结果。候选在应用内交由根部非模态宿主绘制，无宿主保留非焦点 Popup，行内仅显示头像、用户名及不重复的昵称，点击保留键盘。位置读取文本光标和窗口可见范围，下方空间足够时贴近光标，否则放到输入区域上方，高度有上限并允许滚动，不受回复的 300dp 容器裁切。Popup 回退设置 clippingEnabled=false，避免系统再次挪位而遮住输入行；边界由自定义位置提供器限制在状态栏下、键盘上。失败显示错误及重试，草稿不变。
 
+浮层请求的组合身份按当前 MentionQuery 分组。回复面板由 BoxWithConstraints 子组合承载，词段改变时原非模态请求仍可能保留上一词段内容：复现中正文已为 @n、请求记录为 [空词段, n]，浮层却仍显示 recent_member。词段改变时重新绑定请求与候选列表，避免只依赖跨子组合的最新内容转发；同词段的加载、错误和结果仍由原状态更新，不重开键盘或切走焦点。
+
 预览通过独立的 suggestionsEnabled 关闭候选，不禁用 BasicTextField；否则平台会收拢选区，破坏预览前后的光标契约。
 
 预览在 Markdown 解析前以普通 @username 原文生成站点 mention 链接，跳过代码、邮箱、已有链接及转义。正文只给站内用户链接且带 a.mention 的节点添加 mention 注解，不改变普通链接或外站链接。预览和正文共用文字布局对应范围的灰色圆角背景，无下划线，保留原始文字、链接、复制和选区，点击沿用用户主页路由。提及换行按行绘制；隐藏剧透不暴露用户名、可点击链接或清晰背景。预览不能保证用户存在或有通知权限，最终由站点解释。
@@ -31,6 +33,7 @@ Status: implemented
 - 直接打开独立选人底部面板能复用现有工具宿主并提供充足空间，但会打断连续输入和键盘操作；采用不抢焦点、受可见窗口约束的候选浮层。
 - 把用户名替换为 Markdown 主页链接易于本地显示，但会改变站点原生提及的通知语义；仅提交 @username，渲染在展示层处理。
 - 把提及替换成独立行内组件能直接绘制圆角，但会把连续正文变为占位符并影响复制、选区和剧透范围；保留真实文本及链接注解，在文字布局对应范围绘制圆角背景。
+- 将所有词段的结果放在同一份永久状态中能减少请求身份变化，但仍要防止回复子组合转发的内容和点击词段停留在旧值；按 MentionQuery 重新绑定浮层，让展示和点选的身份一起更新，继续由每个查询自己的状态处理加载及取消。
 
 ## Testing
 
@@ -45,6 +48,10 @@ Status: implemented
 最终定位修正后的九项全部通过：候选五项、正文三项、预览选区一项（artifacts/mentions-position-fixed-device.txt）。正文用例验证浅色与深色的灰色圆角实际像素、原用户名路由、隐藏剧透及预览中的代码和邮箱。人工查看 artifacts/mentions-content-LIGHT.png、mentions-content-DARK.png 及 mentions-preview.png，确认中文、背景和无下划线样式；没有把整批 45 项记为全绿。
 
 当前真实网络路由的只读测试通过一项，验证 typed="ne" 与裸 @ 空查询均返回最多六项候选（artifacts/mentions-live-device.txt）。没有真实发布或提及通知。Debug、AndroidTest 构建成功，最终 lintDebug 为 0 errors、60 warnings、1 hint（artifacts/mentions-position-final-lint.txt）。验证设备为 RMX2202 / Android 13；开发版保留 versionCode=3002、versionName=0.3.1-dev，核对签名后覆盖安装，firstInstallTime 仍为 2026-10-23 14:55:34。
+
+回复连续输入的旧实现复现失败（`artifacts/mention-refresh-reply-debug-device.txt`）：@n 已显示且查询 n 已执行，但候选仍为裸 @ 的用户。普通发帖的同序列原本通过（`artifacts/mention-refresh-red-device.txt`），不能用它替代回复子组合验收。真实路由在无上下文、当前可访问分类和公开话题三种上下文均通过裸 @、ne 与不存在用户名的区别检查（`artifacts/mention-refresh-scope-device.txt`）；首次硬编码分类 1 导致权限错误，已改为实际分类目录，没有把权限错误当作搜索缺陷。输入法连接的首版测试未重设 composition，实际输入 @nne，不能作为列表停更证据；显式设置组词范围后通过英文组词查询（`artifacts/mention-refresh-reply-device.txt`）。
+
+绑定修复后，七项候选 UI 全部通过（`artifacts/mention-refresh-fixed-device.txt`，24.15 秒），覆盖逐字输入、删除、无结果、组词、迟到响应、点选、光标、发布锁定、预览和窄屏深色大字。最后把组词用例也移到实际 ReplyEditorSheet，并加入中文昵称查询与点选；这两项回复专项再次通过（`artifacts/mention-refresh-final-device.txt`，10.843 秒）。Debug / AndroidTest 构建通过（`artifacts/mention-refresh-fixed-build.txt`、`artifacts/mention-refresh-final-build.txt`），同签名保数据覆盖安装，版本仍为 3002 / 0.3.1-dev；没有真实发帖或私信。
 
 ## Consequences
 

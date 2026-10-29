@@ -142,6 +142,96 @@ class EditorMentionsUiTest {
         assertEquals("@neo ", draft.raw)
     }
 
+    @Test fun typingAndDeletingLettersRefreshesAnAlreadyVisibleCandidateList() {
+        var draft by mutableStateOf(Draft(title = "标题", categoryId = 1))
+        val visible = MutableTransitionState(false)
+        val terms = CopyOnWriteArrayList<String>()
+        val recent = Member(3, "recent_member", "最近用户", "")
+        compose.setContent { HostedTheme {
+            ReplyEditorSheet(visible, false, { visible.targetState = false }) {
+                EditorForm(draft, emptyList(), { draft = it }, { fail("Unexpected publish") }, {}, {}, reply = true,
+                    replyRules = ReplyRules(1, 64000), mentionSearch = { term ->
+                        terms.add(term)
+                        when (term) {
+                            "" -> listOf(recent)
+                            "n" -> listOf(neyuki)
+                            "ne" -> listOf(neo)
+                            else -> emptyList()
+                        }
+                    })
+            }
+        } }
+        compose.runOnIdle { visible.targetState = true }
+        compose.waitUntil { keyboardShown() }
+        body().performTextInput("@")
+        waitUser("recent_member")
+        body().performTextInput("n")
+        body().assertTextEquals("@n")
+        waitUser("neyuki")
+        compose.onNodeWithTag("mention-user-recent_member").assertDoesNotExist()
+        body().performTextInput("e")
+        waitUser()
+        compose.onNodeWithTag("mention-user-neyuki").assertDoesNotExist()
+        body().performTextReplacement("@zzzzmissing")
+        compose.waitUntil { compose.onAllNodesWithText("没有匹配用户").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mention-user-neo").assertDoesNotExist()
+        body().performTextReplacement("@n")
+        waitUser("neyuki")
+        body().performTextReplacement("@")
+        waitUser("recent_member")
+        assertEquals(listOf("", "n", "ne", "zzzzmissing", "n", ""), terms.toList())
+        body().assertIsFocused().assertTextEquals("@")
+        assertEquals("@", draft.raw)
+    }
+
+    @Test fun latinImeCompositionRefreshesVisibleCandidatesBeforeTheWordIsCommitted() {
+        var draft by mutableStateOf(Draft(title = "标题", categoryId = 1))
+        val visible = MutableTransitionState(false)
+        val recent = Member(3, "recent_member", "最近用户", "")
+        val chinese = Member(4, "xiaoming", "小明", "")
+        compose.setContent { HostedTheme {
+            ReplyEditorSheet(visible, false, { visible.targetState = false }) {
+                EditorForm(draft, emptyList(), { draft = it }, { fail("Unexpected publish") }, {}, {}, reply = true,
+                    replyRules = ReplyRules(1, 64000), mentionSearch = { term ->
+                        when (term) {
+                            "" -> listOf(recent)
+                            "n" -> listOf(neyuki)
+                            "ne" -> listOf(neo)
+                            "小明" -> listOf(chinese)
+                            else -> emptyList()
+                        }
+                    })
+            }
+        } }
+        compose.runOnIdle { visible.targetState = true }
+        compose.waitUntil { keyboardShown() }
+        body().performTextInput("@")
+        waitUser("recent_member")
+        val connection = compose.runOnUiThread {
+            compose.activity.currentFocus!!.onCreateInputConnection(android.view.inputmethod.EditorInfo())!!
+        }
+        compose.runOnUiThread { connection.setComposingText("n", 1) }
+        waitUser("neyuki")
+        body().assertTextEquals("@n")
+        compose.runOnUiThread {
+            connection.setComposingRegion(1, 2)
+            connection.setComposingText("ne", 1)
+        }
+        body().assertTextEquals("@ne")
+        waitUser()
+        compose.onNodeWithTag("mention-user-neyuki").assertDoesNotExist()
+        assertEquals("@ne", draft.raw)
+        compose.onNodeWithTag("mention-user-neo").performClick()
+        body().assertIsFocused().assertTextEquals("@neo ")
+        assertEquals("@neo ", draft.raw)
+        assertTrue(keyboardShown())
+        body().performTextReplacement("@小明")
+        waitUser("xiaoming")
+        compose.onNodeWithTag("mention-user-xiaoming").performClick()
+        body().assertIsFocused().assertTextEquals("@xiaoming ")
+        assertEquals("@xiaoming ", draft.raw)
+    }
+
     @Test fun movingCursorOrSendingClosesSuggestionsAndRetryDoesNotChangeTheDraft() {
         var draft by mutableStateOf(Draft(title = "标题", categoryId = 1))
         var sending by mutableStateOf(false)
