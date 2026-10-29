@@ -20,6 +20,12 @@ Markdown 预览是独立 Dialog 窗口，内部单独提供 EditorToolBackdropHo
 
 “我的”页设置下的图库管理由访客与登录布局同时提供。上方横向目录（含全部）过滤下方自适应惰性图片网格，每项提供具体来源楼层和移除按钮；管理目录支持新建、重命名、删除，删除有确认并保留图片。图片单独进入查看器，避免跨不同帖子浏览组时把第一张来源错误用于其他图片。读取失败显示重试，不把坏数据展示成空图库。
 
+管理页和编辑器选择器的目录共用首页 FeedTabBar 文字与黄色渐变指示器，通过按目录 ID 标识的 HorizontalPager 联动点击和左右滑动。每页保留自己的网格滚动位置，选择器的已选图片顺序仍跨目录保留；非当前页不暴露重复图片的操作语义。增删目录按当前目录身份恢复页码，删除当前目录回到全部，不把旧页码错误应用到其他目录。
+
+管理页通过 enter-always 嵌套滚动折叠标题栏，目录 Tab 始终留在状态栏安全区下方，反向滚动展开标题；编辑器选择器不折叠自己的面板标题。Pager 是顶部的独立采样源，网格以实测页头留白而不是裁短视口，页面内容可经过吸顶 Tab 后方。
+
+图库管理页本身提供同窗口 EditorToolBackdropHost，让目录管理、删除目录和移除图片始终从当前页面采样，不依赖根导航是否提供宿主。独立屏幕的缺源降级由 `standaloneLibraryRemovalSamplesThePageRatherThanAnOpaqueFallback` 先复现（`artifacts/library-navigation-repro-device.txt`）；液态、模糊和半透明仍遵循全局设置与系统版本，不强制打开高级材质。
+
 共享 EditorToolbar 的末尾增加图库入口，因此新话题、回复、编辑及私信保持同一行为。面板复用目录网格，多选顺序跨目录保留，同一原图在插入时去重。图片以转义后的 `![描述](https://cdn.example.com/image.png)` 插在选区末尾，保留选中文字、最新草稿和发布流程，不进入上传函数。选择器在键盘隐藏后使用有界高度，避免回复小容器和无界惰性网格测量；发送、上传及会话未稳定时入口禁用。切换身份销毁旧菜单和选择草稿。
 
 管理网格以 148dp 最小单元容纳来源与删除操作；选择器没有这些文字操作，使用 112dp 最小缩略图单元，避免窄屏大字下只露一张占满视口的图片。大字回复的失败记录同时暴露测试错误假设：等待不可见的第二个惰性项不能代表面板未打开；验收使用真实键盘就绪和多缩略图可达条件。
@@ -33,6 +39,7 @@ Markdown 预览是独立 Dialog 窗口，内部单独提供 EditorToolBackdropHo
 - 下载原图到私有目录能离线显示且不依赖 CDN 生命周期，但会引入容量、清理和上传路径，违背直接复用线上图片的需求；本轮只存链接。
 - Room 能做大规模索引、关系和事务，适合庞大图库；当前仅本地目录及元数据列表，不增加数据库依赖，使用独立偏好文件、后台读写和串行读改写。规模导致整体 JSON 开销明显时再迁移。
 - 复用服务器书签能跨设备同步，但书签对象是帖子且没有本轮所需目录图片契约，也不符合纯本地保存；使用独立身份分区。
+- 仅在单个网格上拦截水平拖动，代码改动最少，但没有分页过渡且与图片、目录横向滚动竞争；复用首页的 HorizontalPager 和 FeedTabBar，按稳定目录身份组织页面。
 
 ## Testing
 
@@ -48,6 +55,14 @@ RMX2202 / Android 13 上，首批新增存储 5 项、图库 UI 14 项，以及�
 
 已目视确认 `artifacts/image-library-picker-dark-large.png`、`artifacts/image-library-management-dark-large.png` 的中文、目录、选择状态和来源按钮。实际 App 从“我的”页设置下进入图库管理并返回，证据为 `artifacts/image-library-live-profile.png`、`artifacts/image-library-live-management.png`；没有写入真实图库。同签名使用 adb install -r 保数据覆盖安装，版本保持 3002 / 0.3.1-dev，firstInstallTime 仍为 2026-10-23 14:55:34。真实多登录账号切换及其他机型尚未人工验收，账号分区由隔离存储及换号 UI 用例验证。
 
+目录分页、折叠标题与独立采样宿主落地后，图库 UI 23 项、材质 1 项、普通图标 1 项、编辑工具栏 10 项、首页页头 6 项及搜索 20 项合计 61 项真机回归全部通过（`artifacts/library-navigation-final-device.txt`）。覆盖左右滑动与点击联动、跨目录多选、窄屏深色大字的独立阅读位置、删除当前目录回到全部、换号销毁旧弹层、标题隐藏与反向展开。Debug、AndroidTest 构建及 Lint 通过（`artifacts/library-navigation-final-build.txt`），Lint 仍为 0 errors / 60 warnings / 1 hint。
+
+`ImageLibraryMaterialUiTest` 使用隔离图库及离线纯色图片，在移除面板打开时把蓝色缩略图切成红色；面板标题之前的采样区排除黄色按钮，确认浅深色下液态、模糊及半透明六种组合均跟随页面内容更新。独立页面缺采样源的复现不代表根导航中所有材质问题都只有这一原因。已目视确认 `artifacts/library-removal-DARK-LIQUID.png` 中的背景透出、边缘材质与中文，以及 `artifacts/library-tabs-pinned.png` 中仅目录 Tab 吸顶。
+
+最后仅调整测试宿主和验收断言：图库选择器放在合法 Column 宿主中，普通图标增加浅深色边缘像素与背景一致的检查；重新构建 AndroidTest，并定向重跑这两项及标题折叠，共 3 项通过（`artifacts/library-navigation-focused-build.txt`、`artifacts/library-navigation-focused-device.txt`）。`artifacts/library-home-tabs-picker.png` 确认目录指示器、跨页勾选及插入按钮没有重叠；首页、搜索的 `*-plain.png` 截图确认图标清晰且没有独立圆底。运行时源码未在完整回归后改动，不重复执行无关用例。
+
 ## Consequences
 
 链接失效、来源删除和权限变化仍可能使图片或原帖不可用；本地收藏不等于离线备份，也不跨设备同步。原图地址可能不是 CDN，不假定任意地址永久有效。元数据整体 JSON 写入随规模增长；所有读写放到 IO 线程并串行，失败保持原数据和可重试入口。
+
+分页与折叠页头需要一起维护目录身份、每页阅读位置及实测页头高度；后续增删目录或调整安全区不能退回仅保存页码或固定留白。材质效果已在当前 Android 13 真机验收，其他 Android 版本及 GPU 的降级效果仍需对应设备确认。

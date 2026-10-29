@@ -3,8 +3,8 @@ package com.kudo.android.ui.library
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -16,9 +16,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -26,36 +33,83 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.CommunityIconButton
+import com.kudo.android.ui.components.LocalToolbarActions
+import com.kudo.android.ui.components.LocalToolbarBackdrop
+import com.kudo.android.ui.components.screenMaterial
+import com.kudo.android.ui.feed.FeedTabBar
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
 import com.kudo.android.ui.topic.ArticleBlock
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import kotlin.math.roundToInt
 
 internal fun SavedImage.articleImage() = ArticleBlock.Image(thumbnailUrl, alt, ratio, originalUrl, filename)
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selectFolder: (String?) -> Unit,
     open: (SavedImage) -> Unit, modifier: Modifier = Modifier, selection: Set<String>? = null,
-    source: ((ImageSource) -> Unit)? = null, remove: ((SavedImage) -> Unit)? = null) {
-    val images = remember(library, folderId) { library.images.filter { folderId == null || it.folderId == folderId } }
-    Column(modifier) {
-        LazyRow(Modifier.fillMaxWidth().testTag("library-folders"), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(listOf(ImageFolder("all", "全部")) + library.folders, key = { it.id }) { folder ->
-                val id = folder.id.takeUnless { it == "all" }
-                val active = folderId == id
-                Box(Modifier.heightIn(min = 48.dp).padding(vertical = 6.dp)
-                    .clip(RoundedCornerShape(50)).background(if (active) LogoYellow else MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable(role = Role.Tab) { selectFolder(id) }.semantics { selected = active }
-                    .padding(horizontal = 16.dp, vertical = 6.dp).testTag("library-folder-${folder.id}")) {
-                    Text(folder.name, color = if (active) Ink else MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium)
+    source: ((ImageSource) -> Unit)? = null, remove: ((SavedImage) -> Unit)? = null,
+    header: (@Composable () -> Unit)? = null) {
+    val folders = listOf(ImageFolder("all", "全部")) + library.folders
+    val selectedId = folderId ?: "all"
+    val pager = rememberPagerState(initialPage = folders.indexOfFirst { it.id == selectedId }.coerceAtLeast(0), pageCount = { folders.size })
+    val scope = rememberCoroutineScope()
+    val backdrop = rememberLayerBackdrop()
+    val behavior = TopAppBarDefaults.enterAlwaysScrollBehavior(canScroll = { header != null })
+    var headerHeight by remember { mutableIntStateOf(0) }
+    val top = with(LocalDensity.current) { headerHeight.toDp() }
+    val currentFolder by rememberUpdatedState(selectedId)
+    val currentSelect by rememberUpdatedState(selectFolder)
+    LaunchedEffect(pager, folders.map { it.id }) {
+        val target = folders.indexOfFirst { it.id == currentFolder }.coerceAtLeast(0)
+        if (pager.currentPage != target) pager.scrollToPage(target)
+        snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { index ->
+            folders.getOrNull(index)?.let { currentSelect(it.id.takeUnless { id -> id == "all" }) }
+        }
+    }
+    LaunchedEffect(selectedId) {
+        val target = folders.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
+        if (pager.currentPage != target && !pager.isScrollInProgress) pager.scrollToPage(target)
+    }
+    Box(modifier.background(MaterialTheme.colorScheme.background).nestedScroll(behavior.nestedScrollConnection)) {
+        HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("library-pager"),
+            key = { folders.getOrNull(it)?.id ?: "removed:$it" }) { index ->
+            val id = (folders.getOrNull(index) ?: return@HorizontalPager).id.takeUnless { it == "all" }
+            Box(Modifier.fillMaxSize().then(if (pager.settledPage == index) Modifier else Modifier.clearAndSetSemantics {})) {
+                ImageLibraryGrid(library.images.filter { id == null || it.folderId == id }, open, selection, source, remove,
+                    PaddingValues(start = 12.dp, end = 12.dp, top = top + 12.dp, bottom = 12.dp))
+            }
+        }
+        CompositionLocalProvider(LocalToolbarBackdrop provides backdrop, LocalToolbarActions provides true) {
+            Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(backdrop)
+                .then(if (header != null) Modifier.statusBarsPadding() else Modifier)) {
+                if (header != null) Column(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    behavior.state.heightOffsetLimit = -placeable.height.toFloat()
+                    val offset = behavior.state.heightOffset.roundToInt()
+                    layout(placeable.width, (placeable.height + offset).coerceAtLeast(0)) { placeable.placeRelative(0, offset) }
+                }.testTag("library-title-bar")) { header() }
+                FeedTabBar(folders.map { it.id to it.name }, folders.getOrNull(pager.currentPage)?.id ?: "all",
+                    containerColor = Color.Transparent, modifier = Modifier.testTag("library-folders")) { id ->
+                    val target = folders.indexOfFirst { it.id == id }
+                    if (target >= 0) scope.launch { pager.animateScrollToPage(target) }
                 }
             }
         }
-        if (images.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+    }
+}
+
+@Composable
+private fun ImageLibraryGrid(images: List<SavedImage>, open: (SavedImage) -> Unit, selection: Set<String>?,
+    source: ((ImageSource) -> Unit)?, remove: ((SavedImage) -> Unit)?, padding: PaddingValues) {
+        if (images.isEmpty()) Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
             Text("暂无收藏图片", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else LazyVerticalGrid(GridCells.Adaptive(if (selection == null) 148.dp else 112.dp), Modifier.weight(1f).fillMaxWidth().testTag("library-images"),
-            contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        } else LazyVerticalGrid(GridCells.Adaptive(if (selection == null) 148.dp else 112.dp), Modifier.fillMaxSize().testTag("library-images"),
+            contentPadding = padding, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(images, key = { it.id }) { image ->
                 val checked = selection?.contains(image.id) == true
                 Column(Modifier.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface).testTag("library-item-${image.id}")) {
@@ -86,5 +140,4 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
                 }
             }
         }
-    }
 }

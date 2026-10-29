@@ -2,6 +2,7 @@ package com.kudo.android.ui.library
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -18,12 +19,20 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.account.AccountPageTopBar
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.editor.EditorToolSheet
+import com.kudo.android.ui.editor.EditorToolBackdropHost
 import com.kudo.android.ui.topic.LocalImageGallery
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
 internal fun ImageLibraryScreen(back: () -> Unit, source: (ImageSource) -> Unit) {
+    key(LocalImageLibrary.current) {
+        EditorToolBackdropHost { ImageLibraryContent(back, source) }
+    }
+}
+
+@Composable
+private fun ImageLibraryContent(back: () -> Unit, source: (ImageSource) -> Unit) {
     val state = LocalImageLibrary.current
     val gallery = LocalImageGallery.current
     val scope = rememberCoroutineScope()
@@ -33,7 +42,16 @@ internal fun ImageLibraryScreen(back: () -> Unit, source: (ImageSource) -> Unit)
     var removing by remember(state) { mutableStateOf<SavedImage?>(null) }
     val library = state?.library
     LaunchedEffect(library, folderId) { if (folderId != null && library?.folders?.none { it.id == folderId } == true) folderId = null }
-    MaterialPageScaffold(modifier = Modifier.testTag("image-library-screen"), header = {
+    if (library != null && state.error == null) ImageLibraryBrowser(library, folderId, { folderId = it }, { image ->
+        gallery?.open(listOf(image.articleImage()), 0, "library-${image.id}", source = image.source)
+    }, Modifier.fillMaxSize().testTag("image-library-screen"), source = source, remove = { removing = it }, header = {
+        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
+            Text("图库管理", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            CommunityIconButton(Icons.Rounded.CreateNewFolder, "管理图库目录", { manage = true })
+        }
+    }) else MaterialPageScaffold(modifier = Modifier.testTag("image-library-screen"), header = {
         AccountPageTopBar("图库管理", back) {
             CommunityIconButton(Icons.Rounded.CreateNewFolder, "管理图库目录", { manage = true }, enabled = library != null && state.error == null)
         }
@@ -43,9 +61,6 @@ internal fun ImageLibraryScreen(back: () -> Unit, source: (ImageSource) -> Unit)
                 Text(state.error!!, Modifier.padding(16.dp))
                 CommunityButton("重试", { scope.launch { state.reload() } }, Modifier.padding(horizontal = 16.dp))
             } else if (library == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CommunityLoadingIndicator() }
-            else ImageLibraryBrowser(library, folderId, { folderId = it }, { image ->
-                gallery?.open(listOf(image.articleImage()), 0, "library-${image.id}", source = image.source)
-            }, Modifier.weight(1f), source = source, remove = { removing = it })
         }
     }
     if (manage && state != null) LibraryFolderSheet(state) { manage = false }
