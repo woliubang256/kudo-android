@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+空目录通过零自身位移的 scrollable 提供纵向嵌套滚动入口，使标题能和有图目录一样收起；不移动空态中心或添加虚假滚动内容。新复现覆盖空目录折叠、横滑目录后继续吸顶、反向展开，以及短网格的窄屏大字号。私信和话题/回复采用相同方向约定，见[个人标签折叠](2026-10-30-personal-tabs-collapse.md)。
+
 访客及每个用户 ID 分别保存版本化 JSON，数据只包含目录、HTTP(S) 原图和缩略图链接、描述与原帖楼层来源，不保存图片文件，不向服务器写收藏。默认收藏目录始终存在。同一目录相同原图幂等，允许不同目录分别收藏。独立偏好文件的后台读改写受同一 Mutex 保护；失败和不支持的版本报错，不以空图库覆盖原始数据。
 
 图片长按和查看器共用导出菜单并增加收藏；下载全部仍以已有浏览组为边界。来源明确传递到全屏会话，不从临时 UI origin 或图片 CDN 地址猜帖子。未揭开的剧透图片不能通过长按导出或收藏。会话不稳定时不开放写入口，账号变化取消旧弹层。
@@ -60,6 +62,10 @@ RMX2202 / Android 13 上，首批新增存储 5 项、图库 UI 14 项，以及�
 `ImageLibraryMaterialUiTest` 使用隔离图库及离线纯色图片，在移除面板打开时把蓝色缩略图切成红色；面板标题之前的采样区排除黄色按钮，确认浅深色下液态、模糊及半透明六种组合均跟随页面内容更新。独立页面缺采样源的复现不代表根导航中所有材质问题都只有这一原因。已目视确认 `artifacts/library-removal-DARK-LIQUID.png` 中的背景透出、边缘材质与中文，以及 `artifacts/library-tabs-pinned.png` 中仅目录 Tab 吸顶。
 
 最后仅调整测试宿主和验收断言：图库选择器放在合法 Column 宿主中，普通图标增加浅深色边缘像素与背景一致的检查；重新构建 AndroidTest，并定向重跑这两项及标题折叠，共 3 项通过（`artifacts/library-navigation-focused-build.txt`、`artifacts/library-navigation-focused-device.txt`）。`artifacts/library-home-tabs-picker.png` 确认目录指示器、跨页勾选及插入按钮没有重叠；首页、搜索的 `*-plain.png` 截图确认图标清晰且没有独立圆底。运行时源码未在完整回归后改动，不重复执行无关用例。
+
+空目录手势修复先在旧实现复现：空目录上滑后标题仍显示，短网格的折叠用例原本通过（`artifacts/personal-collapse-red-device.txt`）。修复后 `ImageLibraryUiTest` 25 项全部通过（`artifacts/personal-collapse-device.txt`），覆盖空目录折叠与反向展开、横滑目录后标签吸顶、280dp 深色 130% 字号短网格，以及既有长列表、分页阅读位置、目录管理、收藏插入和账号隔离。已目视检查 `artifacts/library-empty-tabs-pinned.png` 与 `artifacts/library-short-dark-large-pinned.png`，确认中文可读、仅目录标签吸顶；截图来自离线组件夹具，不代表真实网络账号完整验收。
+
+本轮 Debug、AndroidTest 构建与 Lint 通过（`artifacts/personal-collapse-build.txt`、`artifacts/personal-collapse-focused-build.txt`、`artifacts/personal-collapse-final-lint.txt`），Lint 为 0 errors、60 warnings、1 hint。合并私信及话题/回复后的 45 个不同用例中，44 项分批通过，另一个按钮尺寸旧断言在改动前 APK 上同样失败；整体范围、基线对照与设备限制见[个人标签折叠的验证记录](2026-10-30-personal-tabs-collapse.md)。
 
 ## Consequences
 

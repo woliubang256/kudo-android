@@ -2,6 +2,9 @@ package com.kudo.android.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -106,7 +109,8 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
 @Composable
 private fun ImageLibraryGrid(images: List<SavedImage>, open: (SavedImage) -> Unit, selection: Set<String>?,
     source: ((ImageSource) -> Unit)?, remove: ((SavedImage) -> Unit)?, padding: PaddingValues) {
-        if (images.isEmpty()) Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        if (images.isEmpty()) Box(Modifier.fillMaxSize().scrollable(rememberScrollableState { 0f }, Orientation.Vertical)
+            .padding(padding), contentAlignment = Alignment.Center) {
             Text("暂无收藏图片", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else LazyVerticalGrid(GridCells.Adaptive(if (selection == null) 148.dp else 112.dp), Modifier.fillMaxSize().testTag("library-images"),
             contentPadding = padding, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

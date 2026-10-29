@@ -289,6 +289,49 @@ class ImageLibraryUiTest {
         capture("image-library-compact-empty.png")
     }
 
+    @Test fun emptyLibraryCanCollapseItsTitleSwitchFoldersAndExpandAgain() {
+        screen { ImageLibraryScreen({}) {} }
+        compose.waitUntil { compose.onAllNodesWithText("暂无收藏图片").fetchSemanticsNodes().isNotEmpty() }
+        val original = compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot.top
+        val pager = compose.onNodeWithTag("library-pager")
+        pager.performTouchInput { swipeUp(durationMillis = 700) }
+        compose.onNodeWithText("图库管理").assertIsNotDisplayed()
+        val pinned = compose.onNodeWithTag("library-folders").assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
+        assertTrue(pinned < original - 40f)
+        pager.performTouchInput { swipeUp(durationMillis = 700) }
+        assertEquals(pinned, compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot.top, 1f)
+        pager.performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithText("默认收藏").assertIsSelected()
+        compose.onNodeWithText("暂无收藏图片").assertIsDisplayed()
+        capture("library-empty-tabs-pinned.png")
+        pager.performTouchInput { swipe(Offset(center.x, height * .55f), Offset(center.x, height * .85f), durationMillis = 700) }
+        compose.onNodeWithText("图库管理").assertIsDisplayed()
+        assertEquals(original, compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot.top, 1f)
+        compose.onNodeWithContentDescription("管理图库目录").performClick()
+        compose.onNodeWithText("新建目录").assertIsDisplayed()
+    }
+
+    @Test fun shortLibraryPagesKeepPinnedTabsInADarkNarrowLargeTextWindow() {
+        seed()
+        screen(dark = true, large = true) { Box(Modifier.width(280.dp)) { ImageLibraryScreen({}) {} } }
+        loaded()
+        compose.onNodeWithText("默认收藏").performClick()
+        val original = compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot.top
+        compose.onNodeWithTag("library-images").performTouchInput { swipeUp(durationMillis = 700) }
+        compose.onNodeWithText("图库管理").assertIsNotDisplayed()
+        val pinned = compose.onNodeWithTag("library-folders").assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
+        assertTrue(pinned < original - 40f)
+        compose.onNodeWithTag("library-pager").performTouchInput { swipeLeft(durationMillis = 600) }
+        compose.onNodeWithText("表情").assertIsSelected()
+        compose.onNodeWithTag("library-item-second").assertIsDisplayed()
+        assertEquals(pinned, compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot.top, 1f)
+        capture("library-short-dark-large-pinned.png")
+        compose.onNodeWithTag("library-images").performTouchInput {
+            swipe(Offset(center.x, height * .55f), Offset(center.x, height * .85f), durationMillis = 700)
+        }
+        compose.onNodeWithText("图库管理").assertIsDisplayed()
+    }
+
     @Test fun swipingDirectoryPagesUpdatesTabsAndPreservesSelection() {
         seed()
         screen { Column { ImageLibraryPicker(true) {} } }
