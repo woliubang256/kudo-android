@@ -101,7 +101,7 @@ class GuestProfileUiTest {
             }
         }
         compose.runOnIdle { assertEquals(1, about) }
-        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(2)
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(3)
         compose.onNodeWithText("真诚 · 友善 · 团结 · 专业").assertIsDisplayed()
         compose.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
         compose.onNodeWithText("点击登录").assertIsDisplayed()

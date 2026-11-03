@@ -81,21 +81,26 @@ fun ProfileScreen(user: Member?, login: () -> Unit, settings: () -> Unit, bookma
     repository: CommunityRepository? = null, about: () -> Unit = settings,
     destination: (AccountDestination) -> Unit = { if (it == AccountDestination.BOOKMARKS) bookmarks() },
     downloads: () -> Unit = {},
-    statusBarStyle: (Boolean?) -> Unit = {}, imageLibrary: () -> Unit = {}) {
+    statusBarStyle: (Boolean?) -> Unit = {}, imageLibrary: () -> Unit = {}, apps: () -> Unit = {}) {
     if (user == null) {
-        GuestProfileScreen(login, settings, about, downloads, imageLibrary)
+        GuestProfileScreen(login, settings, about, downloads, imageLibrary, apps)
         return
     }
-    key(user.id, user.username) { MemberProfileScreen(user, repository, settings, about, profile, destination, downloads, statusBarStyle, imageLibrary) }
+    key(user.id, user.username) { MemberProfileScreen(user, repository, settings, about, profile, destination, downloads, statusBarStyle, imageLibrary, apps) }
 }
 
 @Composable
-private fun GuestProfileScreen(login: () -> Unit, settings: () -> Unit, about: () -> Unit, downloads: () -> Unit, imageLibrary: () -> Unit) {
+private fun GuestProfileScreen(login: () -> Unit, settings: () -> Unit, about: () -> Unit, downloads: () -> Unit, imageLibrary: () -> Unit, apps: () -> Unit) {
     val scroll = rememberLazyListState()
     Column(Modifier.fillMaxSize().statusBarsPadding().semantics { paneTitle = "我的" }.testTag("guest-profile")) {
         LazyColumn(state = scroll, modifier = Modifier.quickScrollTarget(scroll), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 112.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { GuestLoginPanel("登录后参与社区讨论", login) }
+            item {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)) {
+                    GuestMenuRow(Icons.Rounded.Apps, "应用广场", null, apps)
+                }
+            }
             item {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)) {
                     GuestMenuRow(Icons.Rounded.Palette, "设置", "主题、字号与液态玻璃", settings)

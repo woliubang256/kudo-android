@@ -2,9 +2,12 @@ package com.kudo.android.ui.web
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.ViewGroup
+import android.view.View
 import android.view.ViewOutlineProvider
 import android.webkit.*
 import androidx.activity.compose.BackHandler
@@ -23,6 +26,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -30,13 +35,16 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kudo.android.ui.LinuxDoLink
 import com.kudo.android.ui.ExternalAppLinkPolicy
-import com.kudo.android.ui.web.webViewProviderLabel
 import com.kudo.android.data.ExternalLinkMode
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 
 private class WebPageState(val saved: Bundle? = null) {
     var view: WebView? = null
+    var bridge: MiniAppWebBridge? = null
     fun save() = Bundle().also { bundle ->
         if (view?.saveState(bundle) == null) saved?.let(bundle::putAll)
     }
@@ -65,7 +73,17 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val currentBack by rememberUpdatedState(back)
     val currentOpenApp by rememberUpdatedState(openApp)
     val currentExternalLinkMode by rememberUpdatedState(externalLinkMode)
-    fun navigateBack() { val view = page.view; if (view?.canGoBack() == true) view.goBack() else currentBack() }
+    val miniApp = MiniAppLocation.parse(currentUrl)
+    val currentMiniApp by rememberUpdatedState(miniApp)
+    val miniUi = remember(url) { MiniAppUiState() }
+    val fullscreen = remember(url) { WebFullscreenState() }
+    val context = LocalContext.current
+    fun close() { miniUi.reset(); fullscreen.exit(); currentBack() }
+    fun navigateBack() {
+        if (miniUi.showing) miniUi.dismiss()
+        else if (fullscreen.view != null) fullscreen.exit()
+        else { val view = page.view; if (view?.canGoBack() == true) view.goBack() else currentBack() }
+    }
     fun retry() {
         navigationGeneration++
         awaitingContent = true; progress = 0; error = null; message = null
@@ -73,22 +91,47 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     }
     BackHandler { navigateBack() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(currentUrl) { miniUi.reset(); page.bridge?.invalidate() }
+    LaunchedEffect(miniApp?.id, miniUi.panel, miniUi.visibility.targetState, miniUi.revision) {
+        val id = miniApp?.id
+        if (id != null && miniUi.panel == MiniAppPanel.ABOUT && miniUi.visibility.targetState) {
+            miniUi.info = null; miniUi.loading = true; miniUi.error = false
+            try { miniUi.info = checkNotNull(page.bridge).info(id) }
+            catch (_: TimeoutCancellationException) { miniUi.error = true }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { miniUi.error = true }
+            finally { miniUi.loading = false }
+        }
+    }
+    LaunchedEffect(miniUi.clipboard) {
+        if (miniUi.clipboard != null) { delay(60000); miniUi.dismiss() }
+    }
     DisposableEffect(lifecycle, page) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> page.view?.onResume()
-                Lifecycle.Event.ON_PAUSE -> { page.view?.onPause(); CookieManager.getInstance().flush() }
+                Lifecycle.Event.ON_RESUME -> { page.view?.visibility = View.VISIBLE; page.view?.onResume() }
+                Lifecycle.Event.ON_PAUSE -> {
+                    if (currentMiniApp != null) {
+                        miniUi.dismiss(); fullscreen.exit(); page.view?.pauseMiniAppMedia(); page.view?.visibility = View.INVISIBLE
+                    }
+                    page.view?.onPause(); CookieManager.getInstance().flush()
+                }
                 else -> Unit
             }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
+        onDispose { lifecycle.removeObserver(observer); miniUi.reset(); fullscreen.exit() }
     }
+    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().then(if (miniUi.showing) Modifier.clearAndSetSemantics {} else Modifier)) {
     WebPageScaffold(modifier = Modifier.testTag("web-page"), header = {
+        if (miniApp != null) MiniAppTopBar(if (miniApp.id == null) "应用广场" else title.takeUnless { it == "网页" }?.removeSuffix(" - LINUX DO") ?: "小程序",
+            ::navigateBack, { miniUi.open(MiniAppPanel.MENU) }, ::close)
+        else
         PageTopBar(title, ::navigateBack) {
             CommunityIconButton(Icons.Rounded.Refresh, "刷新网页", ::retry)
             CommunityIconButton(Icons.Rounded.Language, "在浏览器打开", { openBrowser(currentUrl) })
-            CommunityIconButton(Icons.Rounded.Close, "关闭网页", { currentBack() })
+            CommunityIconButton(Icons.Rounded.Close, "关闭网页", ::close)
         }
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
@@ -112,6 +155,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        settings.mediaPlaybackRequiresUserGesture = true
                         settings.allowFileAccess = false
                         settings.allowContentAccess = false
                         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -119,6 +163,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         settings.javaScriptCanOpenWindowsAutomatically = false
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                        page.bridge = MiniAppWebBridge(this, { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }, miniUi::request)
                         webViewClient = object : WebViewClient() {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                                 val value = request.url.toString()
@@ -139,17 +184,22 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 return true
                             }
                             override fun onPageStarted(view: WebView, value: String, favicon: Bitmap?) {
+                                fullscreen.exit(); miniUi.reset(); page.bridge?.invalidate()
                                 scrollingUp = false
                                 navigationGeneration++
                                 currentUrl = value; progress = 0; awaitingContent = true; error = null; message = null
                             }
-                            override fun doUpdateVisitedHistory(view: WebView, value: String, isReload: Boolean) { currentUrl = value }
+                            override fun doUpdateVisitedHistory(view: WebView, value: String, isReload: Boolean) {
+                                currentUrl = value
+                                page.bridge?.installCompatibility()
+                            }
                             override fun onPageCommitVisible(view: WebView, value: String) {
                                 if (view.url == value) awaitingContent = false
                             }
                             override fun onPageFinished(view: WebView, value: String) {
                                 CookieManager.getInstance().flush()
                                 if (page.view !== view || view.url != value) return
+                                page.bridge?.installCompatibility()
                                 progress = 100
                                 val generation = navigationGeneration
                                 view.postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {
@@ -162,9 +212,11 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 if (request.isForMainFrame) { progress = 100; awaitingContent = false; error = "网页加载失败，请检查网络后重试。" }
                             }
                             override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
-                                if (request.isForMainFrame && response.statusCode >= 400) { progress = 100; awaitingContent = false; error = "网页返回 ${response.statusCode}，请稍后重试。" }
+                                if (request.isForMainFrame && response.statusCode >= 400) { progress = 100; awaitingContent = false; error = "网页返回 ${response.statusCode}，请稍后重试。" }
+
                             }
                             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                                fullscreen.exit(); miniUi.reset(); page.bridge?.close(); page.bridge = null
                                 if (page.view === view) page.view = null
                                 progress = 100
                                 awaitingContent = false
@@ -176,6 +228,10 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         webChromeClient = object : WebChromeClient() {
                             override fun onProgressChanged(view: WebView, value: Int) { progress = value }
                             override fun onReceivedTitle(view: WebView, value: String?) { title = value?.takeIf(String::isNotBlank) ?: "网页" }
+                            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                                if (currentMiniApp != null) fullscreen.show(view, callback) else callback.onCustomViewHidden()
+                            }
+                            override fun onHideCustomView() { fullscreen.exit() }
                         }
                         setDownloadListener { _, _, _, _, _ ->
                             awaitingContent = false; progress = 100
@@ -188,8 +244,12 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         }
                         if (page.saved?.let { restoreState(it) } == null) loadUrl(url)
                     }
-                }, update = { view -> view.setBackgroundColor(surfaceColor) }, onRelease = { view ->
-                    page.view = null
+                }, update = { view ->
+                    view.setBackgroundColor(surfaceColor)
+                    view.importantForAccessibility = if (miniUi.showing) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                }, onRelease = { view ->
+                    if (page.view === view) { page.bridge?.close(); page.bridge = null; page.view = null }
+                    fullscreen.exit()
                     view.setOnScrollChangeListener(null)
                     view.stopLoading(); view.removeAllViews(); view.destroy()
                     CookieManager.getInstance().flush()
@@ -209,7 +269,29 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         CommunityButton("重新加载", ::retry)
                     }
                 }
+                fullscreen.view?.let { customView ->
+                    AndroidView(factory = { customView }, modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)
+                        .testTag("mini-app-fullscreen"), onRelease = { (it.parent as? ViewGroup)?.removeView(it) })
+                }
             }
         }
     }
+    }
+    MiniAppPanels(miniUi, miniApp, ::retry, {
+        (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+            .setPrimaryClip(ClipData.newPlainText("小程序链接", currentUrl))
+    }, { openBrowser(currentUrl) })
+    }
+}
+
+private fun WebView.pauseMiniAppMedia() {
+    evaluateJavascript("""
+        (() => {
+          const pause = doc => {
+            doc.querySelectorAll('audio,video').forEach(media => media.pause());
+            doc.querySelectorAll('iframe').forEach(frame => { try { if (frame.contentDocument) pause(frame.contentDocument); } catch (_) {} });
+          };
+          pause(document);
+        })();
+    """.trimIndent(), null)
 }

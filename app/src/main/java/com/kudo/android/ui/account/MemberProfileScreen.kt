@@ -58,7 +58,7 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?, settings: () -> Unit,
     about: () -> Unit, profile: () -> Unit, destination: (AccountDestination) -> Unit, downloads: () -> Unit = {},
-    statusBarStyle: (Boolean?) -> Unit, imageLibrary: () -> Unit = {}) {
+    statusBarStyle: (Boolean?) -> Unit, imageLibrary: () -> Unit = {}, apps: () -> Unit = {}) {
     var member by remember(user.id, user.username) { mutableStateOf(user) }
     var summary by remember(user.id, user.username) { mutableStateOf<UserSummary?>(null) }
     var summaryError by remember(user.id, user.username) { mutableStateOf(false) }
@@ -184,6 +184,11 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                             val (icon, color) = destinationIcon(entry)
                             CompactAccountRow(icon, color, entry.title, { destination(entry) })
                         }
+                    }
+                }
+                item(key = "apps") {
+                    Column(Modifier.padding(horizontal = 8.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)) {
+                        CompactAccountRow(Icons.Rounded.Apps, Color(0xFFE8A33D), "应用广场", apps)
                     }
                 }
                 item(key = "settings") {
