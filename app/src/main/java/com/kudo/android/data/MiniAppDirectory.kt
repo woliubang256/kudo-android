@@ -1,0 +1,36 @@
+package com.kudo.android.data
+
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.json.JSONObject
+
+data class MiniAppEntry(val id: String, val name: String, val iconUrl: String?) {
+    val url: String get() = "https://linux.do/apps/$id"
+}
+
+data class MiniAppDirectoryPage(val apps: List<MiniAppEntry>, val hasMore: Boolean)
+
+private val miniAppId = Regex("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")
+
+internal fun parseMiniAppDirectory(data: JSONObject, page: Int): MiniAppDirectoryPage {
+    require(data.getInt("page") == page) { "应用目录页码不匹配" }
+    val perPage = data.getInt("per_page").also { require(it > 0) }
+    val total = data.getInt("total").also { require(it >= 0) }
+    val values = data.getJSONArray("apps")
+    val apps = buildList {
+        for (i in 0 until values.length()) {
+            val app = values.optJSONObject(i) ?: continue
+            val id = app.optString("app_id").takeIf(miniAppId::matches) ?: continue
+            val name = app.optString("name").trim().takeIf(String::isNotEmpty) ?: continue
+            val icon = app.optString("icon_url").toHttpUrlOrNull()
+                ?.takeIf { it.isHttps && it.username.isEmpty() && it.password.isEmpty() }?.toString()
+            add(MiniAppEntry(id, name, icon))
+        }
+    }.distinctBy(MiniAppEntry::id)
+    return MiniAppDirectoryPage(apps, values.length() > 0 && (page + 1L) * perPage < total)
+}
+
+suspend fun CommunityRepository.miniApps(query: String = "", page: Int = 0): MiniAppDirectoryPage {
+    require(page >= 0)
+    return parseMiniAppDirectory(client.get("/mini-app-api/apps.json",
+        mapOf("sort" to "latest", "q" to query.trim(), "page" to page.toString())), page)
+}
