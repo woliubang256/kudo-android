@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kudo.android.BuildConfig
 import com.kudo.android.data.*
+import com.kudo.android.ui.components.AppSquareIcon
 import com.kudo.android.ui.components.Avatar
 import com.kudo.android.ui.components.AvatarPresentation
 import com.kudo.android.ui.components.quickScrollTarget
@@ -188,7 +189,7 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                 }
                 item(key = "apps") {
                     Column(Modifier.padding(horizontal = 8.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)) {
-                        CompactAccountRow(Icons.Rounded.Apps, Color(0xFFE8A33D), "应用广场", apps)
+                        CompactAccountRow(AppSquareIcon, MaterialTheme.colorScheme.onSurfaceVariant, "应用广场", apps)
                     }
                 }
                 item(key = "settings") {

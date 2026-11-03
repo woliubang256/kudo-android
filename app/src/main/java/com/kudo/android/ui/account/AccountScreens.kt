@@ -98,7 +98,7 @@ private fun GuestProfileScreen(login: () -> Unit, settings: () -> Unit, about: (
             item { GuestLoginPanel("登录后参与社区讨论", login) }
             item {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)) {
-                    GuestMenuRow(Icons.Rounded.Apps, "应用广场", null, apps)
+                    GuestMenuRow(AppSquareIcon, "应用广场", null, apps)
                 }
             }
             item {
