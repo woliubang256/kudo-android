@@ -231,6 +231,7 @@ class WebScreenUiTest {
         } }
         awaitPage("指南")
         click("quark")
+        compose.waitUntil(5000) { compose.runOnIdle { opened.size == 1 } }
         val previous = mainLoads.get()
         compose.runOnIdle { assertEquals(1, opened.size); mode = ExternalLinkMode.IN_APP }
         compose.runOnIdle { assertEquals(previous, mainLoads.get()); assertEquals(1, views.size) }
@@ -246,6 +247,7 @@ class WebScreenUiTest {
         compose.onNodeWithContentDescription("返回").performClick(); awaitPage("指南")
         compose.runOnIdle { mode = ExternalLinkMode.SYSTEM }
         click("other")
+        compose.waitUntil(5000) { compose.runOnIdle { opened.size == 2 } }
         compose.runOnIdle {
             assertEquals(2, opened.size)
             assertEquals("https://other-fixture.test/page", opened.last())

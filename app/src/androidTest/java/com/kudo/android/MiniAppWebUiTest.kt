@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
 import androidx.compose.material3.Text
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -18,6 +19,7 @@ import com.kudo.android.data.*
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.web.WebScreen
 import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.*
 import org.junit.Assert.*
 import java.io.File
@@ -123,6 +125,74 @@ class MiniAppWebUiTest {
         assertEquals("true", js("location.pathname==='/apps/$second'&&new URLSearchParams(location.search).get('room')==='two'&&location.hash==='#play'"))
         compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
         compose.onNodeWithText("原生来源").assertDoesNotExist()
+    }
+
+    private fun launch(stage: String, value: Int? = null, max: Int = 100) {
+        js("""(()=>{
+          const loader=document.querySelector('.mini-app-loader');loader.classList.add('is-loading');
+          const loading=document.createElement('div');loading.className='mini-app-loader__loading';
+          loading.innerHTML='<strong data-role="stage"></strong><progress max="$max" ${value?.let { "value=\"$it\"" }.orEmpty()}></progress><p data-role="detail"></p><button data-action="retry" hidden>重试</button>';
+          loading.querySelector('[data-role=stage]').textContent=${JSONObject.quote(stage)};loader.append(loading);
+        })()""".trimIndent())
+    }
+
+    private fun awaitLaunchProgress(expected: Float) {
+        compose.waitUntil(5000) { runCatching {
+            kotlin.math.abs(compose.onNodeWithTag("mini-app-launch-progress").fetchSemanticsNode()
+                .config[SemanticsProperties.ProgressBarRangeInfo].current - expected) < .001f
+        }.getOrDefault(false) }
+    }
+
+    @Test fun nativeLaunchFollowsRealProgressAndReadyWithoutReplacingTheGame() {
+        show()
+        val original = web
+        launch("正在下载应用…", 20)
+        awaitLaunchProgress(.2f)
+        compose.onNodeWithText("正在下载应用…", substring = true).assertIsDisplayed()
+        assertEquals("true", js("getComputedStyle(document.querySelector('.mini-app-loader__loading')).visibility==='hidden'"))
+        js("document.querySelector('.mini-app-loader progress').value=70")
+        awaitLaunchProgress(.7f)
+        js("(()=>{const l=document.querySelector('.mini-app-loader');l.querySelector('[data-role=stage]').textContent='正在解压应用…';l.querySelector('progress').max=4;l.querySelector('progress').value=3})()")
+        awaitLaunchProgress(.75f)
+        compose.onNodeWithText("正在解压应用…", substring = true).assertIsDisplayed()
+        js("document.querySelector('.mini-app-loader progress').removeAttribute('value');document.querySelector('[data-role=stage]').textContent='正在启动应用…'")
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-launch-progress").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("mini-app-launch-indicator").assertIsDisplayed()
+        compose.onNodeWithText("正在启动应用…").assertIsDisplayed()
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            for (glass in GlassMode.entries) {
+                compose.runOnIdle { display = display.copy(theme = theme, glass = glass) }
+                compose.onNodeWithTag("mini-app-launch").assertIsDisplayed()
+                compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+                compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
+            }
+            capture("mini-app-launch-${theme.name.lowercase()}.png")
+        }
+        js("document.querySelector('.mini-app-loader').classList.remove('is-loading');document.querySelector('.mini-app-loader__loading').hidden=true")
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-launch").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
+        compose.runOnIdle { assertSame(original, web) }
+    }
+
+    @Test fun nativeLaunchLetsSitePermissionsThroughAndRetriesRealLoaderErrors() {
+        show()
+        launch("正在授权应用…")
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-launch").fetchSemanticsNodes().isNotEmpty() }
+        js("(()=>{const d=document.createElement('dialog');d.className='mini-app-permission-dialog';d.innerHTML='<button id=permission-continue>继续进入</button>';d.querySelector('button').onclick=()=>{window.permissionAccepted=true;d.close()};document.body.append(d);d.showModal()})()")
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-launch").fetchSemanticsNodes().isEmpty() }
+        capture("mini-app-launch-permission.png")
+        click("permission-continue")
+        compose.waitUntil(5000) { js("window.permissionAccepted === true") == "true" }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-launch").fetchSemanticsNodes().isNotEmpty() }
+        js("(()=>{const l=document.querySelector('.mini-app-loader');l.classList.remove('is-loading');l.classList.add('is-error');l.querySelector('[data-role=stage]').textContent='启动失败';l.querySelector('[data-role=detail]').textContent='资源下载失败';l.querySelector('[data-action=retry]').hidden=false})()")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("资源下载失败").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("重试").assertIsDisplayed()
+        capture("mini-app-launch-error.png")
+        val finished = pageFinishes.get()
+        compose.onNodeWithText("重试").performClick()
+        compose.waitUntil(10000) { pageFinishes.get() > finished }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-launch").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
     }
 
     @Test fun runtimeFramesFillTheViewportAndSitePermissionDialogsRemainVisible() {

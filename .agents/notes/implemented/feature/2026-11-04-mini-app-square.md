@@ -14,6 +14,8 @@ Status: implemented
 
 单个应用的固定原生返回、标题和整行胶囊布局由[小程序沉浸运行视图](2026-11-04-mini-app-immersive-runtime.md)部分替代：运行页仅悬浮胶囊，并适配官网宿主与 iframe 铺满安全区域。本篇的 H5 运行时、关于、权限和生命周期约束继续有效；网页广场与非运行页仍保留原布局。
 
+运行时进度使用[小程序原生启动进度](2026-11-04-mini-app-native-launch-progress.md)的受限快照通道；官网继续负责下载、解包、沙箱和权限，原生仅接管启动视觉。
+
 胶囊可见高度为 32dp，更多与关闭各保留 48dp 触控区，按压反馈限制在 32dp 可见表面内。图标使用用户提供的原始 SVG 路径：更多为中大侧小三点，关闭为圆环加实心点，颜色跟随主题。MiniAppWebUiTest 同时验证胶囊视觉高度与两枚按钮的触控尺寸，微调后的 7 项运行页回归通过，记录在 `artifacts/native-apps-refined-device.txt`；实机胶囊见 `artifacts/mini-app-capsule-dark.png`。
 
 加载官网宿主页及其隔离 iframe，继续复用 CookieManager、JavaScript、DOM 存储及默认第三方 Cookie 限制。不下载运行用户提供的开发 ZIP，不复制平台 SDK、鉴权或审核权限；文档仅作为协议参考。全屏保留原生胶囊，返回先退出弹层再退出全屏；切到后台暂停可访问的媒体、隐藏网页并取消剪贴板确认，关闭释放 WebView 和原生桥。保留 HTTPS、CORS 与平台资源校验。

@@ -40,6 +40,7 @@ internal class MiniAppClipboardRequest(
 internal class MiniAppWebBridge(
     private val view: WebView, private val active: () -> Boolean,
     private val clipboard: (MiniAppClipboardRequest) -> Unit,
+    private val launch: (MiniAppLaunchState) -> Unit = {},
     private val presentation: (Boolean) -> Unit = {},
 ) {
     private val pendingInfo = mutableMapOf<String, Pair<String, CompletableDeferred<MiniAppInfo>>>()
@@ -66,6 +67,10 @@ internal class MiniAppWebBridge(
                 if (data.optString("type") == "presentation") {
                     if (mainFrame && location.id != null && data.optString("appId") == location.id &&
                         data.optString("url") == view.url && data.opt("active") is Boolean) presentation(data.getBoolean("active"))
+                    return@addWebMessageListener
+                }
+                if (data.optString("type") == "launch") {
+                    if (mainFrame) MiniAppLaunchState.parse(data, view.url.orEmpty())?.let(launch)
                     return@addWebMessageListener
                 }
                 if (!active()) return@addWebMessageListener

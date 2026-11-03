@@ -18,6 +18,8 @@ WebPageScaffold 只切换标题与悬浮胶囊，正文保持同一 Compose 调�
 
 普通网页布局和 WebView 内连续导航规则保持；离开小程序路径后清除顶层适配标记，恢复普通网页工具栏。精确应用路径在文档完成后两秒仍没有 loader 时也恢复普通布局，避免隐藏登录、验证和不可用页；异步卸载和重新挂载 loader 同样更新布局。复制链接、浏览器打开移除内部嵌入参数，保留其他 query/hash；官网 loader 自身会从 SDK 启动参数中过滤 embed_mode。
 
+运行时的加载、下载、解包和启动呈现由[小程序原生启动进度](2026-11-04-mini-app-native-launch-progress.md)部分替代：有安全消息接口时隐藏官网进度视觉层，通过真实阶段快照显示原生进度；权限 dialog 继续使用官网交互。本篇的 H5 运行时、稳定 WebView、几何和无 loader 回退约束继续有效。
+
 ## Existing note audit
 
 [小程序网页容器](../../implemented/feature/2026-11-04-mini-app-square.md)部分重叠：本篇替代带原生返回、标题和固定整行胶囊的运行页外观；保留其 H5、关于、权限、媒体和生命周期决定。[原生应用广场](../../implemented/feature/2026-11-04-native-app-square.md)继续负责目录和返回恢复。[网页普通材质](../../implemented/bug-fix/2026-10-29-webview-ordinary-material.md)保持。未发现其他同主题 proposed/rejected 笔记。

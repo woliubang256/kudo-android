@@ -38,9 +38,19 @@ class MiniAppImmersiveLiveProbeTest {
         } }
         try {
             for ((index, appId) in listOf(id, "01a1966a-f4a0-7b43-ad9c-c46b7f0e0281").withIndex()) {
+                val stages = JSONArray()
+                val captured = mutableSetOf<String>()
                 if (index > 0) compose.runOnUiThread { web.loadUrl("https://linux.do/apps/$appId?embed_mode=true") }
                 compose.waitUntil(70000) {
                     if (js("location.pathname === '/apps/$appId'") != "true") return@waitUntil false
+                    val snapshot = js("JSON.stringify({stage:document.querySelector('[data-role=stage]')?.textContent,progress:(()=>{const p=document.querySelector('.mini-app-loader progress');return p?.hasAttribute('value')?p.value/p.max:null})(),native:document.documentElement.hasAttribute('data-kudo-mini-app-native-progress')})")
+                    runCatching { JSONObject(JSONArray("[$snapshot]").getString(0)) }.getOrNull()?.let { state ->
+                        val stage = state.optString("stage")
+                        if (stage.isNotEmpty() && captured.add(stage)) {
+                            stages.put(state)
+                            if (compose.onAllNodesWithTag("mini-app-launch").fetchSemanticsNodes().isNotEmpty()) capture("mini-app-live-launch-$index-${stages.length()}.png")
+                        }
+                    }
                     if (js("!!document.querySelector('.mini-app-permission-dialog[open]')") == "true") {
                         capture("mini-app-immersive-permission.png")
                         // The first action enters muted; do not grant unrelated business permissions.
@@ -64,6 +74,7 @@ class MiniAppImmersiveLiveProbeTest {
                     runtime: (()=>{try{const r=f.contentDocument?.querySelector('iframe');return r?{size:[r.clientWidth,r.clientHeight],sandbox:r.getAttribute('sandbox'),embedded:new URL(r.src).searchParams.get('embed_mode')}:null}catch(_){return null}})()}))
                 })""".trimIndent())
                 val record = JSONObject(JSONArray("[$data]").getString(0))
+                record.put("launchSnapshots", stages)
                 records.put(record)
                 capture("mini-app-immersive-$index.png")
                 assertTrue(record.toString(), record.getBoolean("ready"))

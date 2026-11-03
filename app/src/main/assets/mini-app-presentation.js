@@ -30,9 +30,10 @@
     return;
   }
   if (window.__kudoMiniAppPresentation) { window.__kudoMiniAppPresentation(); return; }
-  let ancestors = [], reported = '', fallback, fallbackUrl = '';
+  let ancestors = [], reported = '', launchReported = '', observedLoader, fallback, fallbackUrl = '';
   const clear = () => {
     document.documentElement.removeAttribute('data-kudo-mini-app');
+    document.documentElement.removeAttribute('data-kudo-mini-app-native-progress');
     for (const element of ancestors) element.classList.remove('kudo-mini-app-path');
     ancestors = [];
   };
@@ -44,12 +45,42 @@
     reported = key;
     window.KudoMiniApp.postMessage(JSON.stringify({ type: 'presentation', appId: id, url: location.href, active }));
   };
+  const reportLaunch = loader => {
+    const id = appId(new URL(location.href));
+    if (!id || !loader?.isConnected || !window.KudoMiniApp) return;
+    const loading = loader.querySelector('.mini-app-loader__loading');
+    const permission = !!document.querySelector('.mini-app-permission-dialog[open]');
+    const phase = permission ? 'permission' : loader.classList.contains('is-error') ? 'error' :
+      loader.classList.contains('is-loading') || loading && !loading.hidden ? 'loading' : 'ready';
+    const bar = loading?.querySelector('progress');
+    const fraction = phase === 'loading' && bar && !bar.hidden && bar.hasAttribute('value') && bar.max > 0 ? bar.value / bar.max : null;
+    const retry = loader.querySelector('[data-action="retry"]');
+    const data = { type: 'launch', appId: id, url: location.href, phase,
+      stage: loader.querySelector('[data-role="stage"]')?.textContent.trim().slice(0, 160) || '加载中…',
+      progress: Number.isFinite(fraction) ? Math.round(fraction * 1000) / 1000 : null,
+      detail: phase === 'error' ? loader.querySelector('[data-role="detail"]')?.textContent.trim().slice(0, 1024) || '' : '',
+      retryable: phase === 'error' && !!retry && !retry.hidden && !retry.disabled };
+    const encoded = JSON.stringify(data);
+    if (encoded === launchReported) return;
+    launchReported = encoded;
+    window.KudoMiniApp.postMessage(encoded);
+  };
+  const launchObserver = new MutationObserver(() => reportLaunch(observedLoader));
+  const followLoader = loader => {
+    if (loader !== observedLoader) {
+      launchObserver.disconnect(); observedLoader = loader; launchReported = '';
+      if (loader) launchObserver.observe(loader, { childList: true, subtree: true, characterData: true,
+        attributes: true, attributeFilter: ['class', 'hidden', 'value', 'max', 'disabled'] });
+    }
+    reportLaunch(loader);
+  };
   const update = () => {
     if (!document.documentElement) return;
     clear();
-    if (!appId(new URL(location.href))) { clearTimeout(fallback); fallback = undefined; reported = ''; return; }
+    if (!appId(new URL(location.href))) { clearTimeout(fallback); fallback = undefined; reported = ''; followLoader(null); return; }
     const loader = document.querySelector('.mini-app-page .mini-app-loader');
     if (!loader) {
+      followLoader(null);
       // SPA routes can remove the loader after pushState and after the load event.
       if (document.readyState === 'complete' && (!fallback || fallbackUrl !== location.href)) {
         clearTimeout(fallback);
@@ -72,6 +103,7 @@
         html[data-kudo-mini-app] .mini-app-loader{position:fixed!important;inset:0!important;z-index:1;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:var(--secondary,#fff)}
         html[data-kudo-mini-app] .mini-app-loader__viewport,html[data-kudo-mini-app] .mini-app-loader__frame,html[data-kudo-mini-app] .mini-app-frame-host{width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important}
         html[data-kudo-mini-app] .mini-app-loader__loading{position:absolute!important;inset:0!important;height:100%!important;min-height:0!important}
+        html[data-kudo-mini-app-native-progress] .mini-app-loader__loading{visibility:hidden!important;pointer-events:none!important}
         html[data-kudo-mini-app] .mini-app-loader__media{position:fixed;bottom:0;left:0;width:100%;max-height:50%;overflow:auto;z-index:2}
       `;
       document.documentElement.append(style);
@@ -80,10 +112,12 @@
       element.classList.add('kudo-mini-app-path'); ancestors.push(element);
     }
     document.documentElement.setAttribute('data-kudo-mini-app', '');
+    if (window.KudoMiniApp) document.documentElement.setAttribute('data-kudo-mini-app-native-progress', '');
     for (const frame of loader.querySelectorAll('.mini-app-frame-host')) {
       try { frameStyle(frame.contentDocument); } catch (_) {}
     }
     report(true);
+    followLoader(loader);
   };
   const settle = update;
   window.__kudoMiniAppPresentation = settle;
@@ -97,7 +131,7 @@
     history[method] = function(state, title, url) { const result = original.call(this, state, title, embedded(url)); settle(); return result; };
   }
   if (appId(new URL(location.href))) history.replaceState(history.state, '', embedded(location.href));
-  new MutationObserver(update).observe(document, { childList: true, subtree: true });
+  new MutationObserver(update).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
   addEventListener('popstate', settle);
   addEventListener('DOMContentLoaded', settle, { once: true });
   addEventListener('load', settle, { once: true });

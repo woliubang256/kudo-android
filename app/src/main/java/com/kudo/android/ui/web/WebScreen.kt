@@ -69,6 +69,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     var viewportHeight by remember(url) { mutableIntStateOf(0) }
     var webViewGeneration by remember(url) { mutableIntStateOf(0) }
     var runtimePresentation by remember(url) { mutableStateOf<Boolean?>(null) }
+    var launchState by remember(url) { mutableStateOf<MiniAppLaunchState?>(null) }
     val scrolled = viewportHeight > 0 && scrollY >= viewportHeight
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
     val currentBack by rememberUpdatedState(back)
@@ -76,6 +77,8 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val currentExternalLinkMode by rememberUpdatedState(externalLinkMode)
     val miniApp = MiniAppLocation.parse(currentUrl)
     val immersive = miniApp?.id != null && runtimePresentation != false
+    val visibleLaunch = launchState?.takeIf { immersive && it.url == currentUrl }
+    val launchCover = visibleLaunch?.coversPage == true
     val currentMiniApp by rememberUpdatedState(miniApp)
     val miniUi = remember(url) { MiniAppUiState() }
     val fullscreen = remember(url) { WebFullscreenState() }
@@ -143,7 +146,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             }
             message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall) }
             Box(Modifier.weight(1f).fillMaxWidth().then(if (immersive) Modifier else Modifier.navigationBarsPadding().imePadding())
-                .quickScrollTarget(scrolled = scrolled, scrollingUp = scrollingUp, enabled = error == null && !awaitingContent) {
+                .quickScrollTarget(scrolled = scrolled, scrollingUp = scrollingUp, enabled = error == null && !awaitingContent && !launchCover) {
                     page.view?.let { view ->
                         androidx.compose.animation.core.animate(view.scrollY.toFloat(), 0f) { value, _ -> view.scrollTo(0, value.toInt()) }
                     }
@@ -166,7 +169,8 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         settings.javaScriptCanOpenWindowsAutomatically = false
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
-                        page.bridge = MiniAppWebBridge(this, { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }, miniUi::request) { adapted ->
+                        page.bridge = MiniAppWebBridge(this, { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }, miniUi::request,
+                            launch = { launchState = it }) { adapted ->
                             runtimePresentation = adapted
                             val generation = navigationGeneration
                             postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {
@@ -198,7 +202,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 fullscreen.exit(); miniUi.reset(); page.bridge?.invalidate()
                                 scrollingUp = false
                                 navigationGeneration++
-                                currentUrl = value; runtimePresentation = null; progress = 0; awaitingContent = true; error = null; message = null
+                                currentUrl = value; runtimePresentation = null; launchState = null; progress = 0; awaitingContent = true; error = null; message = null
                             }
                             override fun doUpdateVisitedHistory(view: WebView, value: String, isReload: Boolean) {
                                 currentUrl = value
@@ -258,7 +262,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                     }
                 }, update = { view ->
                     view.setBackgroundColor(surfaceColor)
-                    view.importantForAccessibility = if (miniUi.showing) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                    view.importantForAccessibility = if (miniUi.showing || awaitingContent || launchCover) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                 }, onRelease = { view ->
                     if (page.view === view) { page.bridge?.close(); page.bridge = null; page.view = null }
                     fullscreen.exit()
@@ -267,12 +271,14 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                     CookieManager.getInstance().flush()
                 }, modifier = Modifier.fillMaxSize().clipToBounds().onSizeChanged { viewportHeight = it.height }.testTag("web-content"))
                 }
-                if (awaitingContent && error == null) Column(
-                    Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).testTag("web-loading"),
-                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                    horizontalAlignment = Alignment.CenterHorizontally) {
-                    CommunityLoadingIndicator()
-                    Text("加载中…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if ((awaitingContent || launchCover) && error == null) Box(Modifier.fillMaxSize()
+                    .then(if (awaitingContent) Modifier.testTag("web-loading") else Modifier)) {
+                    if (immersive) MiniAppLaunchContent(visibleLaunch?.takeIf { it.coversPage } ?: MiniAppLaunchState(currentUrl), ::retry)
+                    else Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+                        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally) {
+                        CommunityLoadingIndicator()
+                        Text("加载中…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 error?.let { text ->
                     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(24.dp).testTag("web-error"),
