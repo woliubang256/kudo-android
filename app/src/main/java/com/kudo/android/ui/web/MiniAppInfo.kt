@@ -19,6 +19,12 @@ internal data class MiniAppLocation(val id: String?) {
     }
 }
 
+internal fun miniAppEmbeddedUrl(value: String): String = if (MiniAppLocation.parse(value)?.id == null) value
+    else value.toHttpUrlOrNull()!!.newBuilder().setQueryParameter("embed_mode", "true").build().toString()
+
+internal fun miniAppPublicUrl(value: String): String = if (MiniAppLocation.parse(value)?.id == null) value
+    else value.toHttpUrlOrNull()!!.newBuilder().removeAllQueryParameters("embed_mode").build().toString()
+
 internal data class MiniAppInfo(
     val id: String, val name: String, val description: String, val iconUrl: String?,
     val version: String, val publisher: String,

@@ -40,22 +40,35 @@ internal class MiniAppClipboardRequest(
 internal class MiniAppWebBridge(
     private val view: WebView, private val active: () -> Boolean,
     private val clipboard: (MiniAppClipboardRequest) -> Unit,
+    private val presentation: (Boolean) -> Unit = {},
 ) {
     private val pendingInfo = mutableMapOf<String, Pair<String, CompletableDeferred<MiniAppInfo>>>()
     private var script: ScriptHandler? = null
+    private var presentationScript: ScriptHandler? = null
     private val supported = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
     private var closed = false
     private val compatibility by lazy {
         view.context.assets.open("mini-app-compat.js").bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
+    private val presentationCode by lazy {
+        view.context.assets.open("mini-app-presentation.js").bufferedReader(Charsets.UTF_8).use { it.readText() }
+    }
+    val canReportPresentation get() = supported
 
     init {
         if (supported) {
             WebViewCompat.addWebMessageListener(view, "KudoMiniApp", setOf("https://linux.do")) { _, message, origin, mainFrame, reply ->
-                if (closed || origin != Uri.parse("https://linux.do") || !active() || MiniAppLocation.parse(view.url.orEmpty()) == null)
+                val location = MiniAppLocation.parse(view.url.orEmpty())
+                if (closed || origin != Uri.parse("https://linux.do") || location == null)
                     return@addWebMessageListener
                 val data = message.data?.takeIf { it.length <= 32768 }?.let { runCatching { JSONObject(it) }.getOrNull() }
                     ?: return@addWebMessageListener
+                if (data.optString("type") == "presentation") {
+                    if (mainFrame && location.id != null && data.optString("appId") == location.id &&
+                        data.optString("url") == view.url && data.opt("active") is Boolean) presentation(data.getBoolean("active"))
+                    return@addWebMessageListener
+                }
+                if (!active()) return@addWebMessageListener
                 when (data.optString("type")) {
                     "info" -> if (mainFrame) {
                         val pending = pendingInfo.remove(data.optString("id")) ?: return@addWebMessageListener
@@ -78,9 +91,13 @@ internal class MiniAppWebBridge(
                 script = WebViewCompat.addDocumentStartJavaScript(view, compatibility, setOf("https://linux.do"))
             }
         }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            presentationScript = WebViewCompat.addDocumentStartJavaScript(view, presentationCode, setOf("https://linux.do"))
+        }
     }
 
     fun installCompatibility() {
+        if (!closed) view.evaluateJavascript(presentationCode, null)
         if (supported && !closed && MiniAppLocation.parse(view.url.orEmpty()) != null) {
             view.evaluateJavascript(compatibility, null)
         }
@@ -118,6 +135,7 @@ internal class MiniAppWebBridge(
         closed = true
         invalidate()
         script?.remove()
+        presentationScript?.remove()
         if (supported) WebViewCompat.removeWebMessageListener(view, "KudoMiniApp")
     }
 

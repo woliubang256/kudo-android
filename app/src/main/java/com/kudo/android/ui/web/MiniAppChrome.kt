@@ -55,20 +55,25 @@ internal fun MiniAppTopBar(title: String, back: () -> Unit, more: () -> Unit, cl
         CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
         Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = MaterialTheme.typography.titleMedium,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Box(Modifier.width(97.dp).height(48.dp), contentAlignment = Alignment.Center) {
-            Row(Modifier.fillMaxWidth().height(32.dp).clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
-                .testTag("mini-app-capsule"), verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.width(1.dp).height(18.dp).background(MaterialTheme.colorScheme.outlineVariant))
-                Spacer(Modifier.weight(1f))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MiniAppCapsuleButton(MiniAppIcons.More, "小程序更多", more)
-                Spacer(Modifier.width(1.dp))
-                MiniAppCapsuleButton(MiniAppIcons.Close, "关闭网页", close)
-            }
+        MiniAppCapsule(more, close)
+    }
+}
+
+@Composable
+internal fun MiniAppCapsule(more: () -> Unit, close: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.width(97.dp).height(48.dp), contentAlignment = Alignment.Center) {
+        Row(Modifier.fillMaxWidth().height(32.dp).clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+            .testTag("mini-app-capsule"), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.weight(1f))
+            Box(Modifier.width(1.dp).height(18.dp).background(MaterialTheme.colorScheme.outlineVariant))
+            Spacer(Modifier.weight(1f))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MiniAppCapsuleButton(MiniAppIcons.More, "小程序更多", more)
+            Spacer(Modifier.width(1.dp))
+            MiniAppCapsuleButton(MiniAppIcons.Close, "关闭网页", close)
         }
     }
 }

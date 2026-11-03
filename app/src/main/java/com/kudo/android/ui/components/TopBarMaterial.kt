@@ -37,12 +37,16 @@ internal val LocalToolbarActions = staticCompositionLocalOf { false }
 internal fun WebPageScaffold(
     header: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    headerVisible: Boolean = true,
+    contentModifier: Modifier = Modifier,
+    overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
     CompositionLocalProvider(LocalToolbarBackdrop provides null, LocalToolbarActions provides false) {
         Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().testTag("material-page-header")) { header() }
-            Box(Modifier.weight(1f).fillMaxWidth()) { content(PaddingValues()) }
+            if (headerVisible) Column(Modifier.fillMaxWidth().testTag("material-page-header")) { header() }
+            // The content remains at one composition site when a page enters/leaves immersive mode.
+            Box(Modifier.weight(1f).fillMaxWidth().then(contentModifier)) { content(PaddingValues()); overlay() }
         }
     }
 }

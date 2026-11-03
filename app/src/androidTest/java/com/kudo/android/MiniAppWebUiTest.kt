@@ -40,6 +40,7 @@ class MiniAppWebUiTest {
             if (visible) WebScreen(start, { visible = false }, external, { FixtureView(it).also { view -> web = view } })
             else Text("原生来源")
         } }
+        compose.waitUntil(10000) { js("document.readyState === 'complete'") == "true" }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("web-loading").fetchSemanticsNodes().isEmpty() }
         if (start.contains("/apps")) compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
     }
@@ -86,13 +87,77 @@ class MiniAppWebUiTest {
         compose.runOnIdle { assertTrue(web.destroyed) }
     }
 
+    @Test fun singleAppUsesTheWholeViewportWithoutANativeTitleOrBackRow() {
+        show()
+        compose.onNodeWithContentDescription("返回").assertDoesNotExist()
+        compose.onNodeWithText("测试应用", substring = false).assertDoesNotExist()
+        val viewport = compose.onNodeWithTag("mini-app-viewport").fetchSemanticsNode().boundsInRoot
+        val content = compose.onNodeWithTag("web-content").fetchSemanticsNode().boundsInRoot
+        assertEquals(viewport.top, content.top, 1f)
+        assertEquals(viewport.bottom, content.bottom, 1f)
+        val capsule = compose.onNodeWithTag("mini-app-capsule").fetchSemanticsNode().boundsInRoot
+        assertTrue(capsule.top >= viewport.top && capsule.right <= viewport.right)
+        assertEquals("true", js("location.search.includes('embed_mode=true')"))
+        assertEquals("true", js("document.documentElement.hasAttribute('data-kudo-mini-app')"))
+        assertEquals("true", js("getComputedStyle(document.querySelector('.d-header')).display === 'none'"))
+        assertEquals("true", js("(()=>{const r=document.querySelector('.mini-app-loader').getBoundingClientRect();return r.x===0&&r.y===0&&Math.abs(r.height-innerHeight)<1&&Math.abs(r.width-innerWidth)<1})()"))
+    }
+
+    @Test fun runtimeFramesFillTheViewportAndSitePermissionDialogsRemainVisible() {
+        show()
+        compose.waitUntil(5000) { js("!!document.querySelector('.mini-app-frame-host')?.contentDocument?.querySelector('iframe')") == "true" }
+        assertEquals("true", js("(()=>{const f=document.querySelector('.mini-app-frame-host'),r=f.contentDocument.querySelector('iframe');return Math.abs(f.clientHeight-innerHeight)<1&&Math.abs(r.clientHeight-innerHeight)<1&&Math.abs(r.clientWidth-innerWidth)<1})()"))
+        js("const dialog=document.createElement('dialog');dialog.className='mini-app-permission-dialog';dialog.textContent='官网权限确认';document.body.append(dialog);dialog.showModal()")
+        assertEquals("true", js("(()=>{const d=document.querySelector('dialog'),r=d.getBoundingClientRect();return d.open&&getComputedStyle(d).display!=='none'&&r.width>0&&r.height>0})()"))
+        js("document.querySelector('dialog').close()")
+    }
+
+    @Test fun leavingAppRestoresSiteAndNativeChromeWithoutReplacingWebView() {
+        var opened = ""
+        show(external = { opened = it })
+        val original = web
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("在浏览器打开").performClick()
+        compose.runOnIdle { assertEquals("https://linux.do/apps/$first?room=one#play", opened) }
+        // Chromium skips script-created history entries without a prior user gesture.
+        click("game")
+        js("history.pushState({}, '', '/t/topic/1');document.title='普通帖子'")
+        compose.waitUntil { compose.onAllNodesWithContentDescription("返回").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals("false", js("document.documentElement.hasAttribute('data-kudo-mini-app')"))
+        assertEquals("true", js("getComputedStyle(document.querySelector('.d-header')).display!=='none'"))
+        compose.onNodeWithTag("mini-app-capsule").assertDoesNotExist()
+        compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
+        val domHistory = js("JSON.stringify({path:location.pathname,length:history.length})")
+        compose.runOnIdle {
+            val history = web.copyBackForwardList()
+            assertTrue("DOM=$domHistory; native=${history.size}/${history.currentIndex}; url=${web.url}", web.canGoBack())
+        }
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-viewport").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { assertSame(original, web) }
+    }
+
+    @Test fun missingRuntimeAfterSpaNavigationRestoresReadableSiteChrome() {
+        show()
+        val original = web
+        js("history.pushState({}, '', '/apps/$second');setTimeout(()=>{document.querySelector('.mini-app-page').remove();document.querySelector('.d-header').textContent='登录或验证'},500)")
+        compose.waitUntil(6000) { compose.onAllNodesWithContentDescription("返回").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mini-app-viewport").assertDoesNotExist()
+        assertEquals("true", js("getComputedStyle(document.querySelector('.d-header')).display!=='none'"))
+        compose.runOnIdle { assertSame(original, web) }
+        js("const app=document.createElement('section');app.className='mini-app-page';app.innerHTML='<section class=mini-app-loader>应用</section>';document.body.append(app)")
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mini-app-viewport").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("返回").assertDoesNotExist()
+        compose.runOnIdle { assertSame(original, web) }
+    }
+
     @Test fun spaNavigationClearsOldInfoAndFailedInfoCanRetry() {
         show()
         about("2048")
         compose.onNodeWithText("关闭", substring = false).performClick()
         compose.waitForIdle()
         js("history.pushState({}, '', '/apps/$second');document.title='打砖块'")
-        compose.waitUntil { compose.onAllNodesWithText("打砖块").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil { js("location.pathname").contains(second) }
         failInfo = true
         compose.onNodeWithContentDescription("小程序更多").performClick()
         compose.onNodeWithText("关于", substring = false).performClick()
@@ -172,9 +237,11 @@ class MiniAppWebUiTest {
 
     @Test fun enteringAppsThroughSiteHistoryInstallsClipboardCompatibility() {
         show("https://linux.do/t/topic/1")
+        val original = web
         compose.onNodeWithTag("mini-app-capsule").assertDoesNotExist()
         js("history.pushState({}, '', '/apps/$first');document.title='2048'")
         compose.waitUntil { compose.onAllNodesWithTag("mini-app-capsule").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { assertSame("切换布局不能重建运行中的网页", original, web); assertFalse(original.destroyed) }
         js("navigator.clipboard.readText().catch(()=>{})")
         compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序读取剪贴板文字？").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("取消").performClick()
@@ -209,6 +276,9 @@ class MiniAppWebUiTest {
             super.setWebViewClient(object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                     val path = request.url.path.orEmpty()
+                    if (path == "/mini-app-api/frame-host") return WebResourceResponse("text/html", "UTF-8", 200, "OK",
+                        mapOf("Content-Security-Policy" to "style-src 'none'"),
+                        """<!doctype html><html><body><iframe sandbox="allow-scripts" height="640" srcdoc="应用运行时"></iframe></body></html>""".byteInputStream())
                     if (path.endsWith("/info")) {
                         requests.incrementAndGet()
                         val other = path.contains(second)
@@ -221,8 +291,11 @@ class MiniAppWebUiTest {
                     val html = if (request.url.host != "linux.do") """<html><script>parent.postMessage({bridge:typeof KudoMiniApp},'*')</script></html>"""
                     else """<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>测试应用</title>
                         <style>body{margin:0;background:#202020;color:white}button{display:block;height:48px;margin:16px}#game{background:#333;height:300px}</style></head>
-                        <body><script>window.frameResults=[];addEventListener('message',e=>{if(e.data&&e.data.bridge)frameResults.push(e.data)})</script>
+                        <body><header class="d-header">官网导航</header><script>window.frameResults=[];addEventListener('message',e=>{if(e.data&&e.data.bridge)frameResults.push(e.data)})</script>
+                        <main><section class="mini-app-page"><div class="mini-app-page__header">官网应用标题</div><section class="mini-app-loader"><div class="mini-app-loader__viewport"><div class="mini-app-loader__frame">
                         <div id="game"><button id="fullscreen" onclick="document.getElementById('game').requestFullscreen().catch(e=>window.fullError=e.name)">全屏游戏</button></div>
+                        <iframe class="mini-app-frame-host" src="/mini-app-api/frame-host" style="height:640px"></iframe>
+                        </div></div></section></section></main>
                         <iframe src="https://outside-fixture.test/frame"></iframe>
                         <iframe sandbox="allow-scripts" srcdoc="<script>parent.postMessage({bridge:typeof KudoMiniApp},'*')</script>"></iframe>
                         </body></html>"""

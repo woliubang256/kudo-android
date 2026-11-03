@@ -2,12 +2,24 @@ package com.kudo.android
 
 import com.kudo.android.ui.web.MiniAppInfo
 import com.kudo.android.ui.web.MiniAppLocation
+import com.kudo.android.ui.web.miniAppEmbeddedUrl
+import com.kudo.android.ui.web.miniAppPublicUrl
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
 class MiniAppInfoTest {
     private val id = "01a1966a-f4a0-7b43-ad9c-c46b7f0e0281"
+
+    @Test fun embeddingPreservesLaunchParametersAndSharingRemovesOnlyTheInternalFlag() {
+        val public = "https://linux.do/apps/$id?room=one&room=two#play"
+        assertEquals("https://linux.do/apps/$id?room=one&room=two&embed_mode=true#play", miniAppEmbeddedUrl(public))
+        assertEquals(public, miniAppPublicUrl(miniAppEmbeddedUrl(public)))
+        assertEquals(miniAppEmbeddedUrl(public), miniAppEmbeddedUrl(miniAppEmbeddedUrl(public)))
+        listOf("https://linux.do/apps", "https://linux.do/login?embed_mode=false", "https://other.test/apps/$id").forEach {
+            assertEquals(it, miniAppEmbeddedUrl(it)); assertEquals(it, miniAppPublicUrl(it))
+        }
+    }
 
     @Test fun onlyOfficialHttpsSquareAndExactAppPathsUseTheMiniAppShell() {
         assertEquals(MiniAppLocation(null), MiniAppLocation.parse("https://linux.do/apps/"))

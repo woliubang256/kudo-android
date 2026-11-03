@@ -68,12 +68,14 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     var scrollingUp by remember(url) { mutableStateOf(false) }
     var viewportHeight by remember(url) { mutableIntStateOf(0) }
     var webViewGeneration by remember(url) { mutableIntStateOf(0) }
+    var runtimePresentation by remember(url) { mutableStateOf<Boolean?>(null) }
     val scrolled = viewportHeight > 0 && scrollY >= viewportHeight
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
     val currentBack by rememberUpdatedState(back)
     val currentOpenApp by rememberUpdatedState(openApp)
     val currentExternalLinkMode by rememberUpdatedState(externalLinkMode)
     val miniApp = MiniAppLocation.parse(currentUrl)
+    val immersive = miniApp?.id != null && runtimePresentation != false
     val currentMiniApp by rememberUpdatedState(miniApp)
     val miniUi = remember(url) { MiniAppUiState() }
     val fullscreen = remember(url) { WebFullscreenState() }
@@ -124,7 +126,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     }
     Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().then(if (miniUi.showing) Modifier.clearAndSetSemantics {} else Modifier)) {
-    WebPageScaffold(modifier = Modifier.testTag("web-page"), header = {
+    val header: @Composable () -> Unit = {
         if (miniApp != null) MiniAppTopBar(if (miniApp.id == null) "应用广场" else title.takeUnless { it == "网页" }?.removeSuffix(" - LINUX DO") ?: "小程序",
             ::navigateBack, { miniUi.open(MiniAppPanel.MENU) }, ::close)
         else
@@ -133,13 +135,14 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             CommunityIconButton(Icons.Rounded.Language, "在浏览器打开", { openBrowser(currentUrl) })
             CommunityIconButton(Icons.Rounded.Close, "关闭网页", ::close)
         }
-    }) { padding ->
+    }
+    val content: @Composable (PaddingValues) -> Unit = { padding ->
         Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
-            Box(Modifier.fillMaxWidth().height(2.dp)) {
+            if (!immersive) Box(Modifier.fillMaxWidth().height(2.dp)) {
                 if (progress < 100) Box(Modifier.fillMaxWidth((progress / 100f).coerceIn(0f, 1f)).fillMaxHeight().background(LogoYellow))
             }
             message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall) }
-            Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().imePadding()
+            Box(Modifier.weight(1f).fillMaxWidth().then(if (immersive) Modifier else Modifier.navigationBarsPadding().imePadding())
                 .quickScrollTarget(scrolled = scrolled, scrollingUp = scrollingUp, enabled = error == null && !awaitingContent) {
                     page.view?.let { view ->
                         androidx.compose.animation.core.animate(view.scrollY.toFloat(), 0f) { value, _ -> view.scrollTo(0, value.toInt()) }
@@ -163,7 +166,15 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         settings.javaScriptCanOpenWindowsAutomatically = false
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
-                        page.bridge = MiniAppWebBridge(this, { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }, miniUi::request)
+                        page.bridge = MiniAppWebBridge(this, { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }, miniUi::request) { adapted ->
+                            runtimePresentation = adapted
+                            val generation = navigationGeneration
+                            postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {
+                                override fun onComplete(requestId: Long) {
+                                    if (page.view === this@apply && navigationGeneration == generation && error == null) awaitingContent = false
+                                }
+                            })
+                        }
                         webViewClient = object : WebViewClient() {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                                 val value = request.url.toString()
@@ -187,14 +198,14 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 fullscreen.exit(); miniUi.reset(); page.bridge?.invalidate()
                                 scrollingUp = false
                                 navigationGeneration++
-                                currentUrl = value; progress = 0; awaitingContent = true; error = null; message = null
+                                currentUrl = value; runtimePresentation = null; progress = 0; awaitingContent = true; error = null; message = null
                             }
                             override fun doUpdateVisitedHistory(view: WebView, value: String, isReload: Boolean) {
                                 currentUrl = value
                                 page.bridge?.installCompatibility()
                             }
                             override fun onPageCommitVisible(view: WebView, value: String) {
-                                if (view.url == value) awaitingContent = false
+                                if (view.url == value && MiniAppLocation.parse(value)?.id == null) awaitingContent = false
                             }
                             override fun onPageFinished(view: WebView, value: String) {
                                 CookieManager.getInstance().flush()
@@ -204,7 +215,8 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 val generation = navigationGeneration
                                 view.postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {
                                     override fun onComplete(requestId: Long) {
-                                        if (page.view === view && navigationGeneration == generation && error == null) awaitingContent = false
+                                        if (page.view === view && navigationGeneration == generation && error == null &&
+                                            (MiniAppLocation.parse(view.url.orEmpty())?.id == null || page.bridge?.canReportPresentation != true)) awaitingContent = false
                                     }
                                 })
                             }
@@ -242,7 +254,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                             if (y != oldY) scrollingUp = y < oldY
                             scrollY = y
                         }
-                        if (page.saved?.let { restoreState(it) } == null) loadUrl(url)
+                        if (page.saved?.let { restoreState(it) } == null) loadUrl(miniAppEmbeddedUrl(url))
                     }
                 }, update = { view ->
                     view.setBackgroundColor(surfaceColor)
@@ -276,11 +288,17 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             }
         }
     }
+    WebPageScaffold(header, Modifier.testTag("web-page"), headerVisible = !immersive,
+        contentModifier = if (immersive) Modifier.safeDrawingPadding().imePadding().testTag("mini-app-viewport") else Modifier,
+        overlay = {
+            if (immersive) MiniAppCapsule({ miniUi.open(MiniAppPanel.MENU) }, ::close,
+                Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 4.dp))
+        }, content = content)
     }
     MiniAppPanels(miniUi, miniApp, ::retry, {
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-            .setPrimaryClip(ClipData.newPlainText("小程序链接", currentUrl))
-    }, { openBrowser(currentUrl) })
+            .setPrimaryClip(ClipData.newPlainText("小程序链接", miniAppPublicUrl(currentUrl)))
+    }, { openBrowser(miniAppPublicUrl(currentUrl)) })
     }
 }
 
