@@ -23,6 +23,17 @@ class PostDisplayMetadataTest {
         }
     }
 
+    @Test fun deviceIndicatorUsesOnlyTheServerProvidedModelWithoutGuessing() {
+        val phone = post(8, """, "ios_device_name":"iPhone 14 Pro Max", "ios_device_type":"phone"""")
+        assertEquals(PostDevice("iPhone 14 Pro Max", "phone"), phone.device)
+        assertEquals(PostDevice("iPad Pro", "tablet"), post(9, """, "ios_device_name":"iPad Pro", "ios_device_type":"tablet"""").device)
+        assertEquals(PostDevice("Future Device", ""), post(9, """, "ios_device_name":" Future Device """").device)
+        for (value in listOf("null", "false", "123", "{}", "\"  \"")) {
+            assertNull(post(3, """, "ios_device_name":$value,"ios_device_type":"phone"""").device)
+        }
+        assertNull(post(3).device)
+    }
+
     @Test fun grantedBadgesTitleAndModeratorComeFromThePostNotTrustLevel() {
         val parsed = post(2, """, "user_title":"&lt;开发者&gt;", "moderator":true, "trust_level":4,
             "badges_granted":[{"badge":{"id":4,"name":"小芽","description":"初次参与","icon":"seedling","badge_type_id":3}},

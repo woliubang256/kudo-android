@@ -80,6 +80,7 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                     }
                 }
                 }
+                PostDeviceIndicator(post, enabled && !state.loading && !state.jumping)
                 PostUnreadIndicator(post, state)
                 val actions = LocalTopicActions.current
                 IconButton(onClick = { actions.openReply(detail.id, post, bookmark) }, enabled = enabled && !state.loading && post.id !in state.busy) {
@@ -341,6 +342,7 @@ internal fun ThreadPreviewPost(post: Post, enabled: Boolean, image: (String) -> 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(authorLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                PostDeviceIndicator(post, enabled && !state.loading && !state.jumping)
                 Text("#${post.number}", Modifier.testTag("thread-floor-${post.number}"), maxLines = 1,
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 IconButton(onClick = { navigate(post.number) }, enabled = enabled,

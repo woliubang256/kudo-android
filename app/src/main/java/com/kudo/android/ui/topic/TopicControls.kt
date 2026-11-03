@@ -89,6 +89,7 @@ internal fun TopicTopBar(
             }
         }
         }
+        state.detail?.originalPost?.let { PostDeviceIndicator(it, enabled && !state.loading && !state.jumping) }
         if (author != null && author.id != state.viewerId &&
             (state.viewerId == null || profile == null || profile.canFollow || profile.isFollowed)) {
             val canClick = enabled && !state.loading && !state.followBusy && (state.viewerId == null || !state.authorLoading)

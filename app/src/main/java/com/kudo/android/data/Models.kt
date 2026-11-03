@@ -60,6 +60,7 @@ data class Post(
     val postType: Int = 1, val actionCode: String = "", val actionWho: String = "",
     val canAcceptSolution: Boolean = false, val canUnacceptSolution: Boolean = false,
     val replyToUser: Member? = null,
+    val device: PostDevice? = null,
 ) {
     val activeReaction: String? get() = currentReaction?.id ?: "heart".takeIf { liked }
     val canReact: Boolean get() = if (activeReaction != null) currentReaction?.canUndo ?: canUndoLike else canLike
@@ -69,6 +70,7 @@ data class Post(
     fun editableBy(viewerId: Int?): Boolean = viewerId != null && author.id == viewerId && canEdit
 }
 data class PostReaction(val id: String, val count: Int)
+data class PostDevice(val name: String, val type: String)
 data class UserReaction(val id: String, val canUndo: Boolean)
 data class TopicSolution(
     val postNumber: Int, val username: String = "", val name: String = "", val excerpt: String = "",
@@ -208,6 +210,9 @@ object DiscourseParser {
             replyToUser = json.optJSONObject("reply_to_user")?.takeIf {
                 it.positiveInt("id") != null && it.stringField("username").isNotBlank()
             }?.let { member(it, avatarDetailsLoaded = true) },
+            device = json.stringField("ios_device_name").takeIf(String::isNotBlank)?.let {
+                PostDevice(it, json.stringField("ios_device_type"))
+            },
             canAcceptSolution = json.optBoolean("can_accept_answer"), canUnacceptSolution = json.optBoolean("can_unaccept_answer"))
     }
 
