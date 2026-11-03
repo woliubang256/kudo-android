@@ -37,6 +37,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kudo.android.data.*
 import com.kudo.android.ui.account.*
+import com.kudo.android.ui.apps.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.editor.*
 import com.kudo.android.ui.feed.*
@@ -224,7 +225,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                     3 -> NotificationsScreen(account, ::login, ::topic, ::openWebPage,
                                         { nav.navigate("personal/${AccountDestination.MESSAGES.name}") },
                                         badges = { badgeId -> nav.navigate("account-records/${AccountDestination.BADGES.name}?badge=${badgeId ?: 0}") }, profile = ::user)
-                                    4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") }, imageLibrary = { nav.navigate("image-library") }, apps = { openWebPage("https://linux.do/apps") },
+                                    4 -> ProfileScreen(account.user, ::login, { nav.navigate("settings") }, { nav.navigate("bookmarks") }, { account.user?.username?.let(::user) }, repository = app.repository, about = { nav.navigate("about") }, downloads = { nav.navigate("downloads") }, imageLibrary = { nav.navigate("image-library") }, apps = { nav.navigate("apps") { launchSingleTop = true } },
                                         destination = { destination ->
                                             when (destination) {
                                                 AccountDestination.BOOKMARKS -> nav.navigate("bookmarks")
@@ -374,6 +375,12 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                                 { openWebPage("https://linux.do/chat/c/-/$id") }, ::openLink, ::user,
                                 read = { if (account.user?.id == member.id) account.chatRead(id, it) })
                         } ?: MaterialPagePlaceholder("聊天", { nav.popBackStack() }) { EmptyState("请先登录", "登录后查看聊天。", actionLabel = "登录", action = ::login) }
+                    }
+                    composable("apps") {
+                        val vm = model("app-square-${account.user?.id}") { AppSquareViewModel(app.repository::miniApps) }
+                        val state by vm.state.collectAsStateWithLifecycle()
+                        key(vm) { AppSquareScreen(state, vm::search, vm::retry, vm::more, { nav.popBackStack() }, ::login,
+                            ::openWebPage, initialGrid = app.settings.appSquareGrid(), saveGrid = app.settings::saveAppSquareGrid) }
                     }
                     composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) { entry ->
                         WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,

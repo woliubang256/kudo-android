@@ -32,6 +32,7 @@ class DeepLinkUiTest {
                 composable("root") { Text("首页") }
                 composable("unavailable") { Text("内容不存在或暂无权限") }
                 composable("trust") { Text("原生等级要求") }
+                composable("apps") { Text("原生应用广场") }
                 composable("user/{username}") { Text("用户：${it.arguments!!.getString("username")}") }
                 composable("category/{id}", arguments = listOf(navArgument("id") { type = NavType.IntType })) {
                     Text("分类：${it.arguments!!.getInt("id")}")
@@ -53,6 +54,20 @@ class DeepLinkUiTest {
     }
 
     private fun open(url: String) { compose.runOnIdle { sequence++; incoming = url } }
+
+    @Test fun appDirectoryLinksUseNativeDirectoryWhileIndividualAppsKeepTheirWebUrl() {
+        show()
+        compose.runOnIdle { nav.openContentLink("/apps", {}) }
+        compose.onNodeWithText("原生应用广场").assertIsDisplayed()
+        val app = "https://linux.do/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281?room=one#play"
+        compose.runOnIdle { nav.openWebPage(app) }
+        compose.onNodeWithText("网页：$app").assertIsDisplayed()
+        compose.runOnIdle { nav.popBackStack() }
+        compose.onNodeWithText("原生应用广场").assertIsDisplayed()
+        compose.runOnIdle { nav.popBackStack() }
+        open("https://linux.do/apps/")
+        compose.onNodeWithText("原生应用广场").assertIsDisplayed()
+    }
 
     @Test fun namedTagRoutesPreserveReadableNamesWhileExternalLinksStillMatchWithoutName() {
         show()

@@ -30,6 +30,8 @@ class AppSettings(context: Context) {
         prefs.getBoolean("blur_nsfw_images", true),
     ))
     val display = _display.asStateFlow()
+    fun appSquareGrid(): Boolean = prefs.getBoolean("app_square_grid", true)
+    fun saveAppSquareGrid(grid: Boolean) { prefs.edit().putBoolean("app_square_grid", grid).apply() }
     fun update(value: DisplaySettings) {
         _display.value = value
         prefs.edit().putString("theme", value.theme.name).putString("glass", value.glass.name).putFloat("font_scale", value.fontScale).putString("topic_list_style", value.topicListStyle.name).putBoolean("show_signatures", value.showSignatures).putString("navigation_action", value.navigationAction.name).putBoolean("show_scroll_to_top", value.showScrollToTop).putBoolean("compact_pinned_topics", value.compactPinnedTopics).putString("external_link_mode", value.externalLinkMode.name).putBoolean("blur_nsfw_images", value.blurNsfwImages).apply()

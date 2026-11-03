@@ -6,6 +6,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LinuxDoLinkTest {
+    @Test fun onlyTheExactAppDirectoryUsesNativeRouting() {
+        assertEquals(Apps, LinuxDoLink.parseContent("/apps/?q=2048"))
+        assertEquals(Apps, LinuxDoLink.parse("https://linux.do/apps"))
+        assertNull(LinuxDoLink.parseContent("/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281?room=one#play"))
+        assertNull(LinuxDoLink.parseContent("https://other.test/apps"))
+    }
     @Test fun connectContentLinksHaveANativeDestinationButOtherOriginsDoNot() {
         listOf("https://connect.linux.do", "https://CONNECT.LINUX.DO:443/?from=topic#level",
             "http://connect.linux.do:80/", "//connect.linux.do/help", "https://connect.linux.do/t/123").forEach {

@@ -10,6 +10,9 @@ internal fun NavHostController.openWebPage(value: String, invalid: () -> Unit = 
     if (nativeConnect && LinuxDoLink.parseContent(url) == LinuxDoDestination.Trust) {
         return openLinuxDoDestination(LinuxDoDestination.Trust, {})
     }
+    if (LinuxDoLink.parseContent(url) == LinuxDoDestination.Apps) {
+        return openLinuxDoDestination(LinuxDoDestination.Apps, {})
+    }
     navigate("web?url=${Uri.encode(url)}")
 }
 
@@ -27,6 +30,7 @@ internal fun NavHostController.openLinuxDoDestination(target: LinuxDoDestination
         is LinuxDoDestination.Tag -> navigate("tag/${Uri.encode(target.slug)}?id=${target.id ?: 0}") { launchSingleTop = true }
         LinuxDoDestination.Unavailable -> navigate("unavailable") { launchSingleTop = true }
         LinuxDoDestination.Trust -> navigate("trust") { launchSingleTop = true }
+        LinuxDoDestination.Apps -> navigate("apps") { launchSingleTop = true }
         LinuxDoDestination.Home -> { home(); popBackStack("root", false) }
     }
 }

@@ -10,6 +10,7 @@ sealed interface LinuxDoDestination {
     data object Home : LinuxDoDestination
     data object Unavailable : LinuxDoDestination
     data object Trust : LinuxDoDestination
+    data object Apps : LinuxDoDestination
 }
 
 object LinuxDoLink {
@@ -31,6 +32,7 @@ object LinuxDoLink {
             url.port != if (url.isHttps) 443 else 80) return null
         val path = url.pathSegments.dropLastWhile { it.isEmpty() }
         return when (path.firstOrNull()) {
+            "apps" -> if (path.size == 1) LinuxDoDestination.Apps else LinuxDoDestination.Home
             "404" -> if (path.size == 1) LinuxDoDestination.Unavailable else LinuxDoDestination.Home
             "t" -> {
                 val offset = if (path.getOrNull(1)?.toIntOrNull() != null) 1 else 2
