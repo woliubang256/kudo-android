@@ -8,7 +8,7 @@ Status: implemented
 
 ## Decision
 
-访客和登录用户均在设置上方显示无副标题的应用广场入口。官网 /apps 及其应用路径使用普通材质的固定胶囊，更多包括刷新、复制链接、浏览器打开和关于；关于展示官网实际提供的图标、名称、简介、版本和发布人，读取失败可重试，不虚构字段。关闭退出当前网页容器，返回优先关闭弹层、退出全屏、回退网页历史。
+访客和登录用户均在设置上方显示无副标题的应用广场入口。官网 /apps 及其应用路径使用普通材质的固定胶囊，更多以四列宫格展示重新进入小程序、复制链接、浏览器打开和关于；重新进入复用当前应用的重新加载，保留链接启动参数和原生来源。网页广场的兼容入口保留刷新网页文案，不提供关于。关于展示官网实际提供的图标、名称、简介、版本和发布人，读取失败可重试，不虚构字段。关闭退出当前网页容器，返回优先关闭弹层、退出全屏、回退网页历史。
 
 目录入口的 H5 决策由[原生应用广场](2026-11-04-native-app-square.md)部分替代；本篇继续约束单个小程序运行页，以及已在 WebView 中进入 /apps 的网页连续浏览。
 
@@ -38,6 +38,7 @@ Status: implemented
 
 ## Testing
 
+- 四列更多宫格与重新进入用例验证跨应用后的当前 URL、query/hash、原 WebView 与原生来源均保留，关于和关闭正常（2 tests），记录为 `artifacts/mini-app-menu-grid-device.txt`；截图为 `artifacts/mini-app-menu-grid.png`。
 - 发布人头像扩展经官网访客接口核对：author 实际含 id、username、name、avatar_template、animated_avatar，本地读取静态 avatar_template。5 项 MiniAppInfoTest 通过；关于与线上两款小程序探针通过（2 tests，17.892 秒），记录为 `artifacts/mini-app-publisher-unit.txt` 与 `artifacts/mini-app-publisher-fixed-device.txt`。新增头像用例先复现 SubcomposeAsyncImage 在加载/失败内容时丢失无障碍描述，改为外层 semantics 后通过，失败记录为 `artifacts/mini-app-publisher-device.txt`。
 - MiniAppInfoTest 验证官网 HTTPS 路径、query/hash 保留、服务器字段、错误身份及不安全图标过滤。
 - AppSquareEntryUiTest 验证访客、登录和退出后的入口都在设置上方且无登录拦截。MiniAppWebUiTest 使用真实 WebView 与离线官网响应，覆盖关于字段、跨应用切换、失败重试、真正全屏和返回顺序、关闭释放、剪贴板确认及来源隔离、六种主题材质组合与 history 补装、后台暂停。

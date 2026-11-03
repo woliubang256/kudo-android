@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import com.kudo.android.data.GlassMode
@@ -102,11 +103,12 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
     }, state::dismiss, backdrop = null, glass = GlassMode.TRANSLUCENT,
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 16.dp)) {
         when (state.panel) {
-            MiniAppPanel.MENU -> {
-                MiniAppMenuRow(Icons.Rounded.Refresh, "刷新网页") { state.dismiss(); refresh() }
-                MiniAppMenuRow(Icons.Rounded.Link, "复制链接") { state.dismiss(); copyLink() }
-                MiniAppMenuRow(Icons.Rounded.Language, "在浏览器打开") { state.dismiss(); browser() }
-                if (location?.id != null) MiniAppMenuRow(Icons.Rounded.Info, "关于") { state.open(MiniAppPanel.ABOUT) }
+            MiniAppPanel.MENU -> Row(Modifier.fillMaxWidth().testTag("mini-app-menu-grid"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                MiniAppMenuButton(Icons.Rounded.Refresh, if (location?.id != null) "重新进入小程序" else "刷新网页", Modifier.weight(1f)) { state.dismiss(); refresh() }
+                MiniAppMenuButton(Icons.Rounded.Link, "复制链接", Modifier.weight(1f)) { state.dismiss(); copyLink() }
+                MiniAppMenuButton(Icons.Rounded.Language, "在浏览器打开", Modifier.weight(1f)) { state.dismiss(); browser() }
+                if (location?.id != null) MiniAppMenuButton(Icons.Rounded.Info, "关于", Modifier.weight(1f)) { state.open(MiniAppPanel.ABOUT) }
+                else Spacer(Modifier.weight(1f))
             }
             MiniAppPanel.ABOUT -> {
                 if (state.loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CommunityLoadingIndicator() }
@@ -158,12 +160,16 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
 }
 
 @Composable
-private fun MiniAppMenuRow(icon: ImageVector, title: String, click: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = click)
-        .heightIn(min = 48.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(title, style = MaterialTheme.typography.bodyLarge)
+private fun MiniAppMenuButton(icon: ImageVector, title: String, modifier: Modifier = Modifier, click: () -> Unit) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = click)
+        .padding(horizontal = 2.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Box(Modifier.fillMaxWidth().heightIn(min = 36.dp), contentAlignment = Alignment.TopCenter) {
+            Text(title, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

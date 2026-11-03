@@ -62,6 +62,7 @@ class MiniAppWebUiTest {
 
     private fun about(name: String) {
         compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithTag("mini-app-menu-grid").assertIsDisplayed()
         compose.onNodeWithText("关于", substring = false).performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("mini-app-about").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(name).assertIsDisplayed()
@@ -102,6 +103,23 @@ class MiniAppWebUiTest {
         assertEquals("true", js("document.documentElement.hasAttribute('data-kudo-mini-app')"))
         assertEquals("true", js("getComputedStyle(document.querySelector('.d-header')).display === 'none'"))
         assertEquals("true", js("(()=>{const r=document.querySelector('.mini-app-loader').getBoundingClientRect();return r.x===0&&r.y===0&&Math.abs(r.height-innerHeight)<1&&Math.abs(r.width-innerWidth)<1})()"))
+    }
+
+    @Test fun reenterReloadsTheCurrentAppAndKeepsTheNativeSourceAndLaunchParameters() {
+        show()
+        val original = web
+        js("history.pushState({}, '', '/apps/$second?room=two#play');window.gameMarker='old game'")
+        compose.waitUntil { js("location.pathname").contains(second) }
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithTag("mini-app-menu-grid").assertIsDisplayed()
+        compose.onNodeWithText("重新进入小程序").assertHeightIsAtLeast(48.dp)
+        capture("mini-app-menu-grid.png")
+        compose.onNodeWithText("重新进入小程序").performClick()
+        compose.waitUntil(10000) { js("typeof window.gameMarker === 'undefined' && document.readyState === 'complete'") == "true" }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("web-loading").fetchSemanticsNodes().isEmpty() }
+        assertEquals("true", js("location.pathname==='/apps/$second'&&new URLSearchParams(location.search).get('room')==='two'&&location.hash==='#play'"))
+        compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
+        compose.onNodeWithText("原生来源").assertDoesNotExist()
     }
 
     @Test fun runtimeFramesFillTheViewportAndSitePermissionDialogsRemainVisible() {
