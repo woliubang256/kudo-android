@@ -222,6 +222,44 @@ class TopicFloorNavigationTest {
         }
     }
 
+    @Test fun repliesToAnUnavailableFloorNotifyOnEveryAttemptWithoutChangingTheWindow() = runTest {
+        val replies = listOf(11, 12).joinToString(",") { number ->
+            JSONObject(post(number, 10)).put("reply_to_user", JSONObject("""{"id":10,"username":"pub4hs"}""")).toString()
+        }
+        val visible = """{"id":5,"title":"回复目标缺失","highest_post_number":12,"post_stream":{"stream":[1,11,12],"posts":[${post(1)},$replies]}}"""
+        withTopic({ request -> when (request.requestUrl!!.encodedPath) {
+            "/t/5.json", "/t/5/10.json" -> MockResponse().setBody(visible)
+            else -> null
+        } }) { vm, _ ->
+            val initial = vm.await { !it.loading && !it.contextLoading && it.contextError != null }
+            assertEquals(listOf(11, 12), initial.detail!!.posts.filter { it.replyTo == 10 }.map(Post::number))
+            for (number in listOf(11, 12)) {
+                vm.jumpTo(initial.detail.posts.first { it.number == number }.replyTo!!)
+                val failed = vm.await { !it.jumping && it.jumpError != null }
+                assertEquals(initial.detail, failed.detail)
+                assertEquals(initial.targetNumber, failed.targetNumber)
+                assertEquals(initial.targetRevision, failed.targetRevision)
+                assertEquals("此楼层不存在或暂不可访问", withTimeout(1_500) { vm.events.first() })
+            }
+        }
+    }
+
+    @Test fun forbiddenAndNetworkJumpFailuresAlsoNotifyOutsideTheFloorEditor() = runTest {
+        withTopic({ request -> when (request.requestUrl!!.encodedPath) {
+            "/t/5/80.json" -> MockResponse().setResponseCode(403).setBody("""{"errors":["不能访问"]}""")
+            "/t/5/100.json" -> MockResponse().setResponseCode(503).setBody("{}")
+            else -> null
+        } }) { vm, _ ->
+            val initial = vm.await { !it.loading }
+            for (number in listOf(80, 100)) {
+                vm.jumpTo(number)
+                val failed = vm.await { !it.jumping && it.jumpError != null }
+                assertEquals(initial.detail, failed.detail)
+                assertEquals(failed.jumpError, withTimeout(1_500) { vm.events.first() })
+            }
+        }
+    }
+
     @Test fun aSupersededJumpCannotReplaceTheLatestTarget() = runTest {
         val first = CompletableDeferred<ControlledCall>()
         val latest = CompletableDeferred<ControlledCall>()
@@ -251,6 +289,7 @@ class TopicFloorNavigationTest {
             assertEquals(100, vm.state.value.targetNumber)
             assertEquals(revision, vm.state.value.targetRevision)
             assertFalse(vm.state.value.allPosts.any { it.number == 80 })
+            assertNull("cancelled jumps must not display a failure message", withTimeoutOrNull(100) { vm.events.first() })
         }
     }
 

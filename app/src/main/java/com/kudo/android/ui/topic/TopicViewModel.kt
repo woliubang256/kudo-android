@@ -348,7 +348,11 @@ class TopicViewModel(
                 }
                 resolveContext()
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (token == jumpGeneration) _state.update { it.copy(jumping = false, jumpError = e.message ?: "跳转失败，请重试") } }
+            catch (e: Exception) { if (token == jumpGeneration) {
+                val message = e.message ?: "跳转失败，请重试"
+                _state.update { it.copy(jumping = false, jumpError = message) }
+                messages.trySend(message)
+            } }
         }
     }
 
