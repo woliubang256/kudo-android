@@ -12,6 +12,8 @@ Status: implemented
 
 目录入口的 H5 决策由[原生应用广场](2026-11-04-native-app-square.md)部分替代；本篇继续约束单个小程序运行页，以及已在 WebView 中进入 /apps 的网页连续浏览。
 
+胶囊可见高度为 32dp，更多与关闭各保留 48dp 触控区，按压反馈限制在 32dp 可见表面内。图标使用用户提供的原始 SVG 路径：更多为中大侧小三点，关闭为圆环加实心点，颜色跟随主题。MiniAppWebUiTest 同时验证胶囊视觉高度与两枚按钮的触控尺寸，微调后的 7 项运行页回归通过，记录在 `artifacts/native-apps-refined-device.txt`；实机胶囊见 `artifacts/mini-app-capsule-dark.png`。
+
 加载官网宿主页及其隔离 iframe，继续复用 CookieManager、JavaScript、DOM 存储及默认第三方 Cookie 限制。不下载运行用户提供的开发 ZIP，不复制平台 SDK、鉴权或审核权限；文档仅作为协议参考。全屏保留原生胶囊，返回先退出弹层再退出全屏；切到后台暂停可访问的媒体、隐藏网页并取消剪贴板确认，关闭释放 WebView 和原生桥。保留 HTTPS、CORS 与平台资源校验。
 
 关于通过官网会话在页面内请求 `/mini-app-api/public/<app-id>/info`，只读取 `app` 的公开字段，不在原生层复制发布配置或令牌。响应必须与当前请求 ID 对应，导航取消在途请求。缺失的可选字段省略、图标失败显示通用应用图标；网络错误显示重试，不猜测版本或发布人。

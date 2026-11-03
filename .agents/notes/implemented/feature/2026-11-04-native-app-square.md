@@ -40,7 +40,7 @@ H5 运行页仍使用普通材质，不把网页重新接进玻璃采样。胶�
 - 34 项相关真机回归通过，包含目录、入口、深链和 WebView 普通材质及小程序原有能力，输出为 `artifacts/native-apps-final-device.txt`；目录、搜索及胶囊截图用于核对中文可读与真实内容采样，不采样运行中的 WebView。最后的搜索框对比度与胶囊反馈微调后，10 项受影响界面用例再次通过，见 `artifacts/native-apps-refined-device.txt`。
 - AppSquareLiveProbeTest 已通过手机实际会话与网络链路加载线上目录，输入 2048 后返回一个对应应用，见 `artifacts/native-apps-live-device.txt`、`artifacts/apps-live-result.txt`。截图另检查布局切换后的界面已完成组合，避免把网络返回与实际显示混为一谈。
 - 设备 RMX2202 / Android 13 / WebView 156，保持开发版 0.3.1-dev / 3002；覆盖前核对版本和 SHA-256 一致，使用 `adb install -r` 及 `adb install -r -t`，未清理用户数据。构建、安装前检查改动的 UTF-8 中文。
-- Debug / AndroidTest 构建与 Lint 均通过，Lint 为 0 errors / 67 warnings / 1 hint；笔记门禁通过。搜索框只裁切内部文字与操作，不裁切玻璃阴影，避免展开后出现矩形阴影边界。
+- Debug / AndroidTest 构建与 Lint 均通过，Lint 为 0 errors / 67 warnings / 1 hint；笔记门禁通过。搜索框只裁切内部文字与操作，不裁切玻璃阴影，避免展开后出现矩形阴影边界；该微调后 3 项目录界面用例再次通过，见 `artifacts/native-apps-final-polish-device.txt`。
 
 ## Consequences
 

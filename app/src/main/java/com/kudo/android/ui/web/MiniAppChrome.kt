@@ -4,6 +4,8 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,12 +55,32 @@ internal fun MiniAppTopBar(title: String, back: () -> Unit, more: () -> Unit, cl
         CommunityIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
         Text(title, Modifier.weight(1f).padding(horizontal = 8.dp), style = MaterialTheme.typography.titleMedium,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Row(Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
-            .testTag("mini-app-capsule"), verticalAlignment = Alignment.CenterVertically) {
-            CommunityIconButton(Icons.Rounded.MoreHoriz, "小程序更多", more)
-            Box(Modifier.width(1.dp).height(18.dp).background(MaterialTheme.colorScheme.outlineVariant))
-            CommunityIconButton(Icons.Rounded.Close, "关闭网页", close)
+        Box(Modifier.width(97.dp).height(48.dp), contentAlignment = Alignment.Center) {
+            Row(Modifier.fillMaxWidth().height(32.dp).clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+                .testTag("mini-app-capsule"), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.width(1.dp).height(18.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                Spacer(Modifier.weight(1f))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MiniAppCapsuleButton(MiniAppIcons.More, "小程序更多", more)
+                Spacer(Modifier.width(1.dp))
+                MiniAppCapsuleButton(MiniAppIcons.Close, "关闭网页", close)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiniAppCapsuleButton(icon: ImageVector, description: String, click: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(Modifier.size(48.dp).clickable(interactionSource = interaction, indication = null,
+        role = Role.Button, onClick = click), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(48.dp).height(32.dp).clip(RoundedCornerShape(50))
+            .indication(interaction, ripple()), contentAlignment = Alignment.Center) {
+            Icon(icon, description, Modifier.size(24.dp))
         }
     }
 }

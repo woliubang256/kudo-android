@@ -68,8 +68,11 @@ class MiniAppWebUiTest {
 
     @Test fun capsuleAboutUsesRealFieldsAndClosingPreservesTheSource() {
         show()
+        compose.onNodeWithTag("mini-app-capsule").assertHeightIsEqualTo(32.dp)
         compose.onNodeWithContentDescription("刷新网页").assertDoesNotExist()
         compose.onNodeWithContentDescription("小程序更多").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithContentDescription("关闭网页").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+        capture("mini-app-capsule-dark.png")
         about("2048")
         compose.onNodeWithContentDescription("应用图标").assertIsDisplayed()
         compose.onNodeWithText("2048 小游戏").assertIsDisplayed()
