@@ -59,6 +59,7 @@ data class Post(
     val canEdit: Boolean = false,
     val postType: Int = 1, val actionCode: String = "", val actionWho: String = "",
     val canAcceptSolution: Boolean = false, val canUnacceptSolution: Boolean = false,
+    val replyToUser: Member? = null,
 ) {
     val activeReaction: String? get() = currentReaction?.id ?: "heart".takeIf { liked }
     val canReact: Boolean get() = if (activeReaction != null) currentReaction?.canUndo ?: canUndoLike else canLike
@@ -204,6 +205,9 @@ object DiscourseParser {
             polls = json.optJSONArray("polls").objects().map(::parsePoll).filter { it.name.isNotEmpty() },
             pollVotes = json.optJSONObject("polls_votes")?.let { votes -> votes.keys().asSequence().associateWith { votes.optJSONArray(it).strings() } }.orEmpty(),
             isSolution = json.optBoolean("accepted_answer"), canEdit = json.optBoolean("can_edit"),
+            replyToUser = json.optJSONObject("reply_to_user")?.takeIf {
+                it.positiveInt("id") != null && it.stringField("username").isNotBlank()
+            }?.let { member(it, avatarDetailsLoaded = true) },
             canAcceptSolution = json.optBoolean("can_accept_answer"), canUnacceptSolution = json.optBoolean("can_unaccept_answer"))
     }
 

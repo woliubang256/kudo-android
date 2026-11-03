@@ -10,6 +10,19 @@ class PostDisplayMetadataTest {
     private fun post(number: Int, extra: String = "") = DiscourseParser.post(JSONObject(
         """{"id":$number,"post_number":$number,"user_id":8,"username":"member"$extra}"""))
 
+    @Test fun replyRecipientComesFromTheExplicitPostObjectIncludingAcrossPages() {
+        val parsed = post(88, """, "reply_to_post_number":8,
+            "reply_to_user":{"id":1,"username":"neo","name":"Neo","avatar_template":"/user_avatar/linux.do/neo/{size}/136369_2.png"}""")
+        assertEquals(8, parsed.replyTo)
+        assertEquals("neo", parsed.replyToUser?.username)
+        assertEquals("Neo", parsed.replyToUser?.displayName)
+        assertTrue(parsed.replyToUser!!.avatarDetailsLoaded)
+        assertNull(post(3).replyToUser)
+        listOf("null", "false", "{}", "{\"id\":0,\"username\":\"neo\"}", "{\"id\":1}").forEach {
+            assertNull(post(3, """, "reply_to_user":$it""").replyToUser)
+        }
+    }
+
     @Test fun grantedBadgesTitleAndModeratorComeFromThePostNotTrustLevel() {
         val parsed = post(2, """, "user_title":"&lt;开发者&gt;", "moderator":true, "trust_level":4,
             "badges_granted":[{"badge":{"id":4,"name":"小芽","description":"初次参与","icon":"seedling","badge_type_id":3}},
