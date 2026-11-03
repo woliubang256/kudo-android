@@ -39,12 +39,13 @@ class NestedReplyUiTest {
         compose.onNodeWithText("回复 #2").assertDoesNotExist()
         capture("nested-reply-preview.png")
         compose.onNodeWithTag("reply-preview-post-3").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("3 / 7").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
         compose.onNodeWithTag("post-3").assertIsDisplayed()
         capture("nested-reply-original.png")
-        compose.onNode(hasContentDescription("更多操作") and hasAnyAncestor(hasTestTag("post-3"))).performClick()
+        compose.onNode(hasContentDescription("更多操作") and hasAnyAncestor(hasTestTag("post-3"))).performScrollTo().performClick()
         compose.onNodeWithText("收藏").performClick()
-        compose.onNode(hasText("回复") and hasClickAction() and hasAnyAncestor(hasTestTag("post-3"))).performClick()
+        compose.onNodeWithTag("post-reply-3").performScrollTo().performClick()
         compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
         compose.runOnIdle { assertEquals(3, replied); assertEquals(3, saved) }
     }

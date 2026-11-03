@@ -79,14 +79,10 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                     }
                 }
                 }
-                PostDeviceIndicator(post, enabled && !state.loading && !state.jumping)
                 PostUnreadIndicator(post, state)
                 PostReplyRecipient(post, state.allPosts.ifEmpty { detail.posts }, detail.author,
                     enabled && !state.loading && !state.jumping, navigate, Modifier.weight(1f))
-                val actions = LocalTopicActions.current
-                IconButton(onClick = { actions.openReply(detail.id, post, bookmark) }, enabled = enabled && !state.loading && post.id !in state.busy) {
-                    Icon(Icons.Rounded.MoreHoriz, "更多操作", Modifier.size(20.dp))
-                }
+                PostDeviceIndicator(post, enabled && !state.loading && !state.jumping)
             }
             PostReadingContent(post.number, enabled && !state.loading) {
                 CompositionLocalProvider(LocalArticleHeadingCollector provides onHeading) {
@@ -106,11 +102,21 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                 }
             }
             UserSignature(post, openLink)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { TopicReactionSummary(post, enabled && !state.loading) }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val canToggleSolution = enabled && !state.loading && post.id !in state.busy &&
                     (post.canAcceptSolution || post.canUnacceptSolution)
                 val showSolution = canToggleSolution || post.isSolution
+                val solutionLabel = "解决方案"
+                val compactSolution = if (showSolution) {
+                    val labelWidth = with(LocalDensity.current) {
+                        rememberTextMeasurer().measure(solutionLabel, MaterialTheme.typography.labelLarge, maxLines = 1).size.width.toDp()
+                    }
+                    val actionWidth = if (post.number == 1) 144.dp else 192.dp
+                    // 给回应汇总留出触控宽度，空间不足时仅显示解决方案图标。
+                    maxWidth < actionWidth + 48.dp + labelWidth + 40.dp
+                } else false
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { TopicReactionSummary(post, enabled && !state.loading, Modifier.widthIn(min = 48.dp)) }
                 if (showSolution) {
                     val selected = post.isSolution || post.canUnacceptSolution
                     val solutionColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
@@ -122,10 +128,10 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                             contentDescription = if (selected) "第 ${post.number} 楼解决方案" else "第 ${post.number} 楼选择解决方案"
                             stateDescription = if (selected) "已选为解决方案" else "未选为解决方案"
                         }.padding(horizontal = 8.dp).testTag("solution-action-${post.number}"), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally)) {
                         Icon(if (selected) Icons.Rounded.CheckBox else Icons.Rounded.CheckBoxOutlineBlank, null,
                             Modifier.size(19.dp), tint = if (selected) MaterialTheme.colorScheme.primary else solutionColor)
-                        Text("解决方案", style = MaterialTheme.typography.labelLarge,
+                        if (!compactSolution) Text(solutionLabel, style = MaterialTheme.typography.labelLarge,
                             color = if (selected) MaterialTheme.colorScheme.primary else solutionColor,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -152,6 +158,11 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                     Icon(Icons.Rounded.ChatBubbleOutline, "回复第 ${post.number} 楼", Modifier.size(19.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .75f * LocalContentColor.current.alpha))
                 }
+                if (post.number != 1) IconButton(onClick = { actions.openReply(detail.id, post, bookmark) },
+                    enabled = enabled && !state.loading && post.id !in state.busy, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.MoreHoriz, "更多操作", Modifier.size(20.dp))
+                }
+            }
             }
             PostBoosts(post, enabled, user, openLink)
         }

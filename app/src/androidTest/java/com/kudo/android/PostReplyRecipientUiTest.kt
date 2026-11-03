@@ -43,6 +43,7 @@ class PostReplyRecipientUiTest {
             TopicPost(child, detail, TopicState(detail, false), true, {}, {}, {}, {}, {}, {}, {})
         } }
         assertInlineRecipient(child, bob.displayName)
+        assertBottomMore(child)
         capture("reply-recipient-inline-light.png")
     }
 
@@ -60,18 +61,86 @@ class PostReplyRecipientUiTest {
         } }
         assertInlineRecipient(child, bob.displayName)
         compose.onNodeWithContentDescription("查看第 12 楼的设备").assertIsDisplayed()
-        compose.onNodeWithContentDescription("更多操作").assertIsDisplayed()
+        assertBottomMore(child)
         capture("reply-recipient-inline-dark-large.png")
+    }
+
+    @Test fun deviceWithoutReplyRecipientStillStaysAtTheRightEdge() {
+        val child = post(14).copy(device = PostDevice("iPhone 14 Pro Max", "phone"))
+        val detail = TopicDetail(5, "话题", 1, listOf(child), listOf(14), false)
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicPost(child, detail, TopicState(detail, false), true, {}, {}, {}, {}, {}, {}, {})
+        } }
+        assertRightmostDevice(child)
+        assertBottomMore(child)
+        compose.onNodeWithTag("post-reply-recipient-14").assertDoesNotExist()
+    }
+
+    @Test fun narrowLargeSolutionReplyKeepsMoreAndAllActionsInsideTheCard() {
+        val child = post(12).copy(isSolution = true, canUnacceptSolution = true, likes = 4,
+            reactionCount = 4, reactions = listOf(PostReaction("heart", 4)))
+        val detail = TopicDetail(5, "话题", 1, listOf(child), listOf(12), false)
+        var moreTarget = 0
+        var replyTarget = 0
+        var solutionTarget = 0
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK)) {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.5f),
+                LocalTopicActions provides TopicActionsController({}, { _, _, _ -> }, { _, target, _ -> moreTarget = target.number })) {
+                Box(Modifier.width(320.dp)) {
+                    TopicPost(child, detail, TopicState(detail, false), true, {}, {}, { replyTarget = it!!.number }, {}, {}, {}, {},
+                        solution = { solutionTarget = it.number })
+                }
+            }
+        } }
+        compose.onNodeWithTag("post-reaction-summary-12").assertWidthIsAtLeast(48.dp)
+        compose.onNodeWithText("4", useUnmergedTree = true).assertIsDisplayed().assertWidthIsAtLeast(1.dp)
+        compose.onNodeWithTag("solution-action-12").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+            .assert(hasContentDescription("第 12 楼解决方案"))
+        compose.onNodeWithText("解决方案").assertDoesNotExist()
+        val card = compose.onNodeWithTag("post-12").fetchSemanticsNode().boundsInRoot
+        val padding = with(compose.density) { 16.dp.toPx() }
+        for (node in listOf(compose.onNodeWithTag("post-reaction-summary-12"),
+            compose.onNodeWithTag("solution-action-12"), compose.onNodeWithContentDescription("回应此楼层"),
+            compose.onNodeWithContentDescription("Boost 此帖子"), compose.onNodeWithTag("post-reply-12"),
+            compose.onNodeWithContentDescription("更多操作"))) {
+            val bounds = node.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue("所有操作都应保留在卡片内部", bounds.left >= card.left + padding - 1f && bounds.right <= card.right - padding + 1f)
+        }
+        assertBottomMore(child)
+        capture("reply-actions-solution-dark-large.png")
+        compose.onNodeWithContentDescription("更多操作").performClick()
+        compose.onNodeWithTag("post-reply-12").performClick()
+        compose.onNodeWithTag("solution-action-12").performClick()
+        compose.runOnIdle { assertEquals(12, moreTarget); assertEquals(12, replyTarget); assertEquals(12, solutionTarget) }
     }
 
     private fun assertInlineRecipient(post: Post, authorName: String) {
         val author = compose.onNodeWithText(authorName).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val recipient = compose.onNodeWithTag("post-reply-recipient-${post.number}")
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val more = compose.onNodeWithContentDescription("更多操作").fetchSemanticsNode().boundsInRoot
         assertTrue("回复对象应在作者右侧", recipient.left >= author.right)
         assertTrue("回复对象与作者应在同一行", author.center.y in recipient.top..recipient.bottom)
-        assertTrue("回复对象不能挤占更多按钮", recipient.right <= more.left)
+        if (post.device != null) {
+            val device = compose.onNodeWithTag("post-device-${post.id}").fetchSemanticsNode().boundsInRoot
+            assertTrue("设备图标应在回复对象右侧", recipient.right <= device.left)
+            assertEquals("设备图标与回复对象应在同一行", recipient.center.y, device.center.y, 1f)
+            assertRightmostDevice(post)
+        }
+    }
+
+    private fun assertRightmostDevice(post: Post) {
+        val device = compose.onNodeWithTag("post-device-${post.id}").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val card = compose.onNodeWithTag("post-${post.number}").fetchSemanticsNode().boundsInRoot
+        val padding = with(compose.density) { 16.dp.toPx() }
+        assertEquals("设备图标应在作者栏最右侧", card.right - padding, device.right, 1f)
+    }
+
+    private fun assertBottomMore(post: Post) {
+        val more = compose.onNodeWithContentDescription("更多操作").assertIsDisplayed()
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).fetchSemanticsNode().boundsInRoot
+        val reply = compose.onNodeWithTag("post-reply-${post.number}").fetchSemanticsNode().boundsInRoot
+        assertEquals("更多按钮应与回复同行", reply.center.y, more.center.y, 1f)
+        assertEquals("更多按钮应紧接回复右侧", reply.right, more.left, 1f)
     }
 
     private fun capture(name: String) {
