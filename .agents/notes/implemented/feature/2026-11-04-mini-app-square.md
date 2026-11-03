@@ -38,7 +38,7 @@ Status: implemented
 
 ## Testing
 
-- 四列更多宫格与重新进入用例验证跨应用后的当前 URL、query/hash、原 WebView 与原生来源均保留，关于和关闭正常（2 tests），记录为 `artifacts/mini-app-menu-grid-device.txt`；截图为 `artifacts/mini-app-menu-grid.png`。
+- 四列更多宫格与重新进入用例覆盖跨应用后的当前 URL、query/hash、原 WebView 与原生来源；初轮关于通过，重进用例因导航取消 JavaScript 评估回调而超时，记录为 `artifacts/mini-app-menu-grid-device.txt`。用例改为等待页面完成后再读取状态，2 项通过（4.27 秒），见 `artifacts/mini-app-menu-grid-fixed-device.txt`；截图为 `artifacts/mini-app-menu-grid.png`。
 - 发布人头像扩展经官网访客接口核对：author 实际含 id、username、name、avatar_template、animated_avatar，本地读取静态 avatar_template。5 项 MiniAppInfoTest 通过；关于与线上两款小程序探针通过（2 tests，17.892 秒），记录为 `artifacts/mini-app-publisher-unit.txt` 与 `artifacts/mini-app-publisher-fixed-device.txt`。新增头像用例先复现 SubcomposeAsyncImage 在加载/失败内容时丢失无障碍描述，改为外层 semantics 后通过，失败记录为 `artifacts/mini-app-publisher-device.txt`。
 - MiniAppInfoTest 验证官网 HTTPS 路径、query/hash 保留、服务器字段、错误身份及不安全图标过滤。
 - AppSquareEntryUiTest 验证访客、登录和退出后的入口都在设置上方且无登录拦截。MiniAppWebUiTest 使用真实 WebView 与离线官网响应，覆盖关于字段、跨应用切换、失败重试、真正全屏和返回顺序、关闭释放、剪贴板确认及来源隔离、六种主题材质组合与 history 补装、后台暂停。

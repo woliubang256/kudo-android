@@ -31,6 +31,7 @@ class MiniAppWebUiTest {
     private val second = "01a1966e-935a-79e0-8c76-9b0f7552c578"
     private lateinit var web: FixtureView
     private val requests = AtomicInteger()
+    private val pageFinishes = AtomicInteger()
     @Volatile private var failInfo = false
     private var display by mutableStateOf(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f))
 
@@ -114,9 +115,11 @@ class MiniAppWebUiTest {
         compose.onNodeWithTag("mini-app-menu-grid").assertIsDisplayed()
         compose.onNodeWithText("重新进入小程序").assertHeightIsAtLeast(48.dp)
         capture("mini-app-menu-grid.png")
+        val finished = pageFinishes.get()
         compose.onNodeWithText("重新进入小程序").performClick()
-        compose.waitUntil(10000) { js("typeof window.gameMarker === 'undefined' && document.readyState === 'complete'") == "true" }
+        compose.waitUntil(10000) { pageFinishes.get() > finished }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("web-loading").fetchSemanticsNodes().isEmpty() }
+        assertEquals("true", js("typeof window.gameMarker === 'undefined' && document.readyState === 'complete'"))
         assertEquals("true", js("location.pathname==='/apps/$second'&&new URLSearchParams(location.search).get('room')==='two'&&location.hash==='#play'"))
         compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
         compose.onNodeWithText("原生来源").assertDoesNotExist()
@@ -322,7 +325,7 @@ class MiniAppWebUiTest {
                 }
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = client.shouldOverrideUrlLoading(view, request)
                 override fun onPageStarted(view: WebView, url: String, icon: Bitmap?) = client.onPageStarted(view, url, icon)
-                override fun onPageFinished(view: WebView, url: String) = client.onPageFinished(view, url)
+                override fun onPageFinished(view: WebView, url: String) { pageFinishes.incrementAndGet(); client.onPageFinished(view, url) }
                 override fun onPageCommitVisible(view: WebView, url: String) = client.onPageCommitVisible(view, url)
                 override fun doUpdateVisitedHistory(view: WebView, url: String, reload: Boolean) = client.doUpdateVisitedHistory(view, url, reload)
             })
