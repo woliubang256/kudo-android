@@ -20,6 +20,8 @@ Status: implemented
 
 关于通过官网会话在页面内请求 `/mini-app-api/public/<app-id>/info`，只读取 `app` 的公开字段，不在原生层复制发布配置或令牌。响应必须与当前请求 ID 对应，导航取消在途请求。缺失的可选字段省略、图标失败显示通用应用图标；网络错误显示重试，不猜测版本或发布人。
 
+发布人只展示头像和名字，不额外展示用户名。名字沿用 name、缺失时回退 username；头像读取公开 author 的 avatar_template 或 avatar_url，模板替换尺寸后按官网地址解析，只接受无账号口令的 HTTPS 图片。头像缺失或加载失败显示人物占位，不为弹窗额外请求用户资料。
+
 剪贴板保留标准浏览器接口，缺失方法或遇到 `NotAllowedError` / `NotSupportedError` 时才回退到需本次确认的原生文字读写，限制 4 KiB。WebView 156 暴露 readText 但实际返回 NotAllowedError，单纯检查方法是否存在不足以适配。消息接口使用 AndroidX WebKit 的来源过滤，仅向 `https://linux.do` 注入；接收还检查当前顶层为正式应用广场或精确应用路径、来源为官网且 App 在前台。第三方与 opaque origin 沙箱 iframe 没有消息对象，平台隔离与权限检查仍由官网宿主完成。DocumentStart 注入兼容脚本，并在站内 history 变化与加载完成时幂等补装，覆盖 Ember 从普通页面进入应用的情况。
 
 不放开文件访问、content URI、混合内容、第三方 Cookie 或无手势自动媒体播放；SDK 的存储、用户、主题、包验签、固定 CDN 素材、HTTP/WS 和鉴权仍走官网实现。WebView 不支持安全消息接口时不退回无来源约束的 addJavascriptInterface；关于显示加载失败，其他网页能力继续使用浏览器自身支持。
@@ -36,6 +38,7 @@ Status: implemented
 
 ## Testing
 
+- 发布人头像扩展经官网访客接口核对：author 实际含 id、username、name、avatar_template、animated_avatar，本地读取静态 avatar_template。5 项 MiniAppInfoTest 通过；关于与线上两款小程序探针通过（2 tests，17.892 秒），记录为 `artifacts/mini-app-publisher-unit.txt` 与 `artifacts/mini-app-publisher-fixed-device.txt`。新增头像用例先复现 SubcomposeAsyncImage 在加载/失败内容时丢失无障碍描述，改为外层 semantics 后通过，失败记录为 `artifacts/mini-app-publisher-device.txt`。
 - MiniAppInfoTest 验证官网 HTTPS 路径、query/hash 保留、服务器字段、错误身份及不安全图标过滤。
 - AppSquareEntryUiTest 验证访客、登录和退出后的入口都在设置上方且无登录拦截。MiniAppWebUiTest 使用真实 WebView 与离线官网响应，覆盖关于字段、跨应用切换、失败重试、真正全屏和返回顺序、关闭释放、剪贴板确认及来源隔离、六种主题材质组合与 history 补装、后台暂停。
 - 修复前分别出现剪贴板方法存在却返回 NotAllowedError、默认图标缺失无障碍描述、history 进入应用未安装兼容脚本的失败，证据为 `artifacts/mini-app-current-device.txt`、`artifacts/mini-app-clipboard-repro-device.txt` 和 `artifacts/mini-app-history-repro-device.txt`。这些是新增功能的测试缺口，不是此前用户系统闪退的复现。

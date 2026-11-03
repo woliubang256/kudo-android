@@ -8,6 +8,7 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
@@ -120,7 +121,19 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                     }
                     if (info.description.isNotBlank()) Text(info.description, style = MaterialTheme.typography.bodyMedium)
                     if (info.version.isNotBlank()) MiniAppInfoRow("版本", info.version)
-                    if (info.publisher.isNotBlank()) MiniAppInfoRow("发布人", info.publisher)
+                    if (info.publisher.isNotBlank()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Text("发布人", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SubcomposeAsyncImage(info.publisherAvatarUrl, null,
+                                Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    .semantics { contentDescription = "${info.publisher}的头像" },
+                                loading = { Icon(Icons.Rounded.Person, null, Modifier.padding(4.dp)) },
+                                error = { Icon(Icons.Rounded.Person, null, Modifier.padding(4.dp)) })
+                            Text(info.publisher, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
                 if (state.error) {
                     Text("应用信息加载失败", style = MaterialTheme.typography.bodyMedium)

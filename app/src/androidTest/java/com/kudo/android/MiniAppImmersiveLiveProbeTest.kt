@@ -48,8 +48,11 @@ class MiniAppImmersiveLiveProbeTest {
                     }
                     js("!!document.querySelector('.mini-app-loader:not(.is-loading):not(.is-error) .mini-app-frame-host') || !!document.querySelector('.mini-app-loader.is-error') || location.href.startsWith('chrome-error:')") == "true"
                 }
+                js("window.__kudoPublisherProbe=null;fetch('/mini-app-api/public/$appId/info',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{const a=d.app?.author||{};window.__kudoPublisherProbe={keys:Object.keys(a),name:a.name,avatar_template:a.avatar_template,avatar_url:a.avatar_url}})")
+                compose.waitUntil(15000) { js("!!window.__kudoPublisherProbe") == "true" }
                 val data = js("""JSON.stringify({
                   appId: '$appId', title: document.title, viewport: [innerWidth, innerHeight],
+                  publisher: window.__kudoPublisherProbe,
                   adapted: document.documentElement.hasAttribute('data-kudo-mini-app'),
                   ready: !!document.querySelector('.mini-app-loader:not(.is-loading):not(.is-error) .mini-app-frame-host'),
                   stage: document.querySelector('[data-role=stage]')?.textContent,
@@ -72,6 +75,7 @@ class MiniAppImmersiveLiveProbeTest {
                 compose.onNodeWithText("关于", substring = false).performClick()
                 compose.waitUntil(20000) { compose.onAllNodesWithTag("mini-app-about").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithText(if (index == 0) "东北雨姐galgame" else "2048", substring = false).assertIsDisplayed()
+                assertTrue(compose.onAllNodes(hasContentDescription("的头像", substring = true)).fetchSemanticsNodes().isNotEmpty())
                 capture("mini-app-immersive-about-$index.png")
                 compose.onNodeWithText("关闭", substring = false).performClick()
             }

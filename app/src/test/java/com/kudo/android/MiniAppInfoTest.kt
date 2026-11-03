@@ -49,5 +49,22 @@ class MiniAppInfoTest {
         assertEquals("publisher", info.publisher)
         assertEquals("", info.version)
         assertEquals("", info.description)
+        assertNull(info.publisherAvatarUrl)
+    }
+
+    @Test fun publisherAvatarResolvesPublicTemplatesAndRejectsUnsafeSources() {
+        val author = JSONObject().put("name", "发布人名字").put("username", "different_username")
+            .put("avatar_template", "/user_avatar/linux.do/publisher/{size}/1.png")
+        val data = JSONObject().put("app", JSONObject().put("app_id", id).put("name", "应用").put("author", author))
+        assertEquals("https://linux.do/user_avatar/linux.do/publisher/128/1.png", MiniAppInfo.parse(data, id).publisherAvatarUrl)
+        assertEquals("发布人名字", MiniAppInfo.parse(data, id).publisher)
+        author.remove("avatar_template")
+        author.put("avatar_url", "//cdn.example.test/avatar.png")
+        assertEquals("https://cdn.example.test/avatar.png", MiniAppInfo.parse(data, id).publisherAvatarUrl)
+        listOf("http://cdn.example.test/avatar.png", "javascript:alert(1)", "data:image/png;base64,test",
+            "https://user:password@cdn.example.test/avatar.png", "null", "").forEach {
+            author.put("avatar_url", it)
+            assertNull(it, MiniAppInfo.parse(data, id).publisherAvatarUrl)
+        }
     }
 }
