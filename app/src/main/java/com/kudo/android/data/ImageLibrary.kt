@@ -47,6 +47,14 @@ data class ImageLibrary(
                 .distinctBy { it.folderId to it.originalUrl })
     }
 
+    /** Apply only an order; keep concurrently added folders and the latest images. */
+    fun reorderFolders(ids: List<String>): ImageLibrary {
+        val known = folders.associateBy(ImageFolder::id)
+        val ordered = ids.distinct().mapNotNull(known::get)
+        val reordered = ordered + folders.filterNot { folder -> ordered.any { it.id == folder.id } }
+        return if (reordered == folders) this else copy(folders = reordered)
+    }
+
     fun save(image: SavedImage): ImageLibrary {
         require(folders.any { it.id == image.folderId }) { "目录已不存在，请重新选择" }
         require(validLibraryImageUrl(image.originalUrl)) { "图片地址无效，暂时无法收藏" }
@@ -81,6 +89,8 @@ fun decodeImageLibrary(raw: String?): ImageLibrary {
         val id = folder.optString("id")
         if (id != DEFAULT_IMAGE_FOLDER) library = runCatching { library.addFolder(folder.getString("name"), id) }.getOrDefault(library)
     }
+    val savedOrder = folders.objects().map { it.stringField("id") }
+    library = library.reorderFolders(if (DEFAULT_IMAGE_FOLDER in savedOrder) savedOrder else listOf(DEFAULT_IMAGE_FOLDER) + savedOrder)
     val images = json.getJSONArray("images")
     val seen = mutableSetOf<Pair<String, String>>()
     val ids = mutableSetOf<String>()

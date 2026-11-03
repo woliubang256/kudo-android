@@ -46,6 +46,18 @@ class ImageLibraryStoreTest {
         assertEquals(40L, store.revision.value)
     }
 
+    @Test fun folderOrderIsLocalToGuestAndEachAccountAndSurvivesReopening() = runBlocking {
+        val store = ImageLibraryStore(fixture)
+        for (account in listOf(null, 101, 202)) store.update(account) { it.addFolder("表情", "emoji").addFolder("风景", "landscape").save(image) }
+        store.update(null) { it.reorderFolders(listOf("emoji", DEFAULT_IMAGE_FOLDER, "landscape")) }
+        store.update(101) { it.reorderFolders(listOf("landscape", "emoji", DEFAULT_IMAGE_FOLDER)) }
+        val reopened = ImageLibraryStore(fixture)
+        assertEquals(listOf("emoji", DEFAULT_IMAGE_FOLDER, "landscape"), reopened.load(null).folders.map(ImageFolder::id))
+        assertEquals(listOf("landscape", "emoji", DEFAULT_IMAGE_FOLDER), reopened.load(101).folders.map(ImageFolder::id))
+        assertEquals(listOf(DEFAULT_IMAGE_FOLDER, "emoji", "landscape"), reopened.load(202).folders.map(ImageFolder::id))
+        for (account in listOf(null, 101, 202)) assertEquals(listOf(image), reopened.load(account).images)
+    }
+
     @Test fun duplicatesAndCanceledTransformDoNotWrite() = runBlocking {
         val store = ImageLibraryStore(fixture)
         store.update(101) { it.save(image) }

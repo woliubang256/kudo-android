@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CreateNewFolder
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -91,13 +89,15 @@ private fun LibraryFolderSheet(state: ImageLibraryState, dismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var sortRevision by remember { mutableIntStateOf(0) }
     EditorToolSheet("管理图库目录", dismiss) { close ->
-        fun update(transform: (ImageLibrary) -> ImageLibrary) {
+        fun update(closeAfter: Boolean = true, transform: (ImageLibrary) -> ImageLibrary) {
             busy = true
+            error = null
             scope.launch {
-                try { state.update(transform); close() }
+                try { state.update(transform); if (closeAfter) close() }
                 catch (cancelled: CancellationException) { throw cancelled }
-                catch (failure: Exception) { error = failure.message ?: "目录保存失败，请重试" }
+                catch (failure: Exception) { sortRevision++; error = failure.message ?: "目录保存失败，请重试" }
                 finally { busy = false }
             }
         }
@@ -111,17 +111,9 @@ private fun LibraryFolderSheet(state: ImageLibraryState, dismiss: () -> Unit) {
                 enabled = !busy && name.isNotBlank(), compact = true,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp))
         } else {
-            Column(Modifier.fillMaxWidth()) {
-                state.library?.folders?.forEach { folder ->
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(folder.name, Modifier.weight(1f))
-                        if (folder.id != DEFAULT_IMAGE_FOLDER) {
-                            CommunityIconButton(Icons.Rounded.Edit, "重命名${folder.name}", { editing = folder.id; name = folder.name }, enabled = !busy)
-                            CommunityIconButton(Icons.Rounded.DeleteOutline, "删除${folder.name}", { deleting = folder.id }, enabled = !busy)
-                        }
-                    }
-                }
-            }
+            LibraryFolderList(state.library?.folders.orEmpty(), !busy, sortRevision,
+                saveOrder = { ids -> update(closeAfter = false) { it.reorderFolders(ids) } },
+                edit = { editing = it.id; name = it.name }, delete = { deleting = it.id })
             CommunityButton("新建目录", { creating = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 6.dp),
                 enabled = !busy, compact = true)
         }

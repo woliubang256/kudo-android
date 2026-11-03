@@ -12,6 +12,8 @@ Status: implemented
 
 访客及每个用户 ID 分别保存版本化 JSON，数据只包含目录、HTTP(S) 原图和缩略图链接、描述与原帖楼层来源，不保存图片文件，不向服务器写收藏。默认收藏目录始终存在。同一目录相同原图幂等，允许不同目录分别收藏。独立偏好文件的后台读改写受同一 Mutex 保护；失败和不支持的版本报错，不以空图库覆盖原始数据。
 
+目录数组同时保存显示顺序，默认收藏也可移动，虚拟“全部”不进入数组且固定在 Tab 首位。解码保留默认收藏在有效数组中的位置；旧数据缺少默认收藏时仍在首位补齐。管理面板通过长按把手拖动排序，释放后保存且不关闭面板，并提供无障碍上移/下移操作。排序只提交目录 ID 顺序，以最新图库合并，避免覆盖同时新增的目录或图片；取消拖动不写入，保存失败恢复已保存顺序并显示错误。管理、收藏目录选择、编辑器均直接使用同一目录数组。
+
 图片长按和查看器共用导出菜单并增加收藏；下载全部仍以已有浏览组为边界。来源明确传递到全屏会话，不从临时 UI origin 或图片 CDN 地址猜帖子。未揭开的剧透图片不能通过长按导出或收藏。会话不稳定时不开放写入口，账号变化取消旧弹层。
 
 脚注宿主在账号图库环境外，不能只依赖显示位置的 CompositionLocal。脚注请求携带点击时的组合上下文及明确的帖子来源，根部显示时恢复该上下文；来源账号变化使原脚注关闭，避免遗留旧账号入口。先用 `footnoteImagesCanBeCollectedWithTheirOriginalPostSource` 真机复现缺少“收藏图片”（`artifacts/image-library-edge-repro-device.txt`），再补齐此契约。
@@ -41,6 +43,7 @@ Markdown 预览是独立 Dialog 窗口，内部单独提供 EditorToolBackdropHo
 - 下载原图到私有目录能离线显示且不依赖 CDN 生命周期，但会引入容量、清理和上传路径，违背直接复用线上图片的需求；本轮只存链接。
 - Room 能做大规模索引、关系和事务，适合庞大图库；当前仅本地目录及元数据列表，不增加数据库依赖，使用独立偏好文件、后台读写和串行读改写。规模导致整体 JSON 开销明显时再迁移。
 - 复用服务器书签能跨设备同步，但书签对象是帖子且没有本轮所需目录图片契约，也不符合纯本地保存；使用独立身份分区。
+- 独立增加排序字段能维持旧目录数组的位置，但会让两处顺序需要同步，并引入重复、缺失 ID 的恢复规则；目录数组本身已按顺序编码，直接保留它的顺序，无需变更数据版本。
 - 仅在单个网格上拦截水平拖动，代码改动最少，但没有分页过渡且与图片、目录横向滚动竞争；复用首页的 HorizontalPager 和 FeedTabBar，按稳定目录身份组织页面。
 
 ## Testing
@@ -68,6 +71,8 @@ RMX2202 / Android 13 上，首批新增存储 5 项、图库 UI 14 项，以及�
 本轮 Debug、AndroidTest 构建与 Lint 通过（`artifacts/personal-collapse-build.txt`、`artifacts/personal-collapse-focused-build.txt`、`artifacts/personal-collapse-final-lint.txt`），Lint 为 0 errors、60 warnings、1 hint。合并私信及话题/回复后的 45 个不同用例中，44 项分批通过，另一个按钮尺寸旧断言在改动前 APK 上同样失败；整体范围、基线对照与设备限制见[个人标签折叠的验证记录](2026-10-30-personal-tabs-collapse.md)。
 
 ## Consequences
+
+目录排序增加后的 10 项图库 JVM 用例通过；默认收藏移到中间再读回的用例先在旧解码器失败（artifacts/library-order-repro-unit.txt）。ImageLibraryFolderOrderUiTest 3 项、ImageLibraryStoreTest 6 项与原有 ImageLibraryUiTest 25 项共 34 项在 RMX2202 / Android13 通过（artifacts/post-device-library-device.txt），覆盖拖动默认目录、释放后保存且面板不关闭、重开存储、管理页与编辑器顺序一致、无障碍移动、保存失败恢复、长列表边缘自动滚动、取消不写入、访客及两账号隔离，以及既有收藏、重命名、删除、分页和插入。Debug / AndroidTest 构建、相关 40 项 JVM 测试和 Lint 通过（artifacts/post-device-library-build.txt），0 errors / 60 warnings / 1 hint；已检查深色大字截图 artifacts/library-folder-order-dark-large.png，中文和拖动把手清晰。该截图包含测试模拟的存储失败提示，未损坏真实图库。
 
 链接失效、来源删除和权限变化仍可能使图片或原帖不可用；本地收藏不等于离线备份，也不跨设备同步。原图地址可能不是 CDN，不假定任意地址永久有效。元数据整体 JSON 写入随规模增长；所有读写放到 IO 线程并串行，失败保持原数据和可重试入口。
 
