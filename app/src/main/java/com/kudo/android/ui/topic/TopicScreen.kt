@@ -187,7 +187,8 @@ fun TopicScreen(state: TopicState, glass: GlassMode, back: () -> Unit, retry: ()
     }
     val endLoaded = !hasMore && !state.loading && !state.loadingMore && state.error == null && state.moreError == null
     val mainVisible by remember(listState, posts, endLoaded) { derivedStateOf {
-        val visible = listState.layoutInfo.visibleItemsInfo
+        // Items in the top content padding are composed but covered by the fixed header.
+        val visible = listState.layoutInfo.visibleItemsInfo.filter { it.offset + it.size > 0 }
         val last = posts.lastOrNull()
         if (endLoaded && !listState.canScrollForward && last != null && visible.any { it.key == last.id }) last.number
         else visible.firstNotNullOfOrNull { item -> posts.firstOrNull { it.id == item.key }?.number }

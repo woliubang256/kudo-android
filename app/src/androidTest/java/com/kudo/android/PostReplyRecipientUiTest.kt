@@ -111,6 +111,63 @@ class PostReplyRecipientUiTest {
         compose.runOnIdle { assertEquals(25, requested) }
     }
 
+    @Test fun loadedRecipientActuallyScrollsToTheParentOnEveryClick() {
+        val parent = post(4, alice)
+        val child = post(30, parent = 4).copy(replyToUser = alice)
+        val loaded = (1..30).map { when (it) { 4 -> parent; 30 -> child; else -> post(it) } }
+        val detail = TopicDetail(5, "话题", 1, loaded, loaded.map(Post::id), false, highestPostNumber = 30)
+        var requests = 0
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicScreen(TopicState(detail, false), GlassMode.TRANSLUCENT, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+                readingEnabled = false, jumpTo = { requests++ })
+        } }
+        repeat(2) {
+            compose.onNodeWithTag("topic-posts").performScrollToIndex(30)
+            compose.onNodeWithTag("post-reply-recipient-30").performClick()
+            awaitFloor(4, 30)
+            compose.onNodeWithTag("post-4").assertIsDisplayed()
+            compose.onNodeWithText("4 / 30").assertIsDisplayed()
+        }
+        compose.runOnIdle { assertEquals("已加载目标应直接定位，不重新请求", 0, requests) }
+    }
+
+    @Test fun cachedRecipientStillLoadsItsMainWindowAndScrollsToTheActualFloor() {
+        val parent = post(4, alice)
+        val child = post(40, parent = 4).copy(replyToUser = alice)
+        val loaded = (30..50).map { if (it == 40) child else post(it) }
+        val detail = TopicDetail(5, "话题", 1, loaded, (1..50).toList(), false, highestPostNumber = 50)
+        var state by mutableStateOf(TopicState(detail, false, targetNumber = 40, targetRevision = 1, related = listOf(parent)))
+        var requested = 0
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            TopicScreen(state, GlassMode.TRANSLUCENT, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
+                readingEnabled = false, jumpTo = { number ->
+                    requested = number
+                    state = state.copy(detail = detail.copy(posts = (1..24).map { if (it == 4) parent else post(it) }),
+                        related = loaded, targetNumber = number, targetRevision = state.targetRevision + 1)
+                })
+        } }
+        compose.onNodeWithTag("post-reply-recipient-40").performClick()
+        val topLimit = with(compose.density) { 100.dp.toPx() }
+        compose.waitUntil(5_000) {
+            val viewport = compose.onNodeWithTag("topic-posts").fetchSemanticsNode().boundsInRoot
+            compose.onAllNodesWithTag("post-4").fetchSemanticsNodes().any {
+                it.boundsInRoot.top in viewport.top..(viewport.top + topLimit)
+            }
+        }
+        compose.onNodeWithTag("post-4").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(4, requested) }
+        capture("reply-recipient-cross-page-arrival.png")
+        awaitFloor(4, 50)
+        compose.onNodeWithText("4 / 50").assertIsDisplayed()
+    }
+
+    private fun awaitFloor(number: Int, highest: Int) {
+        // The scroll starts after the next layout; the click itself can become idle before that delay ends.
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("$number / $highest").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @Test fun replyToOriginalUsesOriginalAuthorButInvalidTargetsNeverShowARecipient() {
         var target by androidx.compose.runtime.mutableStateOf<Int?>(1)
         val base = post(3)
