@@ -62,10 +62,9 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
             Text("@${post.author.username} 的内容已忽略", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = { if (post.number == 1) revealOriginal() else revealed = true }) { Text("查看此楼层") }
         } else {
-            if (post.number != 1) Column(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    AvatarProfileLink(post.author, enabled, { user(post.author.username) }) { open ->
-                    Row(Modifier.weight(1f).clickable(enabled = enabled, onClick = open), verticalAlignment = Alignment.CenterVertically) {
+            if (post.number != 1) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                AvatarProfileLink(post.author, enabled, { user(post.author.username) }) { open ->
+                Row(Modifier.weight(1.5f).clickable(enabled = enabled, onClick = open), verticalAlignment = Alignment.CenterVertically) {
                     Avatar(post.author, 32.dp, presentation = AvatarPresentation.PUBLIC)
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -82,13 +81,12 @@ internal fun TopicPost(post: Post, detail: TopicDetail, state: TopicState, enabl
                 }
                 PostDeviceIndicator(post, enabled && !state.loading && !state.jumping)
                 PostUnreadIndicator(post, state)
+                PostReplyRecipient(post, state.allPosts.ifEmpty { detail.posts }, detail.author,
+                    enabled && !state.loading && !state.jumping, navigate, Modifier.weight(1f))
                 val actions = LocalTopicActions.current
                 IconButton(onClick = { actions.openReply(detail.id, post, bookmark) }, enabled = enabled && !state.loading && post.id !in state.busy) {
                     Icon(Icons.Rounded.MoreHoriz, "更多操作", Modifier.size(20.dp))
                 }
-                }
-                PostReplyRecipient(post, state.allPosts.ifEmpty { detail.posts }, detail.author,
-                    enabled && !state.loading && !state.jumping, navigate)
             }
             PostReadingContent(post.number, enabled && !state.loading) {
                 CompositionLocalProvider(LocalArticleHeadingCollector provides onHeading) {

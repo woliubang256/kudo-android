@@ -8,7 +8,7 @@ Status: implemented
 
 ## Decision
 
-解析服务器 reply_to_user，主时间线在作者信息下用回复箭头、小头像和昵称显示显式回复目标；点击走已有楼层定位。服务器未返回作者时依次复用已加载的实际父楼层、主帖作者，仍缺失则显示 #楼层。只接受早于当前楼层的正数目标，不为名称另发请求，不从引用或讨论根猜作者。正文、阅读及楼中楼分组不变。
+解析服务器 reply_to_user，主时间线在作者栏右侧、更多按钮前，用朝右的回复箭头、小头像和昵称同行显示显式回复目标；点击走已有楼层定位。作者与回复对象分享扣除设备和操作按钮后的宽度，作者占较多空间，长昵称单行省略，不单独增加一行。回复入口保留 48dp 触控高度和完整无障碍名称。服务器未返回作者时依次复用已加载的实际父楼层、主帖作者，仍缺失则显示 #楼层。只接受早于当前楼层的正数目标，不为名称另发请求，不从引用或讨论根猜作者。正文、阅读及楼中楼分组不变。
 
 ## Existing note audit
 
@@ -22,6 +22,8 @@ Status: implemented
 ## Testing
 
 PostReplyRecipientUiTest 的两条用例先在旧实现上失败，记录为 artifacts/post-metadata-repro-device.txt。修复后的四条用例与 PostDisplayUiTest、NestedReplyAttributionUiTest 共 17 项在 RMX2202 / Android13 全部通过，记录为 artifacts/post-reply-fixed-device.txt。覆盖已加载与跨页目标、缺失作者、直接回复主帖、无目标及非法楼层；跨页点击确实调用原楼层导航，窄屏 1.5 倍字号不遮作者。PostDisplayMetadataTest 解析回归与 Debug / AndroidTest 构建通过，记录为 artifacts/post-reply-fixed-build.txt。
+
+同行布局的两条新增用例先在旧版失败（artifacts/reply-inline-repro-device.txt），修复后回复对象、正文显示及设备头部共 15 项真机用例通过（artifacts/reply-inline-fixed-device.txt）。断言回复对象位于作者右侧、垂直范围与作者相交且不越过更多按钮，覆盖 320dp / 1.5 倍字号和长目标昵称。真机截图 reply-recipient-inline-light.png 与 reply-recipient-inline-dark-large.png 用于检查中文可读、右向箭头及手机图标位置；主包仅覆盖安装，签名及 3002 / 0.3.1-dev 版本与已安装开发版一致。
 
 ## Consequences
 
