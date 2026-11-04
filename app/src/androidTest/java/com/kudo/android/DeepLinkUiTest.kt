@@ -55,6 +55,32 @@ class DeepLinkUiTest {
 
     private fun open(url: String) { compose.runOnIdle { sequence++; incoming = url } }
 
+    @Test fun initialAndRepeatedMiniAppDeepLinksRetainParametersAndCanReturnToTheirSource() {
+        val url = "https://linux.do/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281?hb=fixture-packet&room=one&room=two&next=%2Ft%2F123#play"
+        incoming = url
+        show()
+        compose.onNodeWithText("网页：$url").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1, consumed); assertNull(incoming); assertTrue(nav.popBackStack()) }
+        compose.onNodeWithText("首页").assertIsDisplayed()
+        compose.runOnIdle { nav.openContentLink("/t/123", {}) }
+        for (target in listOf(url, url.replace("fixture-packet", "another-fixture"))) {
+            open(target)
+            compose.onNodeWithText("网页：$target").assertIsDisplayed()
+            compose.runOnIdle { assertTrue(nav.popBackStack()) }
+            compose.onNodeWithText("帖子：123 楼层：0").assertIsDisplayed()
+        }
+        compose.runOnIdle { assertEquals(3, consumed); assertEquals(4, selected) }
+        open(url)
+        val other = url.replace("fixture-packet", "foreground-fixture")
+        open(other)
+        compose.onNodeWithText("网页：$other").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(nav.popBackStack()) }
+        compose.onNodeWithText("网页：$url").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(nav.popBackStack()) }
+        compose.onNodeWithText("帖子：123 楼层：0").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(5, consumed); assertNull(incoming) }
+    }
+
     @Test fun appDirectoryLinksUseNativeDirectoryWhileIndividualAppsKeepTheirWebUrl() {
         show()
         compose.runOnIdle { nav.openContentLink("/apps", {}) }

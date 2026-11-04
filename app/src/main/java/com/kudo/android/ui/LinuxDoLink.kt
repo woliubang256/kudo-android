@@ -1,5 +1,6 @@
 package com.kudo.android.ui
 
+import com.kudo.android.ui.web.MiniAppLocation
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 sealed interface LinuxDoDestination {
@@ -11,6 +12,7 @@ sealed interface LinuxDoDestination {
     data object Unavailable : LinuxDoDestination
     data object Trust : LinuxDoDestination
     data object Apps : LinuxDoDestination
+    data class MiniApp(val url: String) : LinuxDoDestination
 }
 
 object LinuxDoLink {
@@ -32,7 +34,11 @@ object LinuxDoLink {
             url.port != if (url.isHttps) 443 else 80) return null
         val path = url.pathSegments.dropLastWhile { it.isEmpty() }
         return when (path.firstOrNull()) {
-            "apps" -> if (path.size == 1) LinuxDoDestination.Apps else LinuxDoDestination.Home
+            "apps" -> when {
+                path.size == 1 -> LinuxDoDestination.Apps
+                MiniAppLocation.parse(url.toString())?.id != null -> LinuxDoDestination.MiniApp(url.toString())
+                else -> LinuxDoDestination.Home
+            }
             "404" -> if (path.size == 1) LinuxDoDestination.Unavailable else LinuxDoDestination.Home
             "t" -> {
                 val offset = if (path.getOrNull(1)?.toIntOrNull() != null) 1 else 2

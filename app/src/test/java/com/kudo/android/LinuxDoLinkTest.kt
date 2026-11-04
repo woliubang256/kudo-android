@@ -6,11 +6,33 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LinuxDoLinkTest {
-    @Test fun onlyTheExactAppDirectoryUsesNativeRouting() {
+    @Test fun systemMiniAppLinksKeepTheirFullLaunchAddressInsteadOfGoingHome() {
+        val url = "https://linux.do/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281?hb=fixture-packet&room=one&room=two&next=%2Ft%2F123#play"
+        assertEquals(MiniApp(url), LinuxDoLink.parse(url))
+        assertEquals(MiniApp(url), LinuxDoLink.parseContent(url.removePrefix("https://linux.do")))
+        val encoded = url.replace("fixture-packet", "a%2Bb%2Fc").replace("#play", "#%E4%BD%A0")
+        assertEquals(MiniApp(encoded), LinuxDoLink.parse(encoded))
+    }
+
+    @Test fun directoryAndMiniAppLinksHaveSeparateDestinations() {
         assertEquals(Apps, LinuxDoLink.parseContent("/apps/?q=2048"))
         assertEquals(Apps, LinuxDoLink.parse("https://linux.do/apps"))
-        assertNull(LinuxDoLink.parseContent("/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281?room=one#play"))
+        val url = "https://linux.do/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281?room=one#play"
+        assertEquals(MiniApp(url), LinuxDoLink.parseContent(url))
         assertNull(LinuxDoLink.parseContent("https://other.test/apps"))
+    }
+
+    @Test fun onlyExactOfficialHttpsAppsBecomeMiniAppDeepLinkTargets() {
+        val path = "/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281"
+        for (url in listOf("http://linux.do$path", "https://linux.do/apps/invalid", "https://linux.do$path/other",
+            "https://linux.do/apps/01a1966a%2Ff4a0-7b43-ad9c-c46b7f0e0281")) {
+            assertEquals(url, Home, LinuxDoLink.parse(url))
+            assertNull(url, LinuxDoLink.parseContent(url))
+        }
+        for (url in listOf("https://linux.do.evil.test$path", "https://linux.do:444$path", "https://user@linux.do$path")) {
+            assertNull(url, LinuxDoLink.parse(url))
+            assertNull(url, LinuxDoLink.parseContent(url))
+        }
     }
     @Test fun connectContentLinksHaveANativeDestinationButOtherOriginsDoNot() {
         listOf("https://connect.linux.do", "https://CONNECT.LINUX.DO:443/?from=topic#level",

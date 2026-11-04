@@ -31,6 +31,7 @@ internal fun NavHostController.openLinuxDoDestination(target: LinuxDoDestination
         LinuxDoDestination.Unavailable -> navigate("unavailable") { launchSingleTop = true }
         LinuxDoDestination.Trust -> navigate("trust") { launchSingleTop = true }
         LinuxDoDestination.Apps -> navigate("apps") { launchSingleTop = true }
+        is LinuxDoDestination.MiniApp -> navigate("web?url=${Uri.encode(target.url)}")
         LinuxDoDestination.Home -> { home(); popBackStack("root", false) }
     }
 }
