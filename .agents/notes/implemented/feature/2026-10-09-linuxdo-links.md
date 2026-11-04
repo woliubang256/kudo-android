@@ -16,6 +16,8 @@ Status: implemented
 
 正文普通文字链接与 onebox 共用传入的 onLink 回调。Compose 的 LinkAnnotation.Url 默认使用 LocalUriHandler，RichContent 在正文范围提供自己的 UriHandler，避免文字链接绕过应用路由；回调重组时随之更新。文本仍保留选择、链接语义和样式，显式“浏览器打开”继续使用独立浏览器动作。
 
+带链接的正文图片保留最近一层非灯箱 a[href] 的合法 HTTP(S) 目标，点击通过同一个 onLink 路由；图片 URL、原图、相册归属和长按图片菜单仍独立使用图片资源。灯箱 a.lightbox 仅提供原图地址，不成为网页目标。引用与已揭开的剧透图片遵循同一规则；未揭开的剧透先揭开。此规则覆盖话题 3119942 的静态 SVG 红包图片，不按红包网站域名硬编码行为，也不执行图片内脚本。
+
 ## Existing note audit
 
 [原生客户端](../../implemented/architecture/2026-10-07-native-community-client.md)、[数据契约](../../implemented/architecture/2026-10-07-discourse-data-contract.md)和[详情作者](../../implemented/feature/2026-10-09-topic-author-and-responses.md)部分重叠，分别保留导航结构、网络同源和深链主帖补齐的职责。本篇不替代上述决策。检索未找到独立深链决策或过时提案。
@@ -27,6 +29,8 @@ Status: implemented
 - 继续让文字链接使用系统 UriHandler：无需自定义处理，但未关联域名时打开浏览器，且与 onebox 行为不一致。正文范围提供 UriHandler，复用现有链接分流并保留 Compose 链接交互。
 
 ## Verification
+
+LinkedArticleImageUiTest 先在未修改运行时代码的真机复现图片点击未调用链接回调，记录为 `artifacts/redpack-linked-repro-result.txt`。修复后 3 项用例通过，覆盖 SVG 浅深色实际渲染、更新后的回调、长按图片菜单、普通图片与灯箱原图、剧透先揭开再跳转，记录为 `artifacts/redpack-linked-final-device.txt`。既有 RichContentLinkUiTest 和 SpoilerContentUiTest 的 9 项回归通过，另 1 项线上审计按默认开关跳过。ContentParserTest、QuoteParserTest 和 SpoilerParserTest 集中验证通过，包含链接与图片资源分离、相对链接、实体与参数、危险 scheme/凭据过滤及引用/剧透递归。截图 `artifacts/linked-redpack-light.png` 和 `artifacts/linked-redpack-dark.png` 已检查，文字可读。设备仍为 RMX2202 / Android 13，使用同签名 0.3.1-dev / 3002 覆盖安装，未卸载或清理数据。
 
 分类链接先由 LinuxDoLinkTest 新用例复现错误回到 Home，日志 artifacts/category-link-repro.txt；修复后精确断言分类 ID，DeepLinkUiTest 同时更新为分类入栈及返回原话题。新增分类改动随应用内网页20项集中真机回归全部通过，日志 artifacts/in-app-web-final-device.txt。
 

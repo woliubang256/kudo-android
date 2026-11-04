@@ -14,6 +14,38 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ContentParserTest {
+    @Test fun linkedImageKeepsTargetSeparateFromPreviewAndOriginal() {
+        val image = parseArticle("""<p><a href="https://hb.unsnow.org/hb/fixture?source=post&amp;x=1#detail"><span><img src="/card.svg" width="300" height="409" srcset="/sharp.svg 2x" alt="红包卡片"></span></a></p>""").single() as ArticleBlock.Image
+        assertEquals("https://hb.unsnow.org/hb/fixture?source=post&x=1#detail", image.linkUrl)
+        assertEquals("https://linux.do/sharp.svg", image.url)
+        assertEquals("https://linux.do/card.svg", image.originalUrl)
+        assertEquals("红包卡片", image.alt)
+        assertEquals(300f, image.displayWidth)
+    }
+
+    @Test fun imageLinksNormalizeRelativeTargetsAndRejectInvalidSchemesAndCredentials() {
+        fun image(href: String) = parseArticle("""<a href="$href"><img src="/card.svg"></a>""").single() as ArticleBlock.Image
+        assertEquals("https://linux.do/t/topic/42?source=card#post", image("/t/topic/42?source=card#post").linkUrl)
+        assertEquals("https://example.com/card", image("//example.com/card").linkUrl)
+        for (href in listOf("", "javascript:alert(1)", "data:text/html,test", "https://user:pass@example.com/card")) {
+            assertNull(image(href).linkUrl)
+        }
+        val lightbox = parseArticle("""<a class="lightbox" href="/original.svg"><img src="/card.svg"></a>""").single() as ArticleBlock.Image
+        assertNull(lightbox.linkUrl)
+        assertEquals("https://linux.do/original.svg", lightbox.originalUrl)
+    }
+
+    @Test fun linkedImagesInQuotesAndSpoilersKeepTheirTargets() {
+        val html = """<a href="/t/topic/42"><img src="/card.svg"></a>"""
+        val quote = parseArticle("<blockquote><p>$html</p></blockquote>").single() as ArticleBlock.Quote
+        val spoiler = parseArticle("""<p><span class="spoiler">$html</span></p>""").single() as ArticleBlock.Spoiler
+        for (image in listOf(quote.blocks.single(), spoiler.blocks.single()).filterIsInstance<ArticleBlock.Image>()) {
+            assertEquals("https://linux.do/t/topic/42", image.linkUrl)
+        }
+        assertEquals(1, quote.blocks.size)
+        assertEquals(1, spoiler.blocks.size)
+    }
+
     @Test fun actualSiteCalloutKeepsSameParagraphBodyAndCode() {
         val callout = parseArticle("""<blockquote><p>[!warning]+ 别看了<br>快<strong>折起来</strong>。<br>第二行</p><pre><code>&gt; [!warning]+ 别看了</code></pre></blockquote>""").single() as ArticleBlock.Callout
         assertEquals(ArticleCalloutType.WARNING, callout.type)

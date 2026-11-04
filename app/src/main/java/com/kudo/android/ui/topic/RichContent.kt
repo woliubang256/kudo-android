@@ -117,6 +117,7 @@ sealed interface ArticleBlock {
         val originalUrl: String = url, val filename: String = "",
         val dimensions: String = "", val sizeLabel: String = "",
         val displayWidth: Float? = null,
+        val linkUrl: String? = null,
     ) : ArticleBlock
     data class Embed(val url: String, val title: String, val description: String = "", val image: String? = null, val site: String = "") : ArticleBlock
     data object Rule : ArticleBlock
@@ -291,11 +292,14 @@ fun parseArticle(html: String): List<ArticleBlock> {
                         (width / height).takeIf { it.isFinite() && it > 0 }
                     } else null
                     val original = lightbox?.attr("href")?.let(::mediaUrl) ?: url
+                    val link = if (lightbox == null) element.parents().firstOrNull { it.normalName() == "a" && it.hasAttr("href") }
+                        ?.attr("href")?.let(LinuxDoLink::webUrl) else null
                     result.add(ArticleBlock.Image(if (element.hasClass("animated")) original else previewSource(element, url), element.attr("alt"), ratio,
                         originalUrl = original,
                         filename = metadata?.selectFirst(".filename")?.text().orEmpty(),
                         dimensions = dimensions, sizeLabel = information.removePrefix(dimensions).trim(),
-                        displayWidth = width?.takeIf { lightbox == null && ratio != null && it.isFinite() && it > 0 }))
+                        displayWidth = width?.takeIf { lightbox == null && ratio != null && it.isFinite() && it > 0 },
+                        linkUrl = link))
                 }
             }
             "iframe", "video", "audio" -> {
@@ -582,7 +586,8 @@ fun RichContent(html: String, onImage: (String) -> Unit, onLink: (String) -> Uni
         ArticleImage(block, anchors[index], "article-image-$galleryKey-$index", longPress = {
             if (!exporting) actionTarget = ImageActionTarget(block, images.toList(), imageSource)
         }) {
-            if (gallery == null) onImage(block.originalUrl)
+            if (block.linkUrl != null) onLink(block.linkUrl)
+            else if (gallery == null) onImage(block.originalUrl)
             else gallery.open(images, index, origin, anchors[index], source = imageSource)
         }
     }
@@ -705,7 +710,7 @@ private fun ArticleBlocks(blocks: List<ArticleBlock>, parent: String, collapsed:
                         object : UriHandler { override fun openUri(uri: String) = toggleSpoiler() }
                     ArticleBlocks(block.blocks, path, collapsed, toggle,
                         if (hasImages && revealed) onLink else ({ toggleSpoiler() }), spoilerLinkHandler, poll, onImage) { secret, secretPath ->
-                        SpoilerArticleImage(secret, "spoiler-image-$secretPath", revealed, toggleSpoiler, onImage)
+                        SpoilerArticleImage(secret, "spoiler-image-$secretPath", revealed, toggleSpoiler, onImage, onLink)
                     }
                 }
             }
@@ -807,7 +812,8 @@ private fun CodeBlock(code: String) {
 }
 
 @Composable
-private fun SpoilerArticleImage(image: ArticleBlock.Image, tag: String, revealed: Boolean, toggle: () -> Unit, onImage: (String) -> Unit) {
+private fun SpoilerArticleImage(image: ArticleBlock.Image, tag: String, revealed: Boolean, toggle: () -> Unit,
+    onImage: (String) -> Unit, onLink: (String) -> Unit) {
     val gallery = LocalImageGallery.current
     val source = LocalImageSource.current
     val library = LocalImageLibrary.current
@@ -825,6 +831,7 @@ private fun SpoilerArticleImage(image: ArticleBlock.Image, tag: String, revealed
     ArticleImage(image, anchor, tag, hideSpoiler = if (revealed) toggle else null,
         longPress = if (revealed) ({ if (!exporting) actionTarget = ImageActionTarget(image, listOf(image), source) }) else null) {
         if (!revealed) toggle()
+        else if (image.linkUrl != null) onLink(image.linkUrl)
         else if (gallery == null) onImage(image.originalUrl)
         else gallery.open(listOf(image), 0, origin, anchor, source = source)
     }
@@ -859,7 +866,7 @@ private fun ArticleImage(image: ArticleBlock.Image, anchor: GalleryThumbnailAnch
             .then(if (loading || failed) Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) else Modifier)
             .combinedClickable(onLongClickLabel = "图片操作", onLongClick = longPress,
                 onClick = { if (failed) { loading = true; failed = false; retry++ } else open() })) {
-        key(retry) { AsyncImage(image.url, image.alt.ifBlank { "帖子图片，点击放大" }, Modifier.fillMaxSize(),
+        key(retry) { AsyncImage(image.url, image.alt.ifBlank { if (image.linkUrl != null) "帖子图片，点击打开链接" else "帖子图片，点击放大" }, Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit,
             onLoading = { loading = true; failed = false },
             onError = { loading = false; failed = true },
