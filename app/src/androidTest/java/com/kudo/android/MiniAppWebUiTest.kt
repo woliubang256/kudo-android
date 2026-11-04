@@ -523,7 +523,7 @@ class MiniAppWebUiTest {
                         val other = path.contains(second)
                         val data = if (failInfo) "{}" else """{"app":{"app_id":"${if (other) second else first}",
                             "name":"${if (other) "打砖块" else "2048"}","description":"${if (other) "砖块游戏简介" else "2048 小游戏"}",
-                            "version":"${if (other) "2.0.0" else "1.0.0"}","author":{"name":"${if (other) "另一位发布人" else "Neo"}","avatar_template":"/user_avatar/linux.do/publisher/{size}/1.png"}}}"""
+                            "version":"${if (other) "2.0.0" else "1.0.0"}","author":{"id":${if (other) 218 else 1},"username":"${if (other) "publisher" else "neo"}","name":"${if (other) "另一位发布人" else "Neo"}","avatar_template":"/user_avatar/linux.do/publisher/{size}/1.png"}}}"""
                         return WebResourceResponse("application/json", "UTF-8", if (failInfo) 503 else 200,
                             if (failInfo) "Unavailable" else "OK", emptyMap(), data.byteInputStream())
                     }

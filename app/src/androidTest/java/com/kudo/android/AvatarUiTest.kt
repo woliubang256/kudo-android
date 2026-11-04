@@ -43,6 +43,11 @@ import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.topic.TopicScreen
 import com.kudo.android.ui.topic.TopicState
 import com.kudo.android.ui.topic.UserSignature
+import com.kudo.android.ui.web.MiniAppInfo
+import com.kudo.android.ui.web.MiniAppLocation
+import com.kudo.android.ui.web.MiniAppPanel
+import com.kudo.android.ui.web.MiniAppPanels
+import com.kudo.android.ui.web.MiniAppUiState
 import okio.Buffer
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.After
@@ -51,10 +56,12 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
 class AvatarUiTest {
@@ -169,6 +176,34 @@ class AvatarUiTest {
         compose.runOnIdle { updated = true }
         compose.waitUntil(5000) { rendered.any { it.first.contains("/updated/") } }
         assertEquals(2, requested.count { it.endsWith("/static.png") })
+    }
+
+    @Test fun miniAppPublisherUsesUsernameForTheSharedOwnerAvatarShape() {
+        val id = "01a1966a-f4a0-7b43-ad9c-c46b7f0e0281"
+        fun info(username: String) = MiniAppInfo.parse(JSONObject("""{"app":{"app_id":"$id","name":"2048",
+            "version":"1.0.0","author":{"id":1,"username":"$username","name":"Neo","avatar_url":"$staticUrl"}}}"""), id)
+        val state = MiniAppUiState().apply { this.info = info("NeO"); open(MiniAppPanel.ABOUT) }
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
+        compose.setContent { Content(settings) { MiniAppPanels(state, MiniAppLocation(id), {}, {}, {}) } }
+        compose.waitUntil(5000) { rendered.any { it.first == staticUrl } }
+        fun red(color: Color) = color.red > .7f && color.green < .5f && color.blue < .5f
+        fun corners(): Pair<Color, Color> {
+            val bounds = compose.onNodeWithContentDescription("Neo的头像", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val pixels = compose.onRoot().captureToImage().toPixelMap()
+            return pixels[(bounds.left + bounds.width / 10).roundToInt(), (bounds.top + bounds.height / 10).roundToInt()] to
+                pixels[bounds.left.roundToInt(), bounds.top.roundToInt()]
+        }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            compose.runOnIdle { settings = settings.copy(theme = theme) }
+            val (inset, corner) = corners()
+            assertTrue("关于中的 Neo 应沿用 10% 圆角正方形", red(inset))
+            assertFalse("头像角落仍需圆角裁切", red(corner))
+            capture("mini-app-publisher-avatar-${theme.name.lowercase()}.png")
+        }
+        compose.runOnIdle { state.info = info("another_user") }
+        assertFalse("同名普通发布人仍应圆形，不能用显示名字识别站长", red(corners().first))
+        compose.onNodeWithText("another_user").assertDoesNotExist()
+        compose.onNodeWithText("Neo").assertIsDisplayed()
     }
 
     @Test fun ownerHasRoundedSquareOthersHaveCirclesAndBadgeIsNotClipped() {

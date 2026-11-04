@@ -22,7 +22,7 @@ Status: implemented
 
 关于通过官网会话在页面内请求 `/mini-app-api/public/<app-id>/info`，只读取 `app` 的公开字段，不在原生层复制发布配置或令牌。响应必须与当前请求 ID 对应，导航取消在途请求。缺失的可选字段省略、图标失败显示通用应用图标；网络错误显示重试，不猜测版本或发布人。
 
-发布人只展示头像和名字，不额外展示用户名。名字沿用 name、缺失时回退 username；头像读取公开 author 的 avatar_template 或 avatar_url，模板替换尺寸后按官网地址解析，只接受无账号口令的 HTTPS 图片。头像缺失或加载失败显示人物占位，不为弹窗额外请求用户资料。
+发布人只展示头像和名字，不额外展示用户名。名字沿用 name、缺失时回退 username；公开 author 的 id、username、name 与安全头像地址组成 Member，复用 Avatar 的 PLAIN 展示，不请求额外用户资料或补齐头像挂件。Neo 按用户名识别，使用边长 10% 的圆角正方形，其他用户仍圆形，沿用[统一头像规则](2026-10-08-avatar-presentation.md)，不能用显示名字判断身份。头像读取公开 author 的 avatar_template 或 avatar_url，模板替换尺寸后按官网地址解析，只接受无账号口令的 HTTPS 图片；加载失败沿用统一头像占位。
 
 本篇原有剪贴板策略由[剪贴板单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)部分替代。原策略保留标准浏览器接口，缺失方法或遇到 `NotAllowedError` / `NotSupportedError` 时才回退到需本次确认的原生文字读写，限制 4 KiB；其理由是最少改变浏览器行为。WebView 156 暴露 readText 但实际返回 NotAllowedError，单纯检查方法是否存在不足以适配。消息接口使用 AndroidX WebKit 的来源过滤，仅向 `https://linux.do` 注入；接收还检查当前顶层为正式应用广场或精确应用路径、来源为官网且 App 在前台。第三方与 opaque origin 沙箱 iframe 没有消息对象，平台隔离与权限检查仍由官网宿主完成。DocumentStart 注入兼容脚本，并在站内 history 变化与加载完成时幂等补装，覆盖 Ember 从普通页面进入应用的情况。
 
@@ -44,6 +44,8 @@ Status: implemented
 - 更多图标恢复用户原始 SVG 的中间大点后，`capsuleAboutUsesRealFieldsAndClosingPreservesTheSource` 真机通过，见 `artifacts/mini-app-more-dot-device.txt`；浅深局部截图 `artifacts/mini-app-more-dot-light.png`、`artifacts/mini-app-more-dot-dark.png` 已目视确认中间点较大。Debug 构建、UTF-8 和笔记校验通过；20dp 图标、32dp 胶囊、48dp 触控区和半透明配色保持。
 - 四列更多宫格与重新进入用例覆盖跨应用后的当前 URL、query/hash、原 WebView 与原生来源；初轮关于通过，重进用例因导航取消 JavaScript 评估回调而超时，记录为 `artifacts/mini-app-menu-grid-device.txt`。用例改为等待页面完成后再读取状态，2 项通过（4.27 秒），见 `artifacts/mini-app-menu-grid-fixed-device.txt`；截图为 `artifacts/mini-app-menu-grid.png`。
 - 发布人头像扩展经官网访客接口核对：author 实际含 id、username、name、avatar_template、animated_avatar，本地读取静态 avatar_template。5 项 MiniAppInfoTest 通过；关于与线上两款小程序探针通过（2 tests，17.892 秒），记录为 `artifacts/mini-app-publisher-unit.txt` 与 `artifacts/mini-app-publisher-fixed-device.txt`。新增头像用例先复现 SubcomposeAsyncImage 在加载/失败内容时丢失无障碍描述，改为外层 semantics 后通过，失败记录为 `artifacts/mini-app-publisher-device.txt`。
+- 发布人切换到共享 Avatar 后，Neo 的 10% 圆角形状、浅深色、同名普通用户仍圆形、仅显示名字与原有关于／关闭／跨应用信息刷新共 4 项真机测试通过（8.043 秒），见 `artifacts/mini-app-publisher-shape-device.txt`；5 项 MiniAppInfoTest 与 Debug / AndroidTest 构建通过，见 `artifacts/mini-app-publisher-shape-build.txt`。旧实现先在关于中的 Neo 形状断言失败（`artifacts/mini-app-publisher-shape-repro-device.txt`）；轮廓从同一 Compose 根截图取样，避免 same-window sheet 的 dialog 语义导致节点截图误找 DialogWindowProvider。浅深色截图 `artifacts/mini-app-publisher-avatar-light.png`、`artifacts/mini-app-publisher-avatar-dark.png` 已检查；测试使用红色静态头像夹具，不冒充线上真实头像验收。
+- 上述头像修复的 lint 通过（0 errors / 68 warnings / 1 hint），见 `artifacts/mini-app-publisher-shape-lint.txt`；UTF-8 与 170 篇笔记校验通过。同签名 0.3.1-dev / 3002 覆盖安装，首次安装时间保持 2026-10-23 14:55:34，未清数据。
 - MiniAppInfoTest 验证官网 HTTPS 路径、query/hash 保留、服务器字段、错误身份及不安全图标过滤。
 - AppSquareEntryUiTest 验证访客、登录和退出后的入口都在设置上方且无登录拦截。MiniAppWebUiTest 使用真实 WebView 与离线官网响应，覆盖关于字段、跨应用切换、失败重试、真正全屏和返回顺序、关闭释放、剪贴板确认及来源隔离、六种主题材质组合与 history 补装、后台暂停。
 - 修复前分别出现剪贴板方法存在却返回 NotAllowedError、默认图标缺失无障碍描述、history 进入应用未安装兼容脚本的失败，证据为 `artifacts/mini-app-current-device.txt`、`artifacts/mini-app-clipboard-repro-device.txt` 和 `artifacts/mini-app-history-repro-device.txt`。这些是新增功能的测试缺口，不是此前用户系统闪退的复现。

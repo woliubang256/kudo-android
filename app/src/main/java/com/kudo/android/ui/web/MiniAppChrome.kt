@@ -134,11 +134,7 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                         Text("发布人", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SubcomposeAsyncImage(info.publisherAvatarUrl, null,
-                                Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                    .semantics { contentDescription = "${info.publisher}的头像" },
-                                loading = { Icon(Icons.Rounded.Person, null, Modifier.padding(4.dp)) },
-                                error = { Icon(Icons.Rounded.Person, null, Modifier.padding(4.dp)) })
+                            Avatar(info.publisherMember, 28.dp, presentation = AvatarPresentation.PLAIN)
                             Text(info.publisher, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
