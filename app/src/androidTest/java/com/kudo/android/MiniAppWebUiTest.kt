@@ -16,6 +16,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.webkit.WebViewCompat
 import com.kudo.android.data.*
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.web.WebScreen
@@ -36,6 +37,7 @@ class MiniAppWebUiTest {
     private val requests = AtomicInteger()
     private val pageFinishes = AtomicInteger()
     @Volatile private var failInfo = false
+    private var emulateBrowserClipboard = false
     private var display by mutableStateOf(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f))
 
     private fun show(start: String = "https://linux.do/apps/$first?room=one#play", external: (String) -> Unit = {}) {
@@ -283,6 +285,134 @@ class MiniAppWebUiTest {
         compose.onNodeWithText("原生来源").assertIsDisplayed()
     }
 
+    // Mirrors the official loader's dialog and execute callback, without bypassing its promise.
+    private fun siteClipboard(method: String, text: String = "", timeout: Int = 60000, translated: Boolean = false) {
+        js("""(()=>{
+          window.siteResult='pending';
+          const d=document.createElement('dialog');d.className='mini-app-permission-dialog';
+          const h=document.createElement('h2');h.id='permission-'+crypto.randomUUID();h.textContent='测试应用 请求操作';d.setAttribute('aria-labelledby',h.id);
+          const action=document.createElement('p');action.textContent=${JSONObject.quote(if (translated) "Read clipboard text" else if (method == "read") "读取剪贴板文字" else "写入剪贴板文字")};
+          const preview=document.createElement('p');preview.className='mini-app-permission-dialog__preview';preview.textContent=${JSONObject.quote(text.take(200))};
+          const buttons=document.createElement('div'),cancel=document.createElement('button'),allow=document.createElement('button');
+          cancel.type=allow.type='button';cancel.className='button';allow.className='button --primary';cancel.textContent='取消';allow.textContent='仅本次允许';
+          buttons.append(cancel,allow);d.append(h,action,preview,buttons);
+          let done=false;let timer;
+          const finish=(value)=>{if(done)return;done=true;clearTimeout(timer);d.close();d.remove();window.siteResult=value};
+          cancel.onclick=()=>finish('USER_CANCELLED');d.oncancel=e=>{e.preventDefault();finish('USER_CANCELLED')};
+          window.abortClipboard=()=>finish('TIMEOUT');timer=setTimeout(window.abortClipboard,$timeout);
+          allow.onclick=async()=>{if(done)return;cancel.disabled=allow.disabled=true;d.close();try {
+            const value=${if (method == "read") "await navigator.clipboard.readText()" else "await navigator.clipboard.writeText(${JSONObject.quote(text)})"};
+            finish(${if (method == "read") "value" else "'written'"});
+          }catch(e){finish(e.code||e.name)}};
+          document.body.append(d);d.showModal();
+        })()""".trimIndent())
+    }
+
+    @Test fun siteClipboardUsesASingleNativeConfirmation() {
+        show()
+        siteClipboard("write", "单次原生确认")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序写入剪贴板？").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals("true", js("!document.querySelector('.mini-app-permission-dialog[open]')"))
+        compose.onNodeWithText("取消").performClick()
+        compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
+        assertEquals("true", js("!document.querySelector('.mini-app-permission-dialog')"))
+    }
+
+    @Test fun siteClipboardReadWriteRequireConsentEvenWhenBrowserApisSucceed() {
+        emulateBrowserClipboard = true
+        val manager = compose.activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        var previous: ClipData? = null
+        compose.runOnUiThread { previous = manager.primaryClip; manager.setPrimaryClip(ClipData.newPlainText("fixture", "原生读取测试")) }
+        try {
+            show()
+            siteClipboard("read")
+            compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序读取剪贴板文字？").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals("0", js("window.browserClipboardCalls||0"))
+            assertEquals("\"pending\"", js("window.siteResult"))
+            for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+                compose.runOnIdle { display = display.copy(theme = theme) }
+                compose.onNodeWithText("仅本次允许").assertIsDisplayed()
+                capture("mini-app-clipboard-${theme.name.lowercase()}.png")
+            }
+            compose.onNodeWithText("仅本次允许").performClick()
+            compose.waitUntil(5000) { js("window.siteResult").contains("原生读取测试") }
+            val text = "完整写入".repeat(110)
+            siteClipboard("write", text)
+            compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序写入剪贴板？").fetchSemanticsNodes().isNotEmpty() }
+            compose.runOnUiThread { assertEquals("原生读取测试", manager.primaryClip!!.getItemAt(0).text.toString()) }
+            compose.onNodeWithText("仅本次允许").performClick()
+            compose.waitUntil(5000) { js("window.siteResult").contains("written") }
+            compose.runOnUiThread { assertEquals(text, manager.primaryClip!!.getItemAt(0).text.toString()) }
+            assertEquals("0", js("window.browserClipboardCalls||0"))
+            assertEquals("true", js("!document.querySelector('.mini-app-permission-dialog')"))
+        } finally { compose.runOnUiThread { previous?.let(manager::setPrimaryClip) ?: manager.clearPrimaryClip() } }
+    }
+
+    @Test fun siteClipboardTimeoutAndNavigationDismissTheNativeRequest() {
+        show()
+        siteClipboard("write", "过期请求")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        js("window.abortClipboard()")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isEmpty() }
+        assertEquals("\"TIMEOUT\"", js("window.siteResult"))
+        siteClipboard("write", "切页请求")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        js("history.pushState({}, '', '/apps/$second')")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isEmpty() }
+        compose.waitUntil(5000) { js("window.siteResult !== 'pending'") == "true" }
+        assertEquals("true", js("!document.querySelector('.mini-app-permission-dialog')"))
+    }
+
+    @Test fun siteClipboardReadsTranslatedPreloadAndUnknownDialogsStayOnTheWeb() {
+        show()
+        js("""(()=>{
+          const preload=document.createElement('script');preload.id='data-preloaded';preload.type='application/json';
+          preload.textContent=JSON.stringify({'mini-app/production/$first/':JSON.stringify({configuration:{channel:'production',translations:{native:{
+            action:{clipboard:{readText:'Read clipboard text',writeText:'Write clipboard text'}},rejectAction:'取消',allowAction:'仅本次允许'
+          }}}})});document.head.append(preload);
+        })()""".trimIndent())
+        siteClipboard("read", translated = true)
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("取消").performClick()
+        compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
+        js("""(()=>{const d=document.createElement('dialog');d.className='mini-app-permission-dialog';
+          d.innerHTML='<h2 id=permission-audio>声音权限</h2><p>播放音频</p><p class=mini-app-permission-dialog__preview>声音</p><div><button class=button>取消</button><button class="button --primary" id=audio-allow>开启声音</button></div>';
+          d.setAttribute('aria-labelledby','permission-audio');d.querySelector('#audio-allow').onclick=()=>{window.audioAccepted=true;d.close();d.remove()};document.body.append(d);d.showModal()})()""".trimIndent())
+        assertEquals("true", js("!!document.querySelector('.mini-app-permission-dialog[open]')"))
+        assertEquals("true", js("window.audioAccepted !== true"))
+        compose.onNodeWithText("仅本次允许").assertDoesNotExist()
+        click("audio-allow")
+        compose.waitUntil(5000) { js("window.audioAccepted === true") == "true" }
+    }
+
+    @Test fun frameHostClipboardAndConcurrentCancellationKeepRequestsSeparate() {
+        show()
+        compose.waitUntil(5000) { js("!!document.querySelector('.mini-app-frame-host')?.contentDocument?.querySelector('iframe')") == "true" }
+        js("window.frameClip='pending';document.querySelector('.mini-app-frame-host').contentWindow.navigator.clipboard.readText().catch(e=>window.frameClip=e.code)")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序读取剪贴板文字？").fetchSemanticsNodes().isNotEmpty() }
+        js("window.concurrentClip='pending';navigator.clipboard.writeText('并发取消测试').catch(e=>window.concurrentClip=e.code)")
+        compose.waitUntil(5000) { js("window.concurrentClip").contains("USER_CANCELLED") }
+        compose.onNodeWithText("允许小程序读取剪贴板文字？").assertIsDisplayed()
+        compose.onNodeWithText("取消").performClick()
+        compose.waitUntil(5000) { js("window.frameClip").contains("USER_CANCELLED") }
+        js("window.largeClip='pending';navigator.clipboard.writeText('界'.repeat(1366)).catch(e=>window.largeClip=e.code)")
+        compose.waitUntil(5000) { js("window.largeClip").contains("INVALID_ARGUMENTS") }
+        compose.onNodeWithText("仅本次允许").assertDoesNotExist()
+    }
+
+    @Test fun compatibilityTimeoutDismissesNativeWithoutCompletingALaterRequest() {
+        show()
+        js("""(()=>{const original=window.setTimeout;window.setTimeout=(fn,ms,...args)=>original(fn,ms===60000?300:ms,...args);
+          window.timedClip='pending';navigator.clipboard.readText().catch(e=>window.timedClip=e.code);window.setTimeout=original})()""")
+        compose.waitUntil(5000) { js("window.timedClip").contains("TIMEOUT") }
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isEmpty() }
+        siteClipboard("read")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals("\"pending\"", js("window.siteResult"))
+        compose.onNodeWithText("取消").performClick()
+        compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
+    }
+
     @Test fun clipboardFallbackRequiresConsentAndIsAbsentFromUntrustedFrames() {
         val manager = InstrumentationRegistry.getInstrumentation().targetContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         var previous: ClipData? = null
@@ -373,6 +503,12 @@ class MiniAppWebUiTest {
     }
 
     private inner class FixtureView(context: Context) : WebView(context) {
+        init {
+            if (emulateBrowserClipboard) WebViewCompat.addDocumentStartJavaScript(this, """
+                navigator.clipboard.readText=()=>{window.browserClipboardCalls=(window.browserClipboardCalls||0)+1;return Promise.resolve('browser')};
+                navigator.clipboard.writeText=()=>{window.browserClipboardCalls=(window.browserClipboardCalls||0)+1;return Promise.resolve()};
+            """.trimIndent(), setOf("https://linux.do"))
+        }
         var destroyed = false
         override fun destroy() { destroyed = true; super.destroy() }
         override fun setWebViewClient(client: WebViewClient) {

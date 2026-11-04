@@ -5,6 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.webkit.WebView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
@@ -15,18 +18,28 @@ import org.json.JSONObject
 import java.util.UUID
 
 internal class MiniAppClipboardRequest(
-    val write: Boolean, val text: String?, private val reply: (String?, String?) -> Unit,
+    val write: Boolean, val text: String?, private val valid: () -> Boolean = { true },
+    private val reply: (String?, String?) -> Unit,
 ) {
-    private var completed = false
-    fun cancel() = finish(null, "USER_CANCELLED")
+    var completed by mutableStateOf(false)
+        private set
+    fun cancel(error: String = "USER_CANCELLED") = finish(null, error)
     fun allow(context: Context) {
-        val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        if (write) {
-            manager.setPrimaryClip(ClipData.newPlainText("小程序", text.orEmpty()))
-            finish(null, null)
-        } else {
-            val value = manager.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
-            if (value.toByteArray(Charsets.UTF_8).size > 4096) finish(null, "INVALID_ARGUMENTS") else finish(value, null)
+        if (completed) return
+        // Claim the request before touching the clipboard, including stale/double UI callbacks.
+        completed = true
+        if (!valid()) { reply(null, "APP_UNLOADED"); return }
+        try {
+            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            if (write) {
+                if (text.orEmpty().toByteArray(Charsets.UTF_8).size > 4096) reply(null, "INVALID_ARGUMENTS")
+                else { manager.setPrimaryClip(ClipData.newPlainText("小程序", text.orEmpty())); reply(null, null) }
+            } else {
+                val value = manager.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
+                if (value.toByteArray(Charsets.UTF_8).size > 4096) reply(null, "INVALID_ARGUMENTS") else reply(value, null)
+            }
+        } catch (_: SecurityException) {
+            reply(null, "PERMISSION_DENIED")
         }
     }
     private fun finish(value: String?, error: String?) {
@@ -44,6 +57,7 @@ internal class MiniAppWebBridge(
     private val presentation: (Boolean) -> Unit = {},
 ) {
     private val pendingInfo = mutableMapOf<String, Pair<String, CompletableDeferred<MiniAppInfo>>>()
+    private val pendingClipboard = mutableMapOf<Triple<Boolean, String, String>, MiniAppClipboardRequest>()
     private var script: ScriptHandler? = null
     private var presentationScript: ScriptHandler? = null
     private val supported = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
@@ -73,7 +87,18 @@ internal class MiniAppWebBridge(
                     if (mainFrame) MiniAppLaunchState.parse(data, view.url.orEmpty())?.let(launch)
                     return@addWebMessageListener
                 }
-                if (!active()) return@addWebMessageListener
+                val id = data.optString("id").takeIf { it.length in 1..64 }
+                val document = data.optString("document").takeIf { it.length in 1..64 }
+                val key = if (id != null && document != null) Triple(mainFrame, document, id) else null
+                if (data.optString("type") == "clipboard-cancel") {
+                    if (key != null) pendingClipboard[key]?.cancel(data.optString("error")
+                        .takeIf { it in setOf("USER_CANCELLED", "TIMEOUT", "APP_UNLOADED") } ?: "USER_CANCELLED")
+                    return@addWebMessageListener
+                }
+                if (!active()) {
+                    if (data.optString("type") == "clipboard" && id != null) send(reply, id, null, "USER_CANCELLED")
+                    return@addWebMessageListener
+                }
                 when (data.optString("type")) {
                     "info" -> if (mainFrame) {
                         val pending = pendingInfo.remove(data.optString("id")) ?: return@addWebMessageListener
@@ -83,12 +108,24 @@ internal class MiniAppWebBridge(
                     "info-error" -> if (mainFrame) pendingInfo.remove(data.optString("id"))?.second
                         ?.completeExceptionally(IllegalStateException("应用信息加载失败"))
                     "clipboard" -> {
-                        val id = data.optString("id").takeIf { it.length in 1..64 } ?: return@addWebMessageListener
+                        if (id == null || key == null) return@addWebMessageListener
+                        val url = data.optString("url")
+                        if (url != view.url) { send(reply, id, null, "APP_UNLOADED"); return@addWebMessageListener }
+                        if (pendingClipboard.containsKey(key)) return@addWebMessageListener
                         val method = data.optString("method")
                         val text = data.optString("text")
-                        if (method !in setOf("read", "write") || text.toByteArray(Charsets.UTF_8).size > 4096) {
+                        if (method !in setOf("read", "write") || (method == "write" && data.opt("text") !is String) ||
+                            text.toByteArray(Charsets.UTF_8).size > 4096) {
                             send(reply, id, null, "INVALID_ARGUMENTS")
-                        } else clipboard(MiniAppClipboardRequest(method == "write", text) { value, error -> send(reply, id, value, error) })
+                        } else {
+                            val request = MiniAppClipboardRequest(method == "write", text,
+                                valid = { !closed && active() && view.url == url }) { value, error ->
+                                pendingClipboard.remove(key)
+                                send(reply, id, value, error)
+                            }
+                            pendingClipboard[key] = request
+                            clipboard(request)
+                        }
                     }
                 }
             }
@@ -132,6 +169,8 @@ internal class MiniAppWebBridge(
     }
 
     fun invalidate() {
+        pendingClipboard.values.toList().forEach { it.cancel("APP_UNLOADED") }
+        pendingClipboard.clear()
         pendingInfo.values.forEach { it.second.cancel() }
         pendingInfo.clear()
     }

@@ -109,7 +109,10 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
         }
     }
     LaunchedEffect(miniUi.clipboard) {
-        if (miniUi.clipboard != null) { delay(60000); miniUi.dismiss() }
+        if (miniUi.clipboard != null) { delay(60000); miniUi.clipboard?.cancel("TIMEOUT"); miniUi.dismiss() }
+    }
+    LaunchedEffect(miniUi.clipboard?.completed) {
+        if (miniUi.clipboard?.completed == true) miniUi.dismiss()
     }
     DisposableEffect(lifecycle, page) {
         val observer = LifecycleEventObserver { _, event ->

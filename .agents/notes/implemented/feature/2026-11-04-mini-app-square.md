@@ -24,7 +24,7 @@ Status: implemented
 
 发布人只展示头像和名字，不额外展示用户名。名字沿用 name、缺失时回退 username；头像读取公开 author 的 avatar_template 或 avatar_url，模板替换尺寸后按官网地址解析，只接受无账号口令的 HTTPS 图片。头像缺失或加载失败显示人物占位，不为弹窗额外请求用户资料。
 
-剪贴板保留标准浏览器接口，缺失方法或遇到 `NotAllowedError` / `NotSupportedError` 时才回退到需本次确认的原生文字读写，限制 4 KiB。WebView 156 暴露 readText 但实际返回 NotAllowedError，单纯检查方法是否存在不足以适配。消息接口使用 AndroidX WebKit 的来源过滤，仅向 `https://linux.do` 注入；接收还检查当前顶层为正式应用广场或精确应用路径、来源为官网且 App 在前台。第三方与 opaque origin 沙箱 iframe 没有消息对象，平台隔离与权限检查仍由官网宿主完成。DocumentStart 注入兼容脚本，并在站内 history 变化与加载完成时幂等补装，覆盖 Ember 从普通页面进入应用的情况。
+本篇原有剪贴板策略由[剪贴板单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)部分替代。原策略保留标准浏览器接口，缺失方法或遇到 `NotAllowedError` / `NotSupportedError` 时才回退到需本次确认的原生文字读写，限制 4 KiB；其理由是最少改变浏览器行为。WebView 156 暴露 readText 但实际返回 NotAllowedError，单纯检查方法是否存在不足以适配。消息接口使用 AndroidX WebKit 的来源过滤，仅向 `https://linux.do` 注入；接收还检查当前顶层为正式应用广场或精确应用路径、来源为官网且 App 在前台。第三方与 opaque origin 沙箱 iframe 没有消息对象，平台隔离与权限检查仍由官网宿主完成。DocumentStart 注入兼容脚本，并在站内 history 变化与加载完成时幂等补装，覆盖 Ember 从普通页面进入应用的情况。
 
 不放开文件访问、content URI、混合内容、第三方 Cookie 或无手势自动媒体播放；SDK 的存储、用户、主题、包验签、固定 CDN 素材、HTTP/WS 和鉴权仍走官网实现。WebView 不支持安全消息接口时不退回无来源约束的 addJavascriptInterface；关于显示加载失败，其他网页能力继续使用浏览器自身支持。
 
@@ -54,6 +54,6 @@ Status: implemented
 
 ## Consequences
 
-官网接口或 DOM 结构可能变化；提供明确错误而不从地址猜字段。SDK 存储按应用及正式/沙箱隔离，不自动按账号切换，不宣称分用户。原生剪贴板回退可能在官网权限确认后再次确认，这是浏览器能力缺失时的本次授权边界。固定胶囊会占用部分屏幕，但全屏后仍保留退出入口。网页及弹层统一普通材质，不重新引入采样 WebView 的闪退风险；其他原生页面仍遵循全局设置。
+官网接口或 DOM 结构可能变化；提供明确错误而不从地址猜字段。SDK 存储按应用及正式/沙箱隔离，不自动按账号切换，不宣称分用户。原生剪贴板回退导致的二次确认现由[单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)接管，其失败回退边界见该篇。固定胶囊会占用部分屏幕，但全屏后仍保留退出入口。网页及弹层统一普通材质，不重新引入采样 WebView 的闪退风险；其他原生页面仍遵循全局设置。
 
 测试机和当前 WebView 的通过不能代替其他系统版本的兼容验收。沙箱开发路由不在正式应用胶囊与公开关于接口的识别范围内，继续按普通网页浏览；缺少 DOCUMENT_START_SCRIPT 时只能在顶层页面补装，嵌入 frame-host 的兼容能力仍取决于内核。真实登录后的剪贴板、账号资料和业务网络授权仍需账号验收，不以匿名官网加载或离线夹具的成功替代。

@@ -20,6 +20,8 @@ WebPageScaffold 只切换标题与悬浮胶囊，正文保持同一 Compose 调�
 
 运行时的加载、下载、解包和启动呈现由[小程序原生启动进度](2026-11-04-mini-app-native-launch-progress.md)部分替代：有安全消息接口时隐藏官网进度视觉层，通过真实阶段快照显示原生进度；权限 dialog 继续使用官网交互。本篇的 H5 运行时、稳定 WebView、几何和无 loader 回退约束继续有效。
 
+权限交互中，已识别的剪贴板读写由[单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)部分接管；声音、视频、全屏及其他官网权限继续保留网页交互。
+
 ## Existing note audit
 
 [小程序网页容器](../../implemented/feature/2026-11-04-mini-app-square.md)部分重叠：本篇替代带原生返回、标题和固定整行胶囊的运行页外观；保留其 H5、关于、权限、媒体和生命周期决定。[原生应用广场](../../implemented/feature/2026-11-04-native-app-square.md)继续负责目录和返回恢复。[网页普通材质](../../implemented/bug-fix/2026-10-29-webview-ordinary-material.md)保持。未发现其他同主题 proposed/rejected 笔记。
