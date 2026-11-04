@@ -169,6 +169,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         com.kudo.android.ui.library.ImageLibraryEnvironment(app.imageLibrary, account.user?.id, sessionStable) {
         TopicPresentationEnvironment(app.repository, account.user?.id) {
         AvatarEnvironment(app.repository, account.user?.id) {
+        MiniAppPreviewEnvironment(app.repository, account.user?.id) {
             ImageGalleryHost(loadAlbum = { id ->
                 val detail = app.repository.detail(id, 1)
                 val first = detail.originalPost ?: detail.stream.firstOrNull()?.let { firstId ->
@@ -546,6 +547,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }
             }
             }
+        }
         }
         }
         }

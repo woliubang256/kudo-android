@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.kudo.android.ui.LinuxDoLink
 import com.kudo.android.ui.components.mediaUrl
+import com.kudo.android.ui.web.MiniAppLocation
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Element
 
@@ -41,6 +42,11 @@ internal fun parseOnebox(element: Element): ArticleBlock.Embed? {
 
 @Composable
 internal fun OneboxPreview(block: ArticleBlock.Embed, open: (String) -> Unit) {
+    val appId = remember(block.url) { MiniAppLocation.parse(block.url)?.id }
+    if (appId != null) {
+        MiniAppPreview(appId, block.url, open)
+        return
+    }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
         .clickable(role = Role.Button) { open(block.url) }.padding(14.dp).testTag("onebox-preview"),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
