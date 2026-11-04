@@ -16,7 +16,7 @@ Status: implemented
 
 运行时进度使用[小程序原生启动进度](2026-11-04-mini-app-native-launch-progress.md)的受限快照通道；官网继续负责下载、解包、沙箱和权限，原生仅接管启动视觉。
 
-胶囊可见高度为 32dp，更多与关闭各保留 48dp 触控区，按压反馈限制在 32dp 可见表面内。图标使用用户提供的原始 SVG 路径：更多为中大侧小三点，关闭为圆环加实心点，颜色跟随主题。MiniAppWebUiTest 同时验证胶囊视觉高度与两枚按钮的触控尺寸，微调后的 7 项运行页回归通过，记录在 `artifacts/native-apps-refined-device.txt`；实机胶囊见 `artifacts/mini-app-capsule-dark.png`。
+胶囊可见高度为 32dp，更多与关闭各保留 48dp 触控区，按压反馈限制在 32dp 可见表面内。按最新微信参考图，图标缩到 20dp，更多为等大等距三点，关闭保留用户提供的圆环加实心点；深色采用半透明深底与浅色图标，浅色采用半透明白底与深色图标，使用半 dp 细边和 16dp 分隔线。不采样 WebView，不接入模糊或折射。MiniAppWebUiTest 同时验证胶囊视觉高度与两枚按钮的触控尺寸，微调后的 7 项运行页回归通过，记录在 `artifacts/native-apps-refined-device.txt`；实机胶囊见 `artifacts/mini-app-capsule-dark.png`。
 
 加载官网宿主页及其隔离 iframe，继续复用 CookieManager、JavaScript、DOM 存储及默认第三方 Cookie 限制。不下载运行用户提供的开发 ZIP，不复制平台 SDK、鉴权或审核权限；文档仅作为协议参考。全屏保留原生胶囊，返回先退出弹层再退出全屏；切到后台暂停可访问的媒体、隐藏网页并取消剪贴板确认，关闭释放 WebView 和原生桥。保留 HTTPS、CORS 与平台资源校验。
 
@@ -40,6 +40,7 @@ Status: implemented
 
 ## Testing
 
+- 胶囊外观微调后的 3 项 MiniAppWebUiTest 通过，覆盖 32dp 表面、48dp 触控区、更多与关于、重新进入保留参数、关闭回来源和沉浸布局，记录为 `artifacts/mini-app-capsule-style-device.txt`。胶囊浅深色局部截图已检查：`artifacts/mini-app-capsule-refined-light.png`、`artifacts/mini-app-capsule-refined-dark.png`；使用 Compose 节点捕获以等待重绘，避免系统截图读到切换主题前一帧。截图捕获调整后该用例在 `artifacts/mini-app-deeplink-fixed-device.txt` 中再次通过。入口及胶囊均通过同签名 0.3.1-dev / 3002 覆盖安装验收，未卸载或清理数据。
 - 四列更多宫格与重新进入用例覆盖跨应用后的当前 URL、query/hash、原 WebView 与原生来源；初轮关于通过，重进用例因导航取消 JavaScript 评估回调而超时，记录为 `artifacts/mini-app-menu-grid-device.txt`。用例改为等待页面完成后再读取状态，2 项通过（4.27 秒），见 `artifacts/mini-app-menu-grid-fixed-device.txt`；截图为 `artifacts/mini-app-menu-grid.png`。
 - 发布人头像扩展经官网访客接口核对：author 实际含 id、username、name、avatar_template、animated_avatar，本地读取静态 avatar_template。5 项 MiniAppInfoTest 通过；关于与线上两款小程序探针通过（2 tests，17.892 秒），记录为 `artifacts/mini-app-publisher-unit.txt` 与 `artifacts/mini-app-publisher-fixed-device.txt`。新增头像用例先复现 SubcomposeAsyncImage 在加载/失败内容时丢失无障碍描述，改为外层 semantics 后通过，失败记录为 `artifacts/mini-app-publisher-device.txt`。
 - MiniAppInfoTest 验证官网 HTTPS 路径、query/hash 保留、服务器字段、错误身份及不安全图标过滤。

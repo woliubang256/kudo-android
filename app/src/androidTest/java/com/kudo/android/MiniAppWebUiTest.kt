@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
 import androidx.compose.material3.Text
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -77,7 +78,10 @@ class MiniAppWebUiTest {
         compose.onNodeWithContentDescription("刷新网页").assertDoesNotExist()
         compose.onNodeWithContentDescription("小程序更多").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
         compose.onNodeWithContentDescription("关闭网页").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
-        capture("mini-app-capsule-dark.png")
+        captureCapsule("mini-app-capsule-dark.png")
+        compose.runOnIdle { display = display.copy(theme = ThemeMode.LIGHT) }
+        captureCapsule("mini-app-capsule-light.png")
+        compose.runOnIdle { display = display.copy(theme = ThemeMode.DARK) }
         about("2048")
         compose.onNodeWithContentDescription("应用图标").assertIsDisplayed()
         compose.onNodeWithText("2048 小游戏").assertIsDisplayed()
@@ -351,6 +355,13 @@ class MiniAppWebUiTest {
         assertEquals("1", js("window.pauses"))
         compose.runOnIdle { assertSame(original, web); assertEquals(android.view.View.VISIBLE, web.visibility) }
         compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
+    }
+
+    private fun captureCapsule(name: String) {
+        val bitmap = compose.onNodeWithTag("mini-app-capsule").captureToImage().asAndroidBitmap()
+        File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), name).outputStream().use {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
     }
 
     private fun capture(name: String) {

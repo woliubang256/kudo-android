@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -63,31 +65,35 @@ internal fun MiniAppTopBar(title: String, back: () -> Unit, more: () -> Unit, cl
 
 @Composable
 internal fun MiniAppCapsule(more: () -> Unit, close: () -> Unit, modifier: Modifier = Modifier) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < .5f
+    val foreground = if (dark) Color.White.copy(alpha = .9f) else Color.Black.copy(alpha = .78f)
+    val surface = (if (dark) Color(0xFF2C2C2E) else Color.White).copy(alpha = .86f)
+    val outline = foreground.copy(alpha = if (dark) .1f else .08f)
     Box(modifier.width(97.dp).height(48.dp), contentAlignment = Alignment.Center) {
         Row(Modifier.fillMaxWidth().height(32.dp).clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+            .background(surface)
+            .border(.5.dp, outline, RoundedCornerShape(50))
             .testTag("mini-app-capsule"), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(18.dp).background(MaterialTheme.colorScheme.outlineVariant))
+            Box(Modifier.width(.5.dp).height(16.dp).background(foreground.copy(alpha = .14f)))
             Spacer(Modifier.weight(1f))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            MiniAppCapsuleButton(MiniAppIcons.More, "小程序更多", more)
+            MiniAppCapsuleButton(MiniAppIcons.More, foreground, "小程序更多", more)
             Spacer(Modifier.width(1.dp))
-            MiniAppCapsuleButton(MiniAppIcons.Close, "关闭网页", close)
+            MiniAppCapsuleButton(MiniAppIcons.Close, foreground, "关闭网页", close)
         }
     }
 }
 
 @Composable
-private fun MiniAppCapsuleButton(icon: ImageVector, description: String, click: () -> Unit) {
+private fun MiniAppCapsuleButton(icon: ImageVector, tint: Color, description: String, click: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     Box(Modifier.size(48.dp).clickable(interactionSource = interaction, indication = null,
         role = Role.Button, onClick = click), contentAlignment = Alignment.Center) {
         Box(Modifier.width(48.dp).height(32.dp).clip(RoundedCornerShape(50))
-            .indication(interaction, ripple()), contentAlignment = Alignment.Center) {
-            Icon(icon, description, Modifier.size(24.dp))
+            .indication(interaction, ripple(color = tint)), contentAlignment = Alignment.Center) {
+            Icon(icon, description, Modifier.size(20.dp), tint = tint)
         }
     }
 }

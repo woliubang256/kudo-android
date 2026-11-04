@@ -189,7 +189,7 @@ internal fun MemberProfileScreen(user: Member, repository: CommunityRepository?,
                 }
                 item(key = "apps") {
                     Column(Modifier.padding(horizontal = 8.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface)) {
-                        CompactAccountRow(AppSquareIcon, MaterialTheme.colorScheme.onSurfaceVariant, "应用广场", apps)
+                        CompactAccountRow(AppSquareIcon, Color(0xFF07C160), "应用广场", apps)
                     }
                 }
                 item(key = "settings") {
