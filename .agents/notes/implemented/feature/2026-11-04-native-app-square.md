@@ -22,6 +22,8 @@ H5 运行页仍使用普通材质，不把网页重新接进玻璃采样。胶�
 
 数据单元提供 MiniAppEntry、miniApps 请求与 AppSquareViewModel。页码必须与请求一致，导航仅使用有效 UUID；不安全图标退回通用图标。搜索延迟 300ms、取消旧作业并使用代次隔离，翻页保留已完成数据，失败重试同一页并按 ID 去重。ViewModel 绑定导航条目及账号键，不跨账号复用结果，不在公共目录模型保存用户资料。布局偏好使用 AppSettings 的 `app_square_grid` 键，仅保存显示方式。
 
+MiniAppEntry 直接保留目录返回的 rating_average、rating_count、usage_count，用于列表右侧统计，不逐项补查详情。均值只接受有限的 0～5 数值；两种计数只接受非负整数并用 Long 保存。缺失或错误类型保持为空，实际零值与缺失区分。这里的 usage_count 为目录累计使用量，不替换成 recent_usage_count，也不补入关于。
+
 应用详情按所选 UUID 独立请求 `/mini-app-api/public/<app-id>/info`，共用[小程序公开信息解析](2026-11-04-mini-app-square.md)，不从目录拼装另一套关于数据。详情请求与目录请求分别取消和隔离，关闭、换应用、换查询或排序后，旧请求不能重开弹窗或覆盖新应用。缺失使用次数按用户要求省略，不补查目录或创建运行中的 WebView。
 
 列表与宫格的长按通过同一 combinedClickable 打开关于，普通点击继续进入应用。长按与打开筛选前清除搜索焦点并收起键盘，保留展开状态、查询和布局，避免输入法遮挡弹层。关于与筛选复用 EditorToolBackdropHost 和 EditorToolSheet，以不包含弹层的目录兄弟层为采样源，跟随当前三种材质。加载、失败重试和关闭保持可用；关于内容与小程序运行页共用 MiniAppAboutContent，但运行页外壳仍强制普通材质。
@@ -41,6 +43,7 @@ H5 运行页仍使用普通材质，不把网页重新接进玻璃采样。胶�
 
 ## Testing
 
+- 列表统计的数据扩展经 AppSquareTest 共 7 项 JVM 用例通过，见 `artifacts/app-square-list-data-unit.txt`。新用例检查目录单请求保留小数星及超过 Int 范围的评价／使用量，使用累计而非近期字段，缺失或错误类型省略且实际零值保留。
 - 2026-11-05 浏览器只读核对 hot / latest / rating / used 四种官方参数；详情 app 有 rating_average、rating_count，没有使用次数字段，契约证据为 `artifacts/app-square-statistics-contract.json`。AppSquareTest、AppSquareAboutTest 和 MiniAppInfoTest 共 14 项 JVM 测试通过，覆盖排序参数、查询编码、分页重置、慢旧分页隔离、详情失败重试与身份校验、关闭后旧结果隔离，以及缺失和异常评分字段。
 - 线上截图发现搜索后长按仍显示输入法；新增 longPressFromSearchHidesTheKeyboardBeforeShowingAbout 在旧实现的键盘隐藏等待上失败，记录为 `artifacts/app-square-keyboard-repro-device.txt`。长按入口改为先清焦点、隐藏输入法，再加载关于。
 - 新增 AppSquareMaterialUiTest 对关于与筛选分别切换目录实际绘制的蓝／红底色，采样限制在圆角面板内部，排除角落的遮罩区域，既检查实时采样，也要求普通材质保持高遮盖率。面板与采样层的父链互不包含。早期无缓存模拟图标的夹具出现 Espresso 等待空闲超时及 Compose 并发快照异常，分别保留 `artifacts/app-square-about-crash-logcat.txt`、`artifacts/app-square-material-idler-device.txt`，不把这些运行记为通过；最终材质测试使用确定的目录底色，真实图标和详情网络链路单独由线上探针验收。

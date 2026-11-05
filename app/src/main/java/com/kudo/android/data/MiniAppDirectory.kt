@@ -3,7 +3,8 @@ package com.kudo.android.data
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONObject
 
-data class MiniAppEntry(val id: String, val name: String, val iconUrl: String?) {
+data class MiniAppEntry(val id: String, val name: String, val iconUrl: String?,
+    val ratingAverage: Double? = null, val ratingCount: Long? = null, val usageCount: Long? = null) {
     val url: String get() = "https://linux.do/apps/$id"
 }
 
@@ -27,7 +28,10 @@ internal fun parseMiniAppDirectory(data: JSONObject, page: Int): MiniAppDirector
             val name = app.optString("name").trim().takeIf(String::isNotEmpty) ?: continue
             val icon = app.optString("icon_url").toHttpUrlOrNull()
                 ?.takeIf { it.isHttps && it.username.isEmpty() && it.password.isEmpty() }?.toString()
-            add(MiniAppEntry(id, name, icon))
+            val average = (app.opt("rating_average") as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 0.0..5.0 }
+            val ratings = (app.opt("rating_count") as? Number)?.toString()?.toLongOrNull()?.takeIf { it >= 0 }
+            val usage = (app.opt("usage_count") as? Number)?.toString()?.toLongOrNull()?.takeIf { it >= 0 }
+            add(MiniAppEntry(id, name, icon, average, ratings, usage))
         }
     }.distinctBy(MiniAppEntry::id)
     return MiniAppDirectoryPage(apps, values.length() > 0 && (page + 1L) * perPage < total)

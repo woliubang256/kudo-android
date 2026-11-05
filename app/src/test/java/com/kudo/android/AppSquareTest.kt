@@ -62,6 +62,38 @@ class AppSquareTest {
         } finally { vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); Dispatchers.resetMain() }
     }
 
+    @Test fun directoryKeepsFractionalRatingsAndLongUsageCountsWithoutExtraRequests() = runTest {
+        val server = MockWebServer()
+        server.start(InetAddress.getByName("127.0.0.1"), 0)
+        try {
+            val json = JSONObject(body()).apply { getJSONArray("apps").getJSONObject(0)
+                .put("rating_average", 4.35).put("rating_count", 3_000_000_000L)
+                .put("usage_count", 4_000_000_000L).put("recent_usage_count", 10) }
+            server.enqueue(MockResponse().setBody(json.toString()))
+            val app = CommunityRepository(DiscourseClient(NoCookies, server.url("/"))).miniApps().apps.single()
+            assertEquals(4.35, app.ratingAverage!!, .001)
+            assertEquals(3_000_000_000L, app.ratingCount!!)
+            assertEquals(4_000_000_000L, app.usageCount!!)
+            assertEquals(1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test fun absentAndInvalidDirectoryStatisticsStayMissingButRealZeroIsPreserved() {
+        val absent = parseMiniAppDirectory(JSONObject(body()), 0).apps.single()
+        assertNull(absent.ratingAverage); assertNull(absent.ratingCount); assertNull(absent.usageCount)
+        for ((rating, count) in listOf(-1 to -1, 6 to 1.5, "4" to "10", true to true, JSONObject.NULL to JSONObject.NULL)) {
+            val json = JSONObject(body()).apply { getJSONArray("apps").getJSONObject(0)
+                .put("rating_average", rating).put("rating_count", count).put("usage_count", count) }
+            val app = parseMiniAppDirectory(json, 0).apps.single()
+            assertNull(app.ratingAverage); assertNull(app.ratingCount); assertNull(app.usageCount)
+        }
+        val zero = JSONObject(body()).apply { getJSONArray("apps").getJSONObject(0)
+            .put("rating_average", 0).put("rating_count", 0).put("usage_count", 0) }
+        val app = parseMiniAppDirectory(zero, 0).apps.single()
+        assertEquals(0.0, app.ratingAverage!!, 0.0)
+        assertEquals(0L, app.ratingCount!!); assertEquals(0L, app.usageCount!!)
+    }
+
     @Test fun everySortUsesTheOfficialValueAndDetailsOnlyRequestTheInfoEndpoint() = runTest {
         val server = MockWebServer()
         server.start(InetAddress.getByName("127.0.0.1"), 0)
