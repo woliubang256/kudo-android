@@ -173,7 +173,7 @@ class ImageLibraryUiTest {
         var source: ImageSource? = null
         screen { ImageLibraryScreen({}) { source = it } }
         loaded()
-        compose.onNodeWithText("全部").assertIsSelected()
+        compose.onNodeWithText("默认收藏").assertIsSelected()
         compose.onNodeWithText("来源主题").assertDoesNotExist()
         compose.onNodeWithText("表情").performClick()
         compose.onNodeWithTag("library-item-first").assertDoesNotExist()
@@ -183,6 +183,35 @@ class ImageLibraryUiTest {
         assertEquals(ImageSource(42, 8, "来源主题"), source)
         compose.onNodeWithTag("library-image-second").performClick()
         compose.onNodeWithTag("gallery-page-0").assertIsDisplayed()
+    }
+
+    @Test fun managementDefaultsToTheFirstSortedFolderAndKeepsAnExplicitAllSelection() {
+        seed()
+        runBlocking { store.update(101) { it.reorderFolders(listOf("emoji", DEFAULT_IMAGE_FOLDER)) } }
+        screen { ImageLibraryScreen({}) {} }
+        compose.waitUntil { compose.onAllNodesWithTag("library-item-second").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("表情").assertIsSelected()
+        compose.onNodeWithTag("library-item-first").assertDoesNotExist()
+        compose.onNodeWithText("全部").performClick()
+        compose.onNodeWithTag("library-item-first").assertIsDisplayed()
+        runBlocking { store.update(101) { it.renameFolder("emoji", "常用表情") } }
+        compose.waitUntil { compose.onAllNodesWithText("常用表情").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("全部").assertIsSelected()
+    }
+
+    @Test fun pickerDefaultsToTheFirstSortedFolderAndKeepsAnExplicitAllSelection() {
+        seed()
+        runBlocking { store.update(101) { it.reorderFolders(listOf("emoji", DEFAULT_IMAGE_FOLDER)) } }
+        screen { Column { ImageLibraryPicker(true) {} } }
+        compose.waitUntil { compose.onAllNodesWithTag("library-item-second").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("表情").assertIsSelected()
+        compose.onNodeWithTag("library-item-first").assertDoesNotExist()
+        compose.onNodeWithText("全部").performClick()
+        compose.onNodeWithTag("library-image-first").performClick()
+        runBlocking { store.update(101) { it.renameFolder("emoji", "常用表情") } }
+        compose.waitUntil { compose.onAllNodesWithText("常用表情").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("全部").assertIsSelected()
+        compose.onNodeWithText("插入 1 张图片").assertIsEnabled()
     }
 
     @Test fun folderRenameAndDeleteMoveImagesRatherThanDeletingThem() {
@@ -274,6 +303,7 @@ class ImageLibraryUiTest {
         val folder = saved.folders.single { it.name == "常用" }
         assertEquals(2, saved.images.size)
         assertEquals(first.copy(folderId = folder.id), saved.images.first { it.id == first.id })
+        compose.onNodeWithText("常用").performScrollTo().performClick()
         compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
         compose.onNodeWithTag("collect-folder-${folder.id}").assertIsSelected().assertIsDisplayed()
         capture("library-change-folder-dark-large.png")
@@ -396,14 +426,15 @@ class ImageLibraryUiTest {
         compose.waitUntil { compose.onAllNodesWithText("暂无收藏图片").fetchSemanticsNodes().isNotEmpty() }
         val original = compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot.top
         val pager = compose.onNodeWithTag("library-pager")
+        compose.onNodeWithText("默认收藏").assertIsSelected()
         pager.performTouchInput { swipeUp(durationMillis = 700) }
         compose.onNodeWithText("图库管理").assertIsNotDisplayed()
         val pinned = compose.onNodeWithTag("library-folders").assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
         assertTrue(pinned < original - 40f)
         pager.performTouchInput { swipeUp(durationMillis = 700) }
         assertEquals(pinned, compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot.top, 1f)
-        pager.performTouchInput { swipeLeft(durationMillis = 600) }
-        compose.onNodeWithText("默认收藏").assertIsSelected()
+        pager.performTouchInput { swipeRight(durationMillis = 600) }
+        compose.onNodeWithText("全部").assertIsSelected()
         compose.onNodeWithText("暂无收藏图片").assertIsDisplayed()
         capture("library-empty-tabs-pinned.png")
         pager.performTouchInput { swipe(Offset(center.x, height * .55f), Offset(center.x, height * .85f), durationMillis = 700) }
@@ -439,7 +470,6 @@ class ImageLibraryUiTest {
         screen { Column { ImageLibraryPicker(true) {} } }
         loaded()
         compose.onNodeWithTag("library-image-first").performClick()
-        compose.onNodeWithTag("library-pager").performTouchInput { swipeLeft(durationMillis = 500) }
         compose.onNodeWithText("默认收藏").assertIsSelected()
         compose.onNodeWithTag("library-item-second").assertDoesNotExist()
         compose.onNodeWithTag("library-pager").performTouchInput { swipeLeft(durationMillis = 500) }
@@ -527,7 +557,7 @@ class ImageLibraryUiTest {
         compose.runOnIdle { account = 202 }
         compose.waitUntil { compose.onAllNodesWithText("暂无收藏图片").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
-        compose.onNodeWithText("全部").assertIsSelected()
+        compose.onNodeWithText("默认收藏").assertIsSelected()
         assertEquals(2, runBlocking { store.load(101).images.size })
         assertTrue(runBlocking { store.load(202).images.isEmpty() })
     }

@@ -93,6 +93,7 @@ class ImageLibraryFolderOrderUiTest {
         compose.runOnIdle { picker.value = true }
         compose.onNodeWithTag("editor-library-picker").assertIsDisplayed()
         assertTabOrder()
+        compose.onNodeWithText("表情").assertIsSelected()
         assertEquals(order(), runBlocking { ImageLibraryStore(context).load(101).folders.map(ImageFolder::id) })
     }
 

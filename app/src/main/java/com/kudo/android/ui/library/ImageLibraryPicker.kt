@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 internal fun ImageLibraryPicker(enabled: Boolean, insert: (List<SavedImage>) -> Unit) {
     val state = LocalImageLibrary.current
     val scope = rememberCoroutineScope()
-    var folder by remember(state) { mutableStateOf<String?>(null) }
     var chosen by remember(state) { mutableStateOf<List<String>>(emptyList()) }
     val library = state?.library
     val selected = chosen.mapNotNull { id -> library?.images?.firstOrNull { it.id == id } }.distinctBy { it.originalUrl }
@@ -27,6 +26,7 @@ internal fun ImageLibraryPicker(enabled: Boolean, insert: (List<SavedImage>) -> 
         CommunityButton("重试", { scope.launch { state.reload() } })
     } else if (library == null) CommunityLoadingIndicator(Modifier.padding(16.dp))
     else {
+        var folder by remember(state) { mutableStateOf(library.folders.firstOrNull()?.id) }
         ImageLibraryBrowser(library, folder, { folder = it }, { image ->
             if (enabled) chosen = if (image.id in chosen) chosen - image.id else chosen + image.id
         }, Modifier.fillMaxWidth().height(height).testTag("editor-library-picker"), selection = chosen.toSet())

@@ -35,23 +35,25 @@ private fun ImageLibraryContent(back: () -> Unit, source: (ImageSource) -> Unit)
     val gallery = LocalImageGallery.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var folderId by rememberSaveable(state?.accountId) { mutableStateOf<String?>(null) }
     var manage by remember(state) { mutableStateOf(false) }
     var removing by remember(state) { mutableStateOf<SavedImage?>(null) }
     var changingFolder by remember(state) { mutableStateOf<SavedImage?>(null) }
     val library = state?.library
-    LaunchedEffect(library, folderId) { if (folderId != null && library?.folders?.none { it.id == folderId } == true) folderId = null }
-    if (library != null && state.error == null) ImageLibraryBrowser(library, folderId, { folderId = it }, { image ->
-        gallery?.open(listOf(image.articleImage()), 0, "library-${image.id}", source = image.source)
-    }, Modifier.fillMaxSize().testTag("image-library-screen"), source = source, remove = { removing = it },
-        changeFolder = { changingFolder = it }, header = {
-        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
-            Text("图库管理", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            CommunityIconButton(Icons.Rounded.CreateNewFolder, "管理图库目录", { manage = true })
-        }
-    }) else MaterialPageScaffold(modifier = Modifier.testTag("image-library-screen"), header = {
+    if (library != null && state.error == null) {
+        var folderId by rememberSaveable(state.accountId) { mutableStateOf(library.folders.firstOrNull()?.id) }
+        LaunchedEffect(library, folderId) { if (folderId != null && library.folders.none { it.id == folderId }) folderId = null }
+        ImageLibraryBrowser(library, folderId, { folderId = it }, { image ->
+            gallery?.open(listOf(image.articleImage()), 0, "library-${image.id}", source = image.source)
+        }, Modifier.fillMaxSize().testTag("image-library-screen"), source = source, remove = { removing = it },
+            changeFolder = { changingFolder = it }, header = {
+            Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
+                Text("图库管理", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                CommunityIconButton(Icons.Rounded.CreateNewFolder, "管理图库目录", { manage = true })
+            }
+        })
+    } else MaterialPageScaffold(modifier = Modifier.testTag("image-library-screen"), header = {
         AccountPageTopBar("图库管理", back) {
             CommunityIconButton(Icons.Rounded.CreateNewFolder, "管理图库目录", { manage = true }, enabled = library != null && state.error == null)
         }
