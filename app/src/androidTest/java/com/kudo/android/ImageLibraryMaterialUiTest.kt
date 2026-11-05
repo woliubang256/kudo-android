@@ -1,18 +1,28 @@
 package com.kudo.android
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import coil3.*
 import coil3.decode.DataSource
 import coil3.fetch.*
 import coil3.request.Options
 import com.kudo.android.data.*
+import com.kudo.android.ui.editor.EditorToolBackdropHost
+import com.kudo.android.ui.editor.EditorToolSheet
 import com.kudo.android.ui.library.*
 import com.kudo.android.ui.theme.KudoTheme
 import kotlinx.coroutines.runBlocking
@@ -21,6 +31,7 @@ import org.junit.Assert.*
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.abs
 
 @OptIn(coil3.annotation.DelicateCoilApi::class)
 class ImageLibraryMaterialUiTest {
@@ -42,7 +53,9 @@ class ImageLibraryMaterialUiTest {
                 override fun create(data: Uri, options: Options, imageLoader: ImageLoader) = object : Fetcher {
                     override suspend fun fetch(): FetchResult {
                         val red = data.toString().contains("red")
-                        val bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888).apply {
+                        val width = if (data.toString().contains("wide")) 240 else 80
+                        val height = if (data.toString().contains("tall")) 240 else 80
+                        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
                             eraseColor(if (red) android.graphics.Color.RED else android.graphics.Color.BLUE)
                         }
                         if (red) redLoads.incrementAndGet()
@@ -67,6 +80,83 @@ class ImageLibraryMaterialUiTest {
     @Test fun removalSheetSamplesChangingImagesAcrossThemesAndMaterialModes() = assertSheetMaterial(changeFolder = false)
 
     @Test fun classificationSheetSamplesChangingImagesAcrossThemesAndMaterialModes() = assertSheetMaterial(changeFolder = true)
+
+    @Test fun pickerTitleTabsAndGridShareTheLiveSheetSurface() {
+        runBlocking { state.update { it.copy(images = it.images.take(1)) } }
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT, fontScale = 1.3f))
+        var source by mutableStateOf(Color(0xFFB6314D))
+        compose.setContent { KudoTheme(settings) { EditorToolBackdropHost {
+            Box(Modifier.fillMaxSize().background(source)) {
+                CompositionLocalProvider(LocalImageLibrary provides state) {
+                    EditorToolSheet("图库", {}) { ImageLibraryPicker(true) {} }
+                }
+            }
+        } } }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
+            compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass); source = Color(0xFFB6314D) }
+            val red = pickerSurface("$theme-$glass-red")
+            compose.runOnIdle { source = Color(0xFF2564C3) }
+            val blue = pickerSurface("$theme-$glass-blue")
+            val difference = abs(red.red - blue.red) + abs(red.blue - blue.blue)
+            val minimum = if (glass == GlassMode.TRANSLUCENT || Build.VERSION.SDK_INT < 31) .02f else .2f
+            assertTrue("Picker must keep the live sheet material: $theme/$glass ($difference)", difference > minimum)
+        }
+    }
+
+    @Test fun pickerThumbnailsFillSquareWideAndTallCells() {
+        val images = listOf("square", "wide", "tall").map { shape -> SavedImage(id = shape,
+            originalUrl = "https://material.test/red-$shape.png", thumbnailUrl = "https://material.test/red-$shape.png") }
+        runBlocking { state.update { it.copy(images = images) } }
+        compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK)) { EditorToolBackdropHost {
+            Box(Modifier.fillMaxSize().background(Color(0xFF2564C3))) {
+                CompositionLocalProvider(LocalImageLibrary provides state) {
+                    EditorToolSheet("图库", {}) { ImageLibraryPicker(true) {} }
+                }
+            }
+        } } }
+        compose.waitUntil(5_000) {
+            val pixels = compose.onRoot().captureToImage().toPixelMap()
+            images.all { image ->
+                val bounds = compose.onNodeWithTag("library-image-${image.id}").fetchSemanticsNode().boundsInRoot
+                pixels[bounds.center.x.toInt(), bounds.center.y.toInt()].red > .95f
+            }
+        }
+        val screenshot = compose.onRoot().captureToImage()
+        File(context.getExternalFilesDir(null), "library-picker-filled-thumbnails.png").outputStream().use {
+            screenshot.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        val pixels = screenshot.toPixelMap()
+        for (image in images) {
+            val bounds = compose.onNodeWithTag("library-image-${image.id}").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            val samples = listOf(bounds.centerLeft + Offset(3f, 0f), bounds.centerRight - Offset(3f, 0f),
+                bounds.topCenter + Offset(0f, 3f), bounds.bottomCenter - Offset(0f, 3f))
+            for (point in samples) {
+                val color = pixels[point.x.toInt(), point.y.toInt()]
+                assertTrue("${image.id} must fill its thumbnail at $point: $color", color.red > .95f && color.green < .05f && color.blue < .05f)
+            }
+        }
+        compose.onNodeWithTag("library-image-square").performClick()
+        compose.onNodeWithText("插入 1 张图片").assertIsEnabled().assertTouchHeightIsEqualTo(48.dp)
+    }
+
+    private fun pickerSurface(name: String): Color {
+        val picker = compose.onNodeWithTag("editor-library-picker").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val tabs = compose.onNodeWithTag("library-folders").fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("图库").fetchSemanticsNode().boundsInRoot
+        val screenshot = compose.onRoot().captureToImage()
+        File(context.getExternalFilesDir(null), "library-picker-surface-$name.png").outputStream().use {
+            screenshot.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        val pixels = screenshot.toPixelMap()
+        val expected = pixels[(picker.right - 8).toInt(), title.center.y.toInt()]
+        for (point in listOf(Offset(tabs.right - 8, tabs.top + 3), Offset(picker.right - 8, picker.bottom - 20))) {
+            val actual = pixels[point.x.toInt(), point.y.toInt()]
+            assertEquals("$name red at $point", expected.red, actual.red, .02f)
+            assertEquals("$name green at $point", expected.green, actual.green, .02f)
+            assertEquals("$name blue at $point", expected.blue, actual.blue, .02f)
+        }
+        return expected
+    }
 
     private fun assertSheetMaterial(changeFolder: Boolean) {
         var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))

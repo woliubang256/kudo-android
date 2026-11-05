@@ -63,7 +63,7 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
     val selectedId = folderId ?: "all"
     val pager = rememberPagerState(initialPage = folders.indexOfFirst { it.id == selectedId }.coerceAtLeast(0), pageCount = { folders.size })
     val scope = rememberCoroutineScope()
-    val backdrop = rememberLayerBackdrop()
+    val backdrop = if (selection == null) rememberLayerBackdrop() else null
     val behavior = TopAppBarDefaults.enterAlwaysScrollBehavior(canScroll = { header != null })
     var headerHeight by remember { mutableIntStateOf(0) }
     val top = with(LocalDensity.current) { headerHeight.toDp() }
@@ -80,8 +80,9 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
         val target = folders.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
         if (pager.currentPage != target && !pager.isScrollInProgress) pager.scrollToPage(target)
     }
-    Box(modifier.background(MaterialTheme.colorScheme.background).nestedScroll(behavior.nestedScrollConnection)) {
-        HorizontalPager(pager, Modifier.fillMaxSize().layerBackdrop(backdrop).testTag("library-pager"),
+    Box(modifier.then(if (backdrop != null) Modifier.background(MaterialTheme.colorScheme.background) else Modifier)
+        .nestedScroll(behavior.nestedScrollConnection)) {
+        HorizontalPager(pager, Modifier.fillMaxSize().then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier).testTag("library-pager"),
             key = { folders.getOrNull(it)?.id ?: "removed:$it" }) { index ->
             val id = (folders.getOrNull(index) ?: return@HorizontalPager).id.takeUnless { it == "all" }
             Box(Modifier.fillMaxSize().then(if (pager.settledPage == index) Modifier else Modifier.clearAndSetSemantics {})) {
@@ -89,8 +90,9 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
                     PaddingValues(start = 12.dp, end = 12.dp, top = top + 12.dp, bottom = 12.dp))
             }
         }
-        CompositionLocalProvider(LocalToolbarBackdrop provides backdrop, LocalToolbarActions provides true) {
-            Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.screenMaterial(backdrop)
+        CompositionLocalProvider(LocalToolbarBackdrop provides backdrop, LocalToolbarActions provides (backdrop != null)) {
+            Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }
+                .then(if (backdrop != null) Modifier.screenMaterial(backdrop) else Modifier)
                 .then(if (header != null) Modifier.statusBarsPadding() else Modifier)) {
                 if (header != null) Column(Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
                     val placeable = measurable.measure(constraints)
@@ -125,7 +127,8 @@ private fun ImageLibraryGrid(images: List<SavedImage>, open: (SavedImage) -> Uni
                             onLongClickLabel = "修改分类", onLongClick = { changeFolder(image) }, onClick = { open(image) })
                             else Modifier.clickable(role = if (selection != null) Role.Checkbox else Role.Button) { open(image) })
                         .semantics { if (selection != null) selected = checked }.testTag("library-image-${image.id}")) {
-                        AsyncImage(image.thumbnailUrl, image.alt.ifBlank { "收藏图片" }, Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                        AsyncImage(image.thumbnailUrl, image.alt.ifBlank { "收藏图片" }, Modifier.fillMaxSize(),
+                            contentScale = if (selection != null) ContentScale.Crop else ContentScale.Fit,
                             onError = { failed = true }, onSuccess = { failed = false })
                         if (failed) Text("加载失败，点击查看原图", Modifier.align(Alignment.Center).padding(10.dp), style = MaterialTheme.typography.bodySmall)
                         if (selection != null) Icon(if (checked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
