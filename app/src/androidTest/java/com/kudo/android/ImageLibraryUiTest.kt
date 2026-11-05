@@ -215,6 +215,108 @@ class ImageLibraryUiTest {
         assertEquals("second", runBlocking { store.load(101).images.single().id })
     }
 
+    @Test fun longPressMovesAnImageToAnotherFolderAndKeepsItsSource() {
+        seed()
+        screen { ImageLibraryScreen({}) {} }
+        loaded()
+        compose.onNodeWithText("默认收藏").performClick()
+        compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
+        compose.onNodeWithText("修改分类").assertIsDisplayed()
+        compose.onNodeWithTag("gallery-page-0").assertDoesNotExist()
+        compose.onNodeWithTag("collect-folder-default").assertIsSelected().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithTag("collect-folder-emoji").assertIsNotSelected().performClick()
+        compose.waitUntil { runBlocking { store.load(101).images.first { it.id == first.id }.folderId == "emoji" } }
+        compose.waitUntil { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("library-item-first").assertDoesNotExist()
+        compose.onNodeWithText("默认收藏").assertIsSelected()
+        compose.onNodeWithText("表情").performClick()
+        compose.onNodeWithTag("library-image-first").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("gallery-page-0").assertIsDisplayed()
+        val moved = runBlocking { ImageLibraryStore(fixture).load(101) }
+        assertEquals(first.copy(folderId = "emoji"), moved.images.first { it.id == first.id })
+        assertEquals(second, moved.images.first { it.id == second.id })
+    }
+
+    @Test fun cancelingOrChoosingTheCurrentClassificationDoesNotWrite() {
+        seed()
+        val before = runBlocking { store.load(101) }
+        val revision = store.revision.value
+        screen { ImageLibraryScreen({}) {} }
+        loaded()
+        compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
+        compose.onNodeWithText("修改分类").assertIsDisplayed()
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        compose.waitUntil { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isEmpty() }
+        assertEquals(before, runBlocking { store.load(101) })
+        compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
+        compose.onNodeWithTag("collect-folder-default").assertIsSelected().performClick()
+        compose.waitUntil { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isEmpty() }
+        assertEquals(before, runBlocking { store.load(101) })
+        assertEquals(revision, store.revision.value)
+    }
+
+    @Test fun creatingAClassificationValidatesItsNameAndMovesInsteadOfCopying() {
+        seed()
+        val before = runBlocking { store.load(101) }
+        screen(dark = true, large = true) { Box(Modifier.width(280.dp).fillMaxHeight()) { ImageLibraryScreen({}) {} } }
+        loaded()
+        compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
+        compose.onNodeWithTag("collect-new-folder").performClick()
+        compose.onNodeWithTag("collect-folder-name").performTextInput("表情")
+        compose.onNodeWithText("新建并移动").performScrollTo().performClick()
+        compose.onNodeWithText("已有同名目录").assertIsDisplayed()
+        assertEquals(before, runBlocking { store.load(101) })
+        compose.onNodeWithTag("collect-folder-name").performTextReplacement("常用")
+        compose.onNodeWithText("新建并移动").performScrollTo().performClick()
+        compose.waitUntil { runBlocking { store.load(101).folders.size == 3 } }
+        compose.waitUntil { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isEmpty() }
+        val saved = runBlocking { ImageLibraryStore(fixture).load(101) }
+        val folder = saved.folders.single { it.name == "常用" }
+        assertEquals(2, saved.images.size)
+        assertEquals(first.copy(folderId = folder.id), saved.images.first { it.id == first.id })
+        compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
+        compose.onNodeWithTag("collect-folder-${folder.id}").assertIsSelected().assertIsDisplayed()
+        capture("library-change-folder-dark-large.png")
+    }
+
+    @Test fun movingToAFolderWithTheSameImageMergesOnlyThoseTwoEntries() {
+        seed()
+        val target = first.copy(id = "target", folderId = "emoji", source = ImageSource(99, 2))
+        runBlocking { store.update(101) { it.save(target) } }
+        screen { ImageLibraryScreen({}) {} }
+        loaded()
+        compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
+        compose.onNodeWithTag("collect-folder-emoji").performClick()
+        compose.waitUntil { runBlocking { store.load(101).images.size == 2 } }
+        assertEquals(listOf(target, second), runBlocking { ImageLibraryStore(fixture).load(101) }.images)
+    }
+
+    @Test fun switchingAccountsClosesClassificationWithoutMovingTheOldAccountsImage() {
+        seed()
+        var account by mutableStateOf<Int?>(101)
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            ImageLibraryEnvironment(store, account, true) { ImageLibraryScreen({}) {} }
+        } }
+        loaded()
+        compose.onNodeWithTag("library-image-first").performTouchInput { longClick() }
+        compose.onNodeWithText("修改分类").assertIsDisplayed()
+        compose.runOnIdle { account = 202 }
+        compose.waitUntil { compose.onAllNodesWithText("暂无收藏图片").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        assertEquals(first, runBlocking { store.load(101) }.images.first { it.id == first.id })
+        assertTrue(runBlocking { store.load(202) }.images.isEmpty())
+    }
+
+    @Test fun theEditorPickerDoesNotOfferClassificationOnLongPress() {
+        seed()
+        screen { Column { ImageLibraryPicker(true) { fail("Unexpected insertion") } } }
+        compose.waitUntil { compose.onAllNodesWithTag("library-image-first").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("library-image-first").assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnLongClick))
+            .performTouchInput { longClick() }
+        compose.onNodeWithText("修改分类").assertDoesNotExist()
+        assertEquals(first, runBlocking { store.load(101) }.images.first { it.id == first.id })
+    }
+
     @Test fun standaloneLibraryRemovalSamplesThePageRatherThanAnOpaqueFallback() {
         seed()
         compose.setContent { KudoTheme(DisplaySettings()) {

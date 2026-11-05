@@ -80,6 +80,36 @@ class ImageLibraryStoreTest {
         }
     }
 
+    @Test fun imageMovesPersistForOnlyTheirOwnerAndUseTheLatestMetadata() = runBlocking {
+        val store = ImageLibraryStore(fixture)
+        for (account in listOf(null, 101, 202)) store.update(account) { it.addFolder("表情", "emoji").save(image) }
+        val latest = image.copy(alt = "更新描述", source = ImageSource(456, 9), savedAt = 456)
+        store.update(101) { library -> library.copy(images = listOf(latest)) }
+        store.update(101) { it.moveImage(image.id, "emoji") }
+        val reopened = ImageLibraryStore(fixture)
+        assertEquals(listOf(latest.copy(folderId = "emoji")), reopened.load(101).images)
+        assertEquals(listOf(image), reopened.load(null).images)
+        assertEquals(listOf(image), reopened.load(202).images)
+    }
+
+    @Test fun creatingAFolderAndMovingIsAtomicAndStaleRequestsCannotResurrectImages() = runBlocking {
+        val store = ImageLibraryStore(fixture)
+        store.update(101) { it.save(image) }
+        store.update(101) { it.addFolder("常用", "new").moveImage(image.id, "new") }
+        assertEquals(listOf(image.copy(folderId = "new")), ImageLibraryStore(fixture).load(101).images)
+        store.update(101) { it.removeImage(image.id) }
+        val before = store.load(101)
+        val revision = store.revision.value
+        val raw = base.getSharedPreferences(name, 0).getString("user_101", null)
+        try {
+            store.update(101) { it.addFolder("未保存", "not-saved").moveImage(image.id, "not-saved") }
+            fail("A deleted image must not be restored")
+        } catch (_: IllegalArgumentException) { }
+        assertEquals(before, ImageLibraryStore(fixture).load(101))
+        assertEquals(raw, base.getSharedPreferences(name, 0).getString("user_101", null))
+        assertEquals(revision, store.revision.value)
+    }
+
     @Test fun removingFoldersAndImagesOnlyChangesTheirOwner() = runBlocking {
         val store = ImageLibraryStore(fixture)
         store.update(101) { it.addFolder("临时", "temp").save(image.copy(folderId = "temp")) }

@@ -2,6 +2,7 @@ package com.kudo.android.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -56,6 +57,7 @@ internal fun SavedImage.articleImage() = ArticleBlock.Image(thumbnailUrl, alt, r
 internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selectFolder: (String?) -> Unit,
     open: (SavedImage) -> Unit, modifier: Modifier = Modifier, selection: Set<String>? = null,
     source: ((ImageSource) -> Unit)? = null, remove: ((SavedImage) -> Unit)? = null,
+    changeFolder: ((SavedImage) -> Unit)? = null,
     header: (@Composable () -> Unit)? = null) {
     val folders = listOf(ImageFolder("all", "全部")) + library.folders
     val selectedId = folderId ?: "all"
@@ -83,7 +85,7 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
             key = { folders.getOrNull(it)?.id ?: "removed:$it" }) { index ->
             val id = (folders.getOrNull(index) ?: return@HorizontalPager).id.takeUnless { it == "all" }
             Box(Modifier.fillMaxSize().then(if (pager.settledPage == index) Modifier else Modifier.clearAndSetSemantics {})) {
-                ImageLibraryGrid(library.images.filter { id == null || it.folderId == id }, open, selection, source, remove,
+                ImageLibraryGrid(library.images.filter { id == null || it.folderId == id }, open, selection, source, remove, changeFolder,
                     PaddingValues(start = 12.dp, end = 12.dp, top = top + 12.dp, bottom = 12.dp))
             }
         }
@@ -108,7 +110,7 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
 
 @Composable
 private fun ImageLibraryGrid(images: List<SavedImage>, open: (SavedImage) -> Unit, selection: Set<String>?,
-    source: ((ImageSource) -> Unit)?, remove: ((SavedImage) -> Unit)?, padding: PaddingValues) {
+    source: ((ImageSource) -> Unit)?, remove: ((SavedImage) -> Unit)?, changeFolder: ((SavedImage) -> Unit)?, padding: PaddingValues) {
         if (images.isEmpty()) Box(Modifier.fillMaxSize().scrollable(rememberScrollableState { 0f }, Orientation.Vertical)
             .padding(padding), contentAlignment = Alignment.Center) {
             Text("暂无收藏图片", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -119,7 +121,9 @@ private fun ImageLibraryGrid(images: List<SavedImage>, open: (SavedImage) -> Uni
                 Column(Modifier.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface).testTag("library-item-${image.id}")) {
                     var failed by remember(image.thumbnailUrl) { mutableStateOf(false) }
                     Box(Modifier.fillMaxWidth().aspectRatio(1.15f).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .4f))
-                        .clickable(role = if (selection != null) Role.Checkbox else Role.Button) { open(image) }
+                        .then(if (selection == null && changeFolder != null) Modifier.combinedClickable(role = Role.Button,
+                            onLongClickLabel = "修改分类", onLongClick = { changeFolder(image) }, onClick = { open(image) })
+                            else Modifier.clickable(role = if (selection != null) Role.Checkbox else Role.Button) { open(image) })
                         .semantics { if (selection != null) selected = checked }.testTag("library-image-${image.id}")) {
                         AsyncImage(image.thumbnailUrl, image.alt.ifBlank { "收藏图片" }, Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                             onError = { failed = true }, onSuccess = { failed = false })

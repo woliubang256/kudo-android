@@ -16,6 +16,8 @@ Status: implemented
 
 修改图片分类使用图片 ID 和目标目录 ID，在最新图库中原子移动，不使用打开面板时的图片快照覆盖记录。普通移动只改变目录，保留图片 ID、位置、原图、缩略图、来源和收藏时间；目标目录已有相同原图时保留目标记录并移除原分类中的这一条，其他目录的收藏不受影响。选择当前分类不写入，图片或目标目录已删除时报错。新建目录和移动使用同一次存储更新，失败时两者都不保存，数据格式仍为版本 1。
 
+管理页图片长按直接打开“修改分类”底部面板，复用收藏的目录选择、新建表单及同窗口采样源；当前分类以勾选和无障碍选中态表示，不添加解释小字。普通点击仍查看图片，编辑器的图库选择器不开放分类修改。面板跟随材质设置，切换账号销毁未完成的选择。
+
 图片长按和查看器共用导出菜单并增加收藏；下载全部仍以已有浏览组为边界。来源明确传递到全屏会话，不从临时 UI origin 或图片 CDN 地址猜帖子。未揭开的剧透图片不能通过长按导出或收藏。会话不稳定时不开放写入口，账号变化取消旧弹层。
 
 脚注宿主在账号图库环境外，不能只依赖显示位置的 CompositionLocal。脚注请求携带点击时的组合上下文及明确的帖子来源，根部显示时恢复该上下文；来源账号变化使原脚注关闭，避免遗留旧账号入口。先用 `footnoteImagesCanBeCollectedWithTheirOriginalPostSource` 真机复现缺少“收藏图片”（`artifacts/image-library-edge-repro-device.txt`），再补齐此契约。
@@ -54,6 +56,10 @@ Markdown 预览是独立 Dialog 窗口，内部单独提供 EditorToolBackdropHo
 `ImageLibraryTest` 覆盖版本、损坏保护、目录约束、去重、链接安全、来源和删除迁移；`ImageLibrarySourceTest` 覆盖全屏回复来源恢复、旧格式恢复和列表来源回退；`ImageLibraryStoreTest` 使用随机独立测试偏好文件覆盖访客及双账号持久化、40个并发写入、幂等和损坏保护，不触碰真实图库。`LibraryImageInsertionTest` 覆盖原图优先、转义、选择顺序、跨目录去重、反向选区和草稿保留。
 
 分类移动的模型用例覆盖完整元数据与顺序保留、版本 1 编解码、同图合并保留目标记录、同目录无操作，以及图片或目标目录失效时拒绝修改。
+
+分类修改的 21 项 JVM 用例通过，包含模型、原帖来源恢复和编辑器图片插入。Android 16 / API 36 的 Medium Phone 模拟器上，22 项定向用例通过（`artifacts/library-move-device.txt`，64.927 秒）：管理页长按移动、当前分类勾选、取消与同分类不写入、新建名称校验与原子移动、同图合并、换号关闭旧面板、编辑器选择器手势及既有收藏和插入；独立偏好文件覆盖访客、两账号、最新元数据和失效图片不能复活。
+
+其中材质用例检查浅深色与三种材质的六个组合，在面板打开时把离线图片由蓝色改成红色，验证采样会跟随页面变化。已目视检查 `artifacts/library-change-folder-dark-large.png`、`artifacts/library-classification-LIGHT-LIQUID.png` 和 `artifacts/library-classification-DARK-LIQUID.png`，确认中文、当前分类勾选、窄屏大字和液态采样。Debug、AndroidTest APK 构建、笔记检查及 Lint 通过，Lint 为 0 errors / 68 warnings / 1 hint；显式版本为 0.3.5-dev / 3006，模拟器通过 arm64 转译运行同一 APK，使用 `adb install -r` 与 `adb install -r -t` 安装后手动 instrument，没有自动卸载或清数据。当前无手机连接，本次新增功能的真实手机材质和触控尚未验收。
 
 66 项定向 JVM 用例通过，涵盖上述模型和既有图片导出、相册变换、Markdown、脚注、编辑草稿（`artifacts/image-library-final-validation.txt`）。Debug 和 AndroidTest APK 构建通过；Lint 为 0 errors / 60 warnings / 1 hint，新增一条存储的 UseKtx 建议，保留 commit 的布尔返回以检查实际写盘结果。
 

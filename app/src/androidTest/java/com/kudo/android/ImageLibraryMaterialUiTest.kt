@@ -64,7 +64,11 @@ class ImageLibraryMaterialUiTest {
         context.deleteSharedPreferences(name)
     }
 
-    @Test fun removalSheetSamplesChangingImagesAcrossThemesAndMaterialModes() {
+    @Test fun removalSheetSamplesChangingImagesAcrossThemesAndMaterialModes() = assertSheetMaterial(changeFolder = false)
+
+    @Test fun classificationSheetSamplesChangingImagesAcrossThemesAndMaterialModes() = assertSheetMaterial(changeFolder = true)
+
+    private fun assertSheetMaterial(changeFolder: Boolean) {
         var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
         var generation by mutableIntStateOf(0)
         compose.setContent { KudoTheme(settings) {
@@ -74,21 +78,24 @@ class ImageLibraryMaterialUiTest {
             runBlocking { state.update { library -> library.copy(images = library.images.map { it.copy(thumbnailUrl = "https://material.test/blue.png") }) } }
             compose.runOnIdle { settings = settings.copy(theme = theme, glass = glass); generation++ }
             compose.waitUntil { compose.onAllNodesWithTag("library-remove-image-40").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("library-remove-image-40").performClick()
+            if (changeFolder) compose.onNodeWithTag("library-image-image-40").performTouchInput { longClick() }
+            else compose.onNodeWithTag("library-remove-image-40").performClick()
             val sheet = compose.onNodeWithTag("liquid-action-sheet").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-            val sample = sheet.copy(bottom = compose.onNodeWithText("仅从本机图库移除，不删除原帖或原图。")
+            val firstRow = if (changeFolder) compose.onNodeWithTag("collect-folder-default")
+                else compose.onNodeWithText("仅从本机图库移除，不删除原帖或原图。")
+            val sample = sheet.copy(bottom = firstRow
                 .fetchSemanticsNode().boundsInRoot.top - 6f)
             val blue = strongestChannel(sample, blue = true)
             val previousRed = redLoads.get()
             runBlocking { state.update { library -> library.copy(images = library.images.map { it.copy(thumbnailUrl = "https://material.test/red.png") }) } }
             compose.waitUntil(5_000) { redLoads.get() > previousRed }
             val red = strongestChannel(sample, blue = false)
-            println("Library removal material $theme/$glass blue=$blue red=$red")
+            println("Library ${if (changeFolder) "classification" else "removal"} material $theme/$glass blue=$blue red=$red")
             val minimum = if (glass == GlassMode.TRANSLUCENT) .025f else .08f
             assertTrue("Sheet must sample blue images: $theme/$glass ($blue)", blue > minimum)
             assertTrue("Sheet must update to red images: $theme/$glass ($red)", red > minimum)
             val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-            File(context.getExternalFilesDir(null), "library-removal-$theme-$glass.png").outputStream().use {
+            File(context.getExternalFilesDir(null), "library-${if (changeFolder) "classification" else "removal"}-$theme-$glass.png").outputStream().use {
                 screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }

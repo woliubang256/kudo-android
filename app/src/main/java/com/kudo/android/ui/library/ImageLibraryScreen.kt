@@ -38,11 +38,13 @@ private fun ImageLibraryContent(back: () -> Unit, source: (ImageSource) -> Unit)
     var folderId by rememberSaveable(state?.accountId) { mutableStateOf<String?>(null) }
     var manage by remember(state) { mutableStateOf(false) }
     var removing by remember(state) { mutableStateOf<SavedImage?>(null) }
+    var changingFolder by remember(state) { mutableStateOf<SavedImage?>(null) }
     val library = state?.library
     LaunchedEffect(library, folderId) { if (folderId != null && library?.folders?.none { it.id == folderId } == true) folderId = null }
     if (library != null && state.error == null) ImageLibraryBrowser(library, folderId, { folderId = it }, { image ->
         gallery?.open(listOf(image.articleImage()), 0, "library-${image.id}", source = image.source)
-    }, Modifier.fillMaxSize().testTag("image-library-screen"), source = source, remove = { removing = it }, header = {
+    }, Modifier.fillMaxSize().testTag("image-library-screen"), source = source, remove = { removing = it },
+        changeFolder = { changingFolder = it }, header = {
         Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back)
@@ -62,6 +64,7 @@ private fun ImageLibraryContent(back: () -> Unit, source: (ImageSource) -> Unit)
         }
     }
     if (manage && state != null) LibraryFolderSheet(state) { manage = false }
+    changingFolder?.let { image -> CollectImageSheet(image, move = true) { changingFolder = null } }
     removing?.let { image ->
         var busy by remember(image) { mutableStateOf(false) }
         EditorToolSheet("移除收藏？", { removing = null }) { close ->
