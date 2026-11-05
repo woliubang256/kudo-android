@@ -22,6 +22,8 @@ Status: implemented
 
 关于通过官网会话在页面内请求 `/mini-app-api/public/<app-id>/info`，只读取 `app` 的公开字段，不在原生层复制发布配置或令牌。响应必须与当前请求 ID 对应，导航取消在途请求。缺失的可选字段省略、图标失败显示通用应用图标；网络错误显示重试，不猜测版本或发布人。
 
+公开信息由 data 层的 MiniAppDetails 统一解析，WebView 桥保留 MiniAppInfo 类型别名以共用身份、图标、作者及评分规则。官网详情实际返回 rating_average、rating_count；评分接受 0～5 的有限数值，人数接受非负整数，缺失或类型错误保留为空。详情不返回 usage_count、recent_usage_count，因此关于省略使用次数，不另查目录补齐，也不把缺失值当作零。
+
 发布人只展示头像和名字，不额外展示用户名。名字沿用 name、缺失时回退 username；公开 author 的 id、username、name 与安全头像地址组成 Member，复用 Avatar 的 PLAIN 展示，不请求额外用户资料或补齐头像挂件。Neo 按用户名识别，使用边长 10% 的圆角正方形，其他用户仍圆形，沿用[统一头像规则](2026-10-08-avatar-presentation.md)，不能用显示名字判断身份。头像读取公开 author 的 avatar_template 或 avatar_url，模板替换尺寸后按官网地址解析，只接受无账号口令的 HTTPS 图片；加载失败沿用统一头像占位。
 
 本篇原有剪贴板策略由[剪贴板单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)部分替代。原策略保留标准浏览器接口，缺失方法或遇到 `NotAllowedError` / `NotSupportedError` 时才回退到需本次确认的原生文字读写，限制 4 KiB；其理由是最少改变浏览器行为。WebView 156 暴露 readText 但实际返回 NotAllowedError，单纯检查方法是否存在不足以适配。消息接口使用 AndroidX WebKit 的来源过滤，仅向 `https://linux.do` 注入；接收还检查当前顶层为正式应用广场或精确应用路径、来源为官网且 App 在前台。第三方与 opaque origin 沙箱 iframe 没有消息对象，平台隔离与权限检查仍由官网宿主完成。DocumentStart 注入兼容脚本，并在站内 history 变化与加载完成时幂等补装，覆盖 Ember 从普通页面进入应用的情况。
@@ -40,6 +42,7 @@ Status: implemented
 
 ## Testing
 
+- 2026-11-05 详情解析与目录状态的定向 JVM 测试共 14 项通过；MiniAppInfoTest 的 7 项覆盖可空评分、分数精度、超过 Int 范围的人数，以及缺失、错误类型、负数和越界值。仅从详情读取公开信息，不因缺少使用次数补查目录。
 - 胶囊外观微调后的 3 项 MiniAppWebUiTest 通过，覆盖 32dp 表面、48dp 触控区、更多与关于、重新进入保留参数、关闭回来源和沉浸布局，记录为 `artifacts/mini-app-capsule-style-device.txt`。胶囊浅深色局部截图已检查：`artifacts/mini-app-capsule-refined-light.png`、`artifacts/mini-app-capsule-refined-dark.png`；使用 Compose 节点捕获以等待重绘，避免系统截图读到切换主题前一帧。截图捕获调整后该用例在 `artifacts/mini-app-deeplink-fixed-device.txt` 中再次通过。入口及胶囊均通过同签名 0.3.1-dev / 3002 覆盖安装验收，未卸载或清理数据。
 - 更多图标恢复用户原始 SVG 的中间大点后，`capsuleAboutUsesRealFieldsAndClosingPreservesTheSource` 真机通过，见 `artifacts/mini-app-more-dot-device.txt`；浅深局部截图 `artifacts/mini-app-more-dot-light.png`、`artifacts/mini-app-more-dot-dark.png` 已目视确认中间点较大。Debug 构建、UTF-8 和笔记校验通过；20dp 图标、32dp 胶囊、48dp 触控区和半透明配色保持。
 - 四列更多宫格与重新进入用例覆盖跨应用后的当前 URL、query/hash、原 WebView 与原生来源；初轮关于通过，重进用例因导航取消 JavaScript 评估回调而超时，记录为 `artifacts/mini-app-menu-grid-device.txt`。用例改为等待页面完成后再读取状态，2 项通过（4.27 秒），见 `artifacts/mini-app-menu-grid-fixed-device.txt`；截图为 `artifacts/mini-app-menu-grid.png`。

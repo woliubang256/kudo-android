@@ -378,7 +378,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         } ?: MaterialPagePlaceholder("聊天", { nav.popBackStack() }) { EmptyState("请先登录", "登录后查看聊天。", actionLabel = "登录", action = ::login) }
                     }
                     composable("apps") {
-                        val vm = model("app-square-${account.user?.id}") { AppSquareViewModel(app.repository::miniApps) }
+                        val vm = model("app-square-${account.user?.id}") {
+                            AppSquareViewModel(loadInfo = app.repository::miniAppDetails, load = app.repository::miniApps)
+                        }
                         val state by vm.state.collectAsStateWithLifecycle()
                         key(vm) { AppSquareScreen(state, vm::search, vm::retry, vm::more, { nav.popBackStack() }, ::login,
                             ::openWebPage, initialGrid = app.settings.appSquareGrid(), saveGrid = app.settings::saveAppSquareGrid) }

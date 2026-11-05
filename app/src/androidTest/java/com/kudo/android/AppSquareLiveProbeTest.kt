@@ -27,7 +27,7 @@ class AppSquareLiveProbeTest {
         lateinit var vm: AppSquareViewModel
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.LIGHT)) {
             vm = androidx.lifecycle.viewmodel.compose.viewModel {
-                AppSquareViewModel(repository::miniApps)
+                AppSquareViewModel(loadInfo = repository::miniAppDetails, load = repository::miniApps)
             }
             val state by vm.state.collectAsStateWithLifecycle()
             AppSquareScreen(state, vm::search, vm::retry, vm::more, {}, {}, {})

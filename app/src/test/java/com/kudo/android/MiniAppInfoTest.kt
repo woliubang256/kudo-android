@@ -67,4 +67,31 @@ class MiniAppInfoTest {
             assertNull(it, MiniAppInfo.parse(data, id).publisherAvatarUrl)
         }
     }
+
+    @Test fun ratingPreservesFractionalStarsAndLargeRatingCounts() {
+        val app = JSONObject().put("app_id", id).put("name", "应用")
+            .put("rating_average", 4.35).put("rating_count", 3_000_000_000L)
+        val info = MiniAppInfo.parse(JSONObject().put("app", app), id)
+        assertEquals(4.35, info.ratingAverage!!, 0.00001)
+        assertEquals(3_000_000_000L, info.ratingCount!!)
+        app.put("rating_average", 0).put("rating_count", 0)
+        val unrated = MiniAppInfo.parse(JSONObject().put("app", app), id)
+        assertEquals(0.0, unrated.ratingAverage!!, 0.0)
+        assertEquals(0L, unrated.ratingCount!!)
+    }
+
+    @Test fun missingAndMalformedRatingFieldsDoNotBecomeRealZeroRatings() {
+        val app = JSONObject().put("app_id", id).put("name", "应用")
+        fun info() = MiniAppInfo.parse(JSONObject().put("app", app), id)
+        assertNull(info().ratingAverage)
+        assertNull(info().ratingCount)
+        for (invalid in listOf(-1, 5.1, "4.5", JSONObject.NULL, true)) {
+            app.put("rating_average", invalid)
+            assertNull(info().ratingAverage)
+        }
+        for (invalid in listOf(-1, 1.5, "2", JSONObject.NULL, true)) {
+            app.put("rating_count", invalid)
+            assertNull(info().ratingCount)
+        }
+    }
 }

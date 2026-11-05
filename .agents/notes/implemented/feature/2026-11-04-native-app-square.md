@@ -8,7 +8,7 @@ Status: implemented
 
 ## Decision
 
-应用广场通过现有 DiscourseClient 请求官网 `/mini-app-api/apps.json`，与登录会话、网络策略及标准错误处理保持一致。官网实际请求使用 `sort=latest&q=<query>&page=<零起始页码>`，响应包含 apps、page、per_page、total、sort 和 query；列表随官网分页，不只过滤已加载的一页。进入原生广场不创建 WebView，点击具体应用时打开其官网运行页，返回保留广场状态。
+应用广场通过现有 DiscourseClient 请求官网 `/mini-app-api/apps.json`，与登录会话、网络策略及标准错误处理保持一致。官网实际请求使用 `sort=<排序>&q=<query>&page=<零起始页码>`，响应包含 apps、page、per_page、total、sort 和 query；列表随官网分页，不只过滤已加载的一页。默认 latest（最新上线），另支持 hot（最热，近 7 天去重使用量）、rating（评分最高，同分按评分人数）和 used（使用最多，累计去重使用量）。切换排序保留查询、重置页码并取消及隔离旧响应；分页和重试继续使用当前排序。进入原生广场不创建 WebView，点击具体应用时打开其官网运行页，返回保留广场状态。
 
 顶部依次为返回、应用广场标题、搜索、布局切换。原生内容与顶部采样源分离，复用 MaterialPageScaffold、TopBarIconButton 和用户选择的材质，匹配现有独立圆形玻璃操作。搜索点击后以右侧为锚向左展开，占用标题区域；返回与布局切换位置固定。展开后自动聚焦，提供清空，返回先收起搜索再离开目录；请求取消并隔离旧查询结果。
 
@@ -21,6 +21,8 @@ H5 运行页仍使用普通材质，不把网页重新接进玻璃采样。胶�
 ## State and navigation
 
 数据单元提供 MiniAppEntry、miniApps 请求与 AppSquareViewModel。页码必须与请求一致，导航仅使用有效 UUID；不安全图标退回通用图标。搜索延迟 300ms、取消旧作业并使用代次隔离，翻页保留已完成数据，失败重试同一页并按 ID 去重。ViewModel 绑定导航条目及账号键，不跨账号复用结果，不在公共目录模型保存用户资料。布局偏好使用 AppSettings 的 `app_square_grid` 键，仅保存显示方式。
+
+应用详情按所选 UUID 独立请求 `/mini-app-api/public/<app-id>/info`，共用[小程序公开信息解析](2026-11-04-mini-app-square.md)，不从目录拼装另一套关于数据。详情请求与目录请求分别取消和隔离，关闭、换应用、换查询或排序后，旧请求不能重开弹窗或覆盖新应用。缺失使用次数按用户要求省略，不补查目录或创建运行中的 WebView。
 
 列表和宫格共用 LazyGridState，返回 H5 来源时保留查询与滚动位置。查询变更的 revision 仅应用一次并保存已应用值，不能在屏幕每次重新进入组合时无条件滚回顶部。官网精确 /apps 路径的原生入口、正文链接和外部导航均指向原生 apps 路由，具体 /apps/<UUID> 保留完整网页 URL；WebView 内的跳转仍遵守网页连续浏览规则。
 
@@ -36,6 +38,7 @@ H5 运行页仍使用普通材质，不把网页重新接进玻璃采样。胶�
 
 ## Testing
 
+- 2026-11-05 浏览器只读核对 hot / latest / rating / used 四种官方参数；详情 app 有 rating_average、rating_count，没有使用次数字段，契约证据为 `artifacts/app-square-statistics-contract.json`。AppSquareTest、AppSquareAboutTest 和 MiniAppInfoTest 共 14 项 JVM 测试通过，覆盖排序参数、查询编码、分页重置、慢旧分页隔离、详情失败重试与身份校验、关闭后旧结果隔离，以及缺失和异常评分字段。
 - 应用广场入口微调后，AppSquareEntryUiTest 在浅深色下依次切换访客、登录用户、访客，6 次打开均不触发登录；记录为 `artifacts/mini-app-entry-tint-device.txt`。已检查 `artifacts/apps-entry-guest-dark.png`、`artifacts/apps-entry-member-dark.png` 和 `artifacts/apps-entry-member-light.png`，访客灰色、登录用户微信绿且文字可读。
 - 浏览器捕获官网实际目录及 `q=2048` 搜索请求，确认零起始分页、latest 排序和响应字段。
 - AppSquareTest 验证请求参数编码、页码、UUID 与图标约束，分页去重与同页重试，以及慢旧请求不能覆盖新查询；LinuxDoLinkTest 验证只有目录进入原生路由，具体应用继续 H5。三组相关 JVM 测试共 15 项通过。

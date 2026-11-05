@@ -1,9 +1,6 @@
 package com.kudo.android.ui.web
 
-import com.kudo.android.data.Member
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.json.JSONObject
 
 internal data class MiniAppLocation(val id: String?) {
     companion object {
@@ -27,32 +24,4 @@ internal fun miniAppEmbeddedUrl(value: String): String = if (MiniAppLocation.par
 internal fun miniAppPublicUrl(value: String): String = if (MiniAppLocation.parse(value)?.id == null) value
     else value.toHttpUrlOrNull()!!.newBuilder().removeAllQueryParameters("embed_mode").build().toString()
 
-internal data class MiniAppInfo(
-    val id: String, val name: String, val description: String, val iconUrl: String?,
-    val version: String, val publisherMember: Member?,
-) {
-    val publisher get() = publisherMember?.displayName.orEmpty()
-    val publisherAvatarUrl get() = publisherMember?.avatar?.takeIf { it.isNotBlank() }
-
-    companion object {
-        fun parse(value: JSONObject, expectedId: String): MiniAppInfo {
-            val app = value.getJSONObject("app")
-            require(app.getString("app_id") == expectedId)
-            val name = app.getString("name").trim().also { require(it.isNotEmpty()) }
-            val author = app.optJSONObject("author")
-            val icon = app.optString("icon_url").toHttpUrlOrNull()
-                ?.takeIf { it.isHttps && it.username.isEmpty() && it.password.isEmpty() }?.toString()
-            val avatar = listOf("avatar_template", "avatar_url").firstNotNullOfOrNull { key ->
-                author?.optString(key)?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
-                    ?.replace("{size}", "128")?.let { "https://linux.do/".toHttpUrl().resolve(it) }
-                    ?.takeIf { it.isHttps && it.username.isEmpty() && it.password.isEmpty() }?.toString()
-            }
-            val publisher = author?.let {
-                Member(it.optInt("id"), it.optString("username"), it.optString("name"), avatar.orEmpty(),
-                    avatarDetailsLoaded = true)
-            }
-            return MiniAppInfo(expectedId, name, app.optString("description"), icon,
-                app.optString("version"), publisher)
-        }
-    }
-}
+internal typealias MiniAppInfo = com.kudo.android.data.MiniAppDetails
