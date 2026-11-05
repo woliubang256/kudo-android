@@ -40,13 +40,15 @@ class AppSquareUiTest {
             compose.runOnIdle { display = DisplaySettings(theme = theme, glass = glass, fontScale = 1.3f) }
             val back = compose.onNodeWithTag("apps-back").fetchSemanticsNode().boundsInRoot
             val layout = compose.onNodeWithTag("apps-layout").fetchSemanticsNode().boundsInRoot
+            val filter = compose.onNodeWithTag("apps-filter").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithContentDescription("搜索应用").performClick()
             compose.onNodeWithTag("apps-search-field").performTextInput("砖块")
             compose.onNodeWithTag("apps-search-field").assertTextEquals("砖块").assertIsFocused()
             assertEquals(back, compose.onNodeWithTag("apps-back").fetchSemanticsNode().boundsInRoot)
             assertEquals(layout, compose.onNodeWithTag("apps-layout").fetchSemanticsNode().boundsInRoot)
+            assertEquals(filter, compose.onNodeWithTag("apps-filter").fetchSemanticsNode().boundsInRoot)
             val surface = compose.onNodeWithTag("apps-search-surface").fetchSemanticsNode().boundsInRoot
-            assertTrue(surface.left >= back.right && surface.right <= layout.left)
+            assertTrue(surface.left >= back.right && surface.right <= filter.left && filter.right <= layout.left)
             compose.onNodeWithTag("apps-grid").performScrollToIndex(30)
             capture("apps-search-${theme.name}-${glass.name}.png")
             compose.onNodeWithContentDescription("清空搜索").performClick()

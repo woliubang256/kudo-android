@@ -10,7 +10,7 @@ Status: implemented
 
 应用广场通过现有 DiscourseClient 请求官网 `/mini-app-api/apps.json`，与登录会话、网络策略及标准错误处理保持一致。官网实际请求使用 `sort=<排序>&q=<query>&page=<零起始页码>`，响应包含 apps、page、per_page、total、sort 和 query；列表随官网分页，不只过滤已加载的一页。默认 latest（最新上线），另支持 hot（最热，近 7 天去重使用量）、rating（评分最高，同分按评分人数）和 used（使用最多，累计去重使用量）。切换排序保留查询、重置页码并取消及隔离旧响应；分页和重试继续使用当前排序。进入原生广场不创建 WebView，点击具体应用时打开其官网运行页，返回保留广场状态。
 
-顶部依次为返回、应用广场标题、搜索、布局切换。原生内容与顶部采样源分离，复用 MaterialPageScaffold、TopBarIconButton 和用户选择的材质，匹配现有独立圆形玻璃操作。搜索点击后以右侧为锚向左展开，占用标题区域；返回与布局切换位置固定。展开后自动聚焦，提供清空，返回先收起搜索再离开目录；请求取消并隔离旧查询结果。
+顶部依次为返回、应用广场标题、搜索、筛选、布局切换。原生内容与顶部采样源分离，复用 MaterialPageScaffold、TopBarIconButton 和用户选择的材质，匹配现有独立圆形玻璃操作。搜索点击后以右侧为锚向左展开，占用标题区域；返回、筛选与布局切换位置固定。展开后自动聚焦，提供清空，返回先收起搜索再离开目录；请求取消并隔离旧查询结果。筛选使用扁平底部面板，四种排序仅显示名称与当前黄色勾选，不增加解释小字；保留查询与布局。
 
 两种布局分别为图标在左、名称在右的列表，以及图标在上、名称在下的自适应宫格。默认宫格，不额外堆放版本、发布人、评分及重复副标题。切换保留查询，布局选择本地记忆。支持浅深色、大字号、加载、空结果、失败重试和后续分页。参考图用于布局与操作，不虚构“最近使用”“我的常用”等站点没有提供的数据分组。
 
@@ -24,6 +24,8 @@ H5 运行页仍使用普通材质，不把网页重新接进玻璃采样。胶�
 
 应用详情按所选 UUID 独立请求 `/mini-app-api/public/<app-id>/info`，共用[小程序公开信息解析](2026-11-04-mini-app-square.md)，不从目录拼装另一套关于数据。详情请求与目录请求分别取消和隔离，关闭、换应用、换查询或排序后，旧请求不能重开弹窗或覆盖新应用。缺失使用次数按用户要求省略，不补查目录或创建运行中的 WebView。
 
+列表与宫格的长按通过同一 combinedClickable 打开关于，普通点击继续进入应用。长按与打开筛选前清除搜索焦点并收起键盘，保留展开状态、查询和布局，避免输入法遮挡弹层。关于与筛选复用 EditorToolBackdropHost 和 EditorToolSheet，以不包含弹层的目录兄弟层为采样源，跟随当前三种材质。加载、失败重试和关闭保持可用；关于内容与小程序运行页共用 MiniAppAboutContent，但运行页外壳仍强制普通材质。
+
 列表和宫格共用 LazyGridState，返回 H5 来源时保留查询与滚动位置。查询变更的 revision 仅应用一次并保存已应用值，不能在屏幕每次重新进入组合时无条件滚回顶部。官网精确 /apps 路径的原生入口、正文链接和外部导航均指向原生 apps 路由，具体 /apps/<UUID> 保留完整网页 URL；WebView 内的跳转仍遵守网页连续浏览规则。
 
 ## Existing note audit
@@ -35,10 +37,15 @@ H5 运行页仍使用普通材质，不把网页重新接进玻璃采样。胶�
 - 复用官网目录 H5 可以沿用站点搜索和分页，维护成本最低，但不能满足用户明确要求的原生布局和搜索动效，因此目录改用原生，继续复用 H5 执行小程序。
 - 只对首批应用做本地搜索能减少请求且当前应用数量少，但官网已有分页，后续会漏掉尚未加载的应用；采用官网搜索与分页，并取消旧请求。
 - 给整个页面和运行中的 WebView 套同一玻璃容器能让外观一致，但违反既有网页普通材质决定并重新引入采样风险；目录使用原生材质，运行页继续普通材质。
+- 从目录补查使用量能丰富关于信息，但详情没有该字段且用户明确要求缺失就省略，因此只使用详情，不额外合并两个接口。
 
 ## Testing
 
 - 2026-11-05 浏览器只读核对 hot / latest / rating / used 四种官方参数；详情 app 有 rating_average、rating_count，没有使用次数字段，契约证据为 `artifacts/app-square-statistics-contract.json`。AppSquareTest、AppSquareAboutTest 和 MiniAppInfoTest 共 14 项 JVM 测试通过，覆盖排序参数、查询编码、分页重置、慢旧分页隔离、详情失败重试与身份校验、关闭后旧结果隔离，以及缺失和异常评分字段。
+- 线上截图发现搜索后长按仍显示输入法；新增 longPressFromSearchHidesTheKeyboardBeforeShowingAbout 在旧实现的键盘隐藏等待上失败，记录为 `artifacts/app-square-keyboard-repro-device.txt`。长按入口改为先清焦点、隐藏输入法，再加载关于。
+- 新增 AppSquareMaterialUiTest 对关于与筛选分别切换目录实际绘制的蓝／红底色，采样限制在圆角面板内部，排除角落的遮罩区域，既检查实时采样，也要求普通材质保持高遮盖率。面板与采样层的父链互不包含。早期无缓存模拟图标的夹具出现 Espresso 等待空闲超时及 Compose 并发快照异常，分别保留 `artifacts/app-square-about-crash-logcat.txt`、`artifacts/app-square-material-idler-device.txt`，不把这些运行记为通过；最终材质测试使用确定的目录底色，真实图标和详情网络链路单独由线上探针验收。
+- 最终 15 项真机测试全部通过（53.57 秒），见 `artifacts/app-square-final-device.txt`：320dp／130% 字号的搜索与固定按钮、列表／宫格长按、普通点击、评分缺失／零人／小数星、详情失败重试、搜索后键盘隐藏、四种排序保持查询和布局、浅深色三种材质采样及源排除、运行页关于与 Neo 头像回归。AppSquareLiveProbeTest 使用真实官网会话请求目录、2048 详情及四种排序，未启动小程序或提交评分；`artifacts/apps-live-about-final.png` 已目视核对真实图标、五星、2 人评分和中文，输入法已隐藏。小数星由离线 4.35 分夹具截图核对，不冒充线上分数。
+- Debug / AndroidTest 构建及 Lint 通过，日志为 `artifacts/app-square-final-build.txt`，Lint 为 0 errors / 68 warnings / 1 hint。设备仍为 RMX2202 / Android 13，开发版 0.3.1-dev / 3002，覆盖前版本与 SHA-256 一致；仅使用 install -r、install -r -t 和 am instrument，首次安装时间仍为 2026-10-23 14:55:34，未清数据。UTF-8 与 diff-check 通过；核对接口的自建浏览器页已关闭。
 - 应用广场入口微调后，AppSquareEntryUiTest 在浅深色下依次切换访客、登录用户、访客，6 次打开均不触发登录；记录为 `artifacts/mini-app-entry-tint-device.txt`。已检查 `artifacts/apps-entry-guest-dark.png`、`artifacts/apps-entry-member-dark.png` 和 `artifacts/apps-entry-member-light.png`，访客灰色、登录用户微信绿且文字可读。
 - 浏览器捕获官网实际目录及 `q=2048` 搜索请求，确认零起始分页、latest 排序和响应字段。
 - AppSquareTest 验证请求参数编码、页码、UUID 与图标约束，分页去重与同页重试，以及慢旧请求不能覆盖新查询；LinuxDoLinkTest 验证只有目录进入原生路由，具体应用继续 H5。三组相关 JVM 测试共 15 项通过。

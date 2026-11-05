@@ -2,11 +2,13 @@ package com.kudo.android.ui.apps
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -18,19 +20,38 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import com.kudo.android.data.MiniAppEntry
+import com.kudo.android.data.MiniAppSort
 import com.kudo.android.ui.components.*
+import com.kudo.android.ui.editor.EditorToolBackdropHost
+import com.kudo.android.ui.editor.EditorToolSheet
+import com.kudo.android.ui.theme.LogoYellow
 
 @Composable
 internal fun AppSquareScreen(state: AppSquareState, search: (String) -> Unit, retry: () -> Unit,
     more: () -> Unit, back: () -> Unit, login: () -> Unit, open: (String) -> Unit,
-    initialGrid: Boolean = true, saveGrid: (Boolean) -> Unit = {}) {
+    initialGrid: Boolean = true, saveGrid: (Boolean) -> Unit = {}, sort: (MiniAppSort) -> Unit = {},
+    showAbout: (MiniAppEntry) -> Unit = {}, dismissAbout: () -> Unit = {}, retryAbout: () -> Unit = {}) {
+    EditorToolBackdropHost {
+        AppSquareContent(state, search, retry, more, back, login, open, initialGrid, saveGrid,
+            sort, showAbout, dismissAbout, retryAbout)
+    }
+}
+
+@Composable
+private fun AppSquareContent(state: AppSquareState, search: (String) -> Unit, retry: () -> Unit,
+    more: () -> Unit, back: () -> Unit, login: () -> Unit, open: (String) -> Unit,
+    initialGrid: Boolean, saveGrid: (Boolean) -> Unit, sort: (MiniAppSort) -> Unit,
+    showAbout: (MiniAppEntry) -> Unit, dismissAbout: () -> Unit, retryAbout: () -> Unit) {
     var grid by rememberSaveable { mutableStateOf(initialGrid) }
     var expanded by rememberSaveable { mutableStateOf(false) }
+    var filtering by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun navigateBack() {
@@ -40,7 +61,9 @@ internal fun AppSquareScreen(state: AppSquareState, search: (String) -> Unit, re
     BackHandler(expanded) { navigateBack() }
     MaterialPageScaffold(header = {
         AppSquareToolbar(state.query, expanded, grid, ::navigateBack, { expanded = true }, search,
-            { grid = !grid; saveGrid(grid) })
+            { grid = !grid; saveGrid(grid) }, {
+                focus.clearFocus(); keyboard?.hide(); filtering = true
+            })
     }) { padding ->
         // Both layouts share one lazy grid, keeping the visible app when switching layouts.
         val scroll = rememberLazyGridState()
@@ -60,7 +83,11 @@ internal fun AppSquareScreen(state: AppSquareState, search: (String) -> Unit, re
             state = scroll, contentPadding = PaddingValues(start = 16.dp, end = 16.dp,
                 top = padding.calculateTopPadding() + 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 16.dp else 4.dp)) {
-            items(state.apps, key = MiniAppEntry::id) { app -> AppSquareItem(app, grid) { open(app.url) } }
+            items(state.apps, key = MiniAppEntry::id) { app ->
+                AppSquareItem(app, grid, { open(app.url) }, {
+                    focus.clearFocus(); keyboard?.hide(); showAbout(app)
+                })
+            }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 when {
                     state.loading -> LoadingRow()
@@ -73,11 +100,37 @@ internal fun AppSquareScreen(state: AppSquareState, search: (String) -> Unit, re
             }
         }
     }
+    if (filtering) EditorToolSheet("筛选应用", { filtering = false }) { close ->
+        MiniAppSort.entries.forEach { option ->
+            Row(Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = {
+                close(); sort(option)
+            }).semantics { selected = state.sort == option }.heightIn(min = 48.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp).testTag("apps-sort-${option.apiValue}"),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(option.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                if (state.sort == option) Icon(Icons.Rounded.Check, null, Modifier.size(22.dp), tint = LogoYellow)
+            }
+        }
+    }
+    state.about?.let { about ->
+        EditorToolSheet("关于应用", dismissAbout, showTitle = false) { close ->
+            when {
+                about.loading -> LoadingRow()
+                about.info != null -> MiniAppAboutContent(about.info)
+                about.error != null -> {
+                    Text("应用信息加载失败", style = MaterialTheme.typography.bodyMedium)
+                    CommunityButton("重试", retryAbout, Modifier.fillMaxWidth())
+                }
+            }
+            CommunityButton("关闭", close, Modifier.fillMaxWidth())
+        }
+    }
 }
 
 @Composable
-private fun AppSquareItem(app: MiniAppEntry, grid: Boolean, open: () -> Unit) {
-    val modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = open)
+private fun AppSquareItem(app: MiniAppEntry, grid: Boolean, open: () -> Unit, about: () -> Unit) {
+    val modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+        .combinedClickable(role = Role.Button, onClick = open, onLongClickLabel = "关于应用", onLongClick = about)
         .testTag("app-${app.id}").padding(horizontal = 8.dp, vertical = if (grid) 8.dp else 10.dp)
     if (grid) Column(modifier, horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -30,7 +30,8 @@ class AppSquareLiveProbeTest {
                 AppSquareViewModel(loadInfo = repository::miniAppDetails, load = repository::miniApps)
             }
             val state by vm.state.collectAsStateWithLifecycle()
-            AppSquareScreen(state, vm::search, vm::retry, vm::more, {}, {}, {})
+            AppSquareScreen(state, vm::search, vm::retry, vm::more, {}, {}, {},
+                sort = vm::sort, showAbout = vm::showAbout, dismissAbout = vm::dismissAbout, retryAbout = vm::retryAbout)
         } }
         fun awaitResults() {
             compose.waitUntil(45000) { !vm.state.value.loading }
@@ -52,6 +53,22 @@ class AppSquareLiveProbeTest {
             awaitResults()
             assertTrue(vm.state.value.apps.any { it.name.contains("2048") })
             capture("apps-live-search.png")
+            val app = vm.state.value.apps.first { it.name.contains("2048") }
+            compose.onNodeWithTag("app-${app.id}").performTouchInput { longClick() }
+            compose.waitUntil(45000) { vm.state.value.about?.loading == false }
+            assertNull(vm.state.value.about?.error)
+            assertEquals(app.id, vm.state.value.about?.info?.id)
+            compose.onNodeWithTag("mini-app-about").assertIsDisplayed()
+            capture("apps-live-about.png")
+            compose.onNodeWithText("关闭", substring = false).performClick()
+            for (sort in listOf(MiniAppSort.HOT, MiniAppSort.RATING, MiniAppSort.USED)) {
+                compose.onNodeWithContentDescription("筛选应用").performClick()
+                compose.onNodeWithTag("apps-sort-${sort.apiValue}").performClick()
+                awaitResults()
+                assertEquals(sort, vm.state.value.sort)
+                assertEquals("2048", vm.state.value.query)
+                compose.onNodeWithTag("apps-list").assertIsDisplayed()
+            }
         } catch (error: Throwable) { capture("apps-live-failure.png"); throw error }
     }
 

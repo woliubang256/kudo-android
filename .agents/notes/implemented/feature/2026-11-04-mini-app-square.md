@@ -45,7 +45,7 @@ MiniAppAboutContent 在目录与运行页共用图标、名字、简介、版本
 ## Testing
 
 - 2026-11-05 详情解析与目录状态的定向 JVM 测试共 14 项通过；MiniAppInfoTest 的 7 项覆盖可空评分、分数精度、超过 Int 范围的人数，以及缺失、错误类型、负数和越界值。仅从详情读取公开信息，不因缺少使用次数补查目录。
-- 共用关于内容后，MiniAppWebUiTest 的关于字段／关闭、跨应用失败重试，以及 AvatarUiTest 的 Neo 形状共 3 项真机用例已分别完成并返回成功，见 `artifacts/app-square-about-device.txt` 的前 6 项结果；同轮随后的原生目录材质用例被 Espresso 等待空闲超时中断，不能把整轮记为通过。已完成的运行页回归确认小数评分、人数、缺字段省略和头像规则，未接入 WebView 采样。
+- 共用关于内容后，MiniAppWebUiTest 的关于字段／关闭、跨应用失败重试，以及 AvatarUiTest 的 Neo 形状共 3 项真机用例纳入最终 15 项回归并全部通过，见 `artifacts/app-square-final-device.txt`。运行页确认小数评分、人数、缺字段省略和头像规则，未接入 WebView 采样；原生目录的材质、线上接口和键盘遮挡复现与修复记录见[原生应用广场](2026-11-04-native-app-square.md)。
 - 胶囊外观微调后的 3 项 MiniAppWebUiTest 通过，覆盖 32dp 表面、48dp 触控区、更多与关于、重新进入保留参数、关闭回来源和沉浸布局，记录为 `artifacts/mini-app-capsule-style-device.txt`。胶囊浅深色局部截图已检查：`artifacts/mini-app-capsule-refined-light.png`、`artifacts/mini-app-capsule-refined-dark.png`；使用 Compose 节点捕获以等待重绘，避免系统截图读到切换主题前一帧。截图捕获调整后该用例在 `artifacts/mini-app-deeplink-fixed-device.txt` 中再次通过。入口及胶囊均通过同签名 0.3.1-dev / 3002 覆盖安装验收，未卸载或清理数据。
 - 更多图标恢复用户原始 SVG 的中间大点后，`capsuleAboutUsesRealFieldsAndClosingPreservesTheSource` 真机通过，见 `artifacts/mini-app-more-dot-device.txt`；浅深局部截图 `artifacts/mini-app-more-dot-light.png`、`artifacts/mini-app-more-dot-dark.png` 已目视确认中间点较大。Debug 构建、UTF-8 和笔记校验通过；20dp 图标、32dp 胶囊、48dp 触控区和半透明配色保持。
 - 四列更多宫格与重新进入用例覆盖跨应用后的当前 URL、query/hash、原 WebView 与原生来源；初轮关于通过，重进用例因导航取消 JavaScript 评估回调而超时，记录为 `artifacts/mini-app-menu-grid-device.txt`。用例改为等待页面完成后再读取状态，2 项通过（4.27 秒），见 `artifacts/mini-app-menu-grid-fixed-device.txt`；截图为 `artifacts/mini-app-menu-grid.png`。

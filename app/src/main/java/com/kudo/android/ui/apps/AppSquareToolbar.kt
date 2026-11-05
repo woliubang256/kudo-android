@@ -30,7 +30,7 @@ import com.kudo.android.ui.theme.LogoYellow
 
 @Composable
 internal fun AppSquareToolbar(query: String, expanded: Boolean, grid: Boolean, back: () -> Unit,
-    expand: () -> Unit, search: (String) -> Unit, toggleLayout: () -> Unit) {
+    expand: () -> Unit, search: (String) -> Unit, toggleLayout: () -> Unit, filter: () -> Unit) {
     val progress by animateFloatAsState(if (expanded) 1f else 0f, label = "app-search-expansion")
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -68,6 +68,7 @@ internal fun AppSquareToolbar(query: String, expanded: Boolean, grid: Boolean, b
                 }
             } else TopBarIconButton(Icons.Rounded.Search, "搜索应用", expand, Modifier.align(Alignment.CenterEnd))
         }
+        TopBarIconButton(Icons.Rounded.FilterList, "筛选应用", filter, Modifier.testTag("apps-filter"))
         TopBarIconButton(if (grid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
             if (grid) "切换列表布局" else "切换宫格布局", toggleLayout, Modifier.testTag("apps-layout"))
     }

@@ -383,7 +383,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         }
                         val state by vm.state.collectAsStateWithLifecycle()
                         key(vm) { AppSquareScreen(state, vm::search, vm::retry, vm::more, { nav.popBackStack() }, ::login,
-                            ::openWebPage, initialGrid = app.settings.appSquareGrid(), saveGrid = app.settings::saveAppSquareGrid) }
+                            ::openWebPage, initialGrid = app.settings.appSquareGrid(), saveGrid = app.settings::saveAppSquareGrid,
+                            sort = vm::sort, showAbout = vm::showAbout, dismissAbout = vm::dismissAbout, retryAbout = vm::retryAbout) }
                     }
                     composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) { entry ->
                         WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
