@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import coil3.compose.SubcomposeAsyncImage
 import com.kudo.android.data.MiniAppDetails
 import com.kudo.android.ui.theme.LogoYellow
@@ -51,20 +52,25 @@ private fun MiniAppRating(average: Double?, count: Long?) {
     if (average == null && count == null) return
     Row(Modifier.fillMaxWidth().testTag("mini-app-rating"), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (average != null) Row(Modifier.clearAndSetSemantics {
-            contentDescription = if (count == 0L) "暂无评分" else "评分 $average 分，满分 5 分"
-        }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            repeat(5) { index ->
-                val fraction = if (count == 0L) 0f else (average - index).coerceIn(0.0, 1.0).toFloat()
-                Box(Modifier.size(22.dp)) {
-                    Icon(Icons.Rounded.Star, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f))
-                    Icon(Icons.Rounded.Star, null, Modifier.fillMaxSize().drawWithContent {
-                        clipRect(right = size.width * fraction) { this@drawWithContent.drawContent() }
-                    }, tint = LogoYellow)
-                }
-            }
-        }
+        if (average != null) MiniAppStars(average, unrated = count == 0L)
         if (count != null) Text(if (count == 0L) "暂无评分" else "$count 人评分",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+internal fun MiniAppStars(average: Double, size: Dp = 22.dp, gap: Dp = 2.dp, unrated: Boolean = false) {
+    Row(Modifier.clearAndSetSemantics {
+        contentDescription = if (unrated) "暂无评分" else "评分 $average 分，满分 5 分"
+    }, horizontalArrangement = Arrangement.spacedBy(gap)) {
+        repeat(5) { index ->
+            val fraction = if (unrated) 0f else (average - index).coerceIn(0.0, 1.0).toFloat()
+            Box(Modifier.size(size)) {
+                Icon(Icons.Rounded.Star, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f))
+                Icon(Icons.Rounded.Star, null, Modifier.fillMaxSize().drawWithContent {
+                    clipRect(right = this.size.width * fraction) { this@drawWithContent.drawContent() }
+                }, tint = LogoYellow)
+            }
+        }
     }
 }

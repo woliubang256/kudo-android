@@ -12,7 +12,7 @@ Status: implemented
 
 顶部依次为返回、应用广场标题、搜索、筛选、布局切换。原生内容与顶部采样源分离，复用 MaterialPageScaffold、TopBarIconButton 和用户选择的材质，匹配现有独立圆形玻璃操作。搜索点击后以右侧为锚向左展开，占用标题区域；返回、筛选与布局切换位置固定。展开后自动聚焦，提供清空，返回先收起搜索再离开目录；请求取消并隔离旧查询结果。筛选使用扁平底部面板，四种排序仅显示名称与当前黄色勾选，不增加解释小字；保留查询与布局。
 
-两种布局分别为图标在左、名称在右的列表，以及图标在上、名称在下的自适应宫格。默认宫格，不额外堆放版本、发布人、评分及重复副标题。切换保留查询，布局选择本地记忆。支持浅深色、大字号、加载、空结果、失败重试和后续分页。参考图用于布局与操作，不虚构“最近使用”“我的常用”等站点没有提供的数据分组。
+两种布局分别为图标和名称在左、统计在最右的列表，以及图标在上、名称在下的自适应宫格。列表右侧独立两行：上为五颗星及评价人数（有数据时），下为累计使用人次；标题不挪到统计上方。统计最多占行内宽度的 45%，名称允许两行截断。评分人数为零时不显示未评分占位；缺失统计逐项省略，实际使用零值保留。大数字以万／亿和最多一位小数紧凑显示，不向上取整，无障碍保留实际数值。五颗星共用关于的分数裁切。默认宫格，宫格不加统计，不额外堆放版本、发布人及重复副标题。切换保留查询，布局选择本地记忆。支持浅深色、大字号、加载、空结果、失败重试和后续分页。参考图用于布局与操作，不虚构“最近使用”“我的常用”等站点没有提供的数据分组。
 
 “我的”页面的应用广场入口沿用用户提供的小程序图形：访客使用中性灰，登录后与其他彩色账号菜单并列使用微信绿 `#07C160`，不以入口颜色限制访客访问。
 
@@ -40,9 +40,12 @@ MiniAppEntry 直接保留目录返回的 rating_average、rating_count、usage_c
 - 只对首批应用做本地搜索能减少请求且当前应用数量少，但官网已有分页，后续会漏掉尚未加载的应用；采用官网搜索与分页，并取消旧请求。
 - 给整个页面和运行中的 WebView 套同一玻璃容器能让外观一致，但违反既有网页普通材质决定并重新引入采样风险；目录使用原生材质，运行页继续普通材质。
 - 从目录补查使用量能丰富关于信息，但详情没有该字段且用户明确要求缺失就省略，因此只使用详情，不额外合并两个接口。
+- 把名称放第一行、所有统计放第二行能利用全行宽度，但用户明确保留左侧图标和名称，要求两行统计独立放到最右；使用右对齐的窄列，并限制其宽度，避免统计挤占全部名称空间。
 
 ## Testing
 
+- 列表统计展示经 AppSquareListUiTest 3 项真机用例通过，覆盖 320dp、浅深色和 130% 字号下左侧名称与右侧两行统计不重叠、行序及右边缘对齐、无评分省略、实际零使用量保留、缺失统计不占位、极大计数和宫格不显示统计。共享星星的两个 MiniAppWebUiTest 关于用例同时通过，见 `artifacts/app-square-list-search-device.txt`。已目视检查 `artifacts/apps-list-statistics-light.png` 和 `artifacts/apps-list-statistics-dark-large.png`，中文清晰。
+- AppSquareTest、MiniAppCountTest 和 MiniAppInfoTest 共 15 项 JVM 用例通过；紧凑数字测试覆盖万／亿阈值、向下截断及 Long.MAX_VALUE 不溢出。Debug、AndroidTest 构建和 Lint 通过，见 `artifacts/app-square-list-search-build.txt`；Lint 为 0 errors / 68 warnings / 1 hint。
 - 列表统计的数据扩展经 AppSquareTest 共 7 项 JVM 用例通过，见 `artifacts/app-square-list-data-unit.txt`。新用例检查目录单请求保留小数星及超过 Int 范围的评价／使用量，使用累计而非近期字段，缺失或错误类型省略且实际零值保留。
 - 2026-11-05 浏览器只读核对 hot / latest / rating / used 四种官方参数；详情 app 有 rating_average、rating_count，没有使用次数字段，契约证据为 `artifacts/app-square-statistics-contract.json`。AppSquareTest、AppSquareAboutTest 和 MiniAppInfoTest 共 14 项 JVM 测试通过，覆盖排序参数、查询编码、分页重置、慢旧分页隔离、详情失败重试与身份校验、关闭后旧结果隔离，以及缺失和异常评分字段。
 - 线上截图发现搜索后长按仍显示输入法；新增 longPressFromSearchHidesTheKeyboardBeforeShowingAbout 在旧实现的键盘隐藏等待上失败，记录为 `artifacts/app-square-keyboard-repro-device.txt`。长按入口改为先清焦点、隐藏输入法，再加载关于。

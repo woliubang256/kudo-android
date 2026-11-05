@@ -137,9 +137,13 @@ private fun AppSquareItem(app: MiniAppEntry, grid: Boolean, open: () -> Unit, ab
         AppIcon(app, Modifier.size(60.dp))
         Text(app.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center)
-    } else Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        AppIcon(app, Modifier.size(48.dp))
-        Text(app.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    } else BoxWithConstraints(modifier) {
+        val statisticsWidth = maxWidth * .45f
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppIcon(app, Modifier.size(48.dp))
+            Text(app.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            AppSquareStatistics(app, Modifier.widthIn(max = statisticsWidth))
+        }
     }
 }
 
