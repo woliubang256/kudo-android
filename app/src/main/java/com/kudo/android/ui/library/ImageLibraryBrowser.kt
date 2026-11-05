@@ -128,7 +128,7 @@ private fun ImageLibraryGrid(images: List<SavedImage>, open: (SavedImage) -> Uni
                             else Modifier.clickable(role = if (selection != null) Role.Checkbox else Role.Button) { open(image) })
                         .semantics { if (selection != null) selected = checked }.testTag("library-image-${image.id}")) {
                         AsyncImage(image.thumbnailUrl, image.alt.ifBlank { "收藏图片" }, Modifier.fillMaxSize(),
-                            contentScale = if (selection != null) ContentScale.Crop else ContentScale.Fit,
+                            contentScale = ContentScale.Crop,
                             onError = { failed = true }, onSuccess = { failed = false })
                         if (failed) Text("加载失败，点击查看原图", Modifier.align(Alignment.Center).padding(10.dp), style = MaterialTheme.typography.bodySmall)
                         if (selection != null) Icon(if (checked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,

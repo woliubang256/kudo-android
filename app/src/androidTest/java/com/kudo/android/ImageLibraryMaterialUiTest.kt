@@ -104,8 +104,7 @@ class ImageLibraryMaterialUiTest {
     }
 
     @Test fun pickerThumbnailsFillSquareWideAndTallCells() {
-        val images = listOf("square", "wide", "tall").map { shape -> SavedImage(id = shape,
-            originalUrl = "https://material.test/red-$shape.png", thumbnailUrl = "https://material.test/red-$shape.png") }
+        val images = thumbnailImages()
         runBlocking { state.update { it.copy(images = images) } }
         compose.setContent { KudoTheme(DisplaySettings(theme = ThemeMode.DARK)) { EditorToolBackdropHost {
             Box(Modifier.fillMaxSize().background(Color(0xFF2564C3))) {
@@ -114,6 +113,32 @@ class ImageLibraryMaterialUiTest {
                 }
             }
         } } }
+        assertFilledThumbnails(images, "library-picker-filled-thumbnails.png")
+        compose.onNodeWithTag("library-image-square").performClick()
+        compose.onNodeWithText("插入 1 张图片").assertIsEnabled().assertTouchHeightIsEqualTo(48.dp)
+    }
+
+    @Test fun managementThumbnailsFillSquareWideAndTallCellsInBothThemes() {
+        val images = thumbnailImages().map { it.copy(source = ImageSource(42, 1, "图片来源")) }
+        runBlocking { state.update { it.copy(images = images) } }
+        var settings by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT, fontScale = 1.3f))
+        compose.setContent { KudoTheme(settings) {
+            CompositionLocalProvider(LocalImageLibrary provides state) { ImageLibraryScreen({}) {} }
+        } }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            compose.runOnIdle { settings = settings.copy(theme = theme) }
+            assertFilledThumbnails(images, "library-management-filled-$theme.png")
+            for (image in images) {
+                compose.onNodeWithTag("library-source-${image.id}").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+                compose.onNodeWithTag("library-remove-${image.id}").assertIsDisplayed()
+            }
+        }
+    }
+
+    private fun thumbnailImages() = listOf("square", "wide", "tall").map { shape -> SavedImage(id = shape,
+        originalUrl = "https://material.test/red-$shape.png", thumbnailUrl = "https://material.test/red-$shape.png") }
+
+    private fun assertFilledThumbnails(images: List<SavedImage>, screenshotName: String) {
         compose.waitUntil(5_000) {
             val pixels = compose.onRoot().captureToImage().toPixelMap()
             images.all { image ->
@@ -122,7 +147,7 @@ class ImageLibraryMaterialUiTest {
             }
         }
         val screenshot = compose.onRoot().captureToImage()
-        File(context.getExternalFilesDir(null), "library-picker-filled-thumbnails.png").outputStream().use {
+        File(context.getExternalFilesDir(null), screenshotName).outputStream().use {
             screenshot.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         val pixels = screenshot.toPixelMap()
@@ -135,8 +160,6 @@ class ImageLibraryMaterialUiTest {
                 assertTrue("${image.id} must fill its thumbnail at $point: $color", color.red > .95f && color.green < .05f && color.blue < .05f)
             }
         }
-        compose.onNodeWithTag("library-image-square").performClick()
-        compose.onNodeWithText("插入 1 张图片").assertIsEnabled().assertTouchHeightIsEqualTo(48.dp)
     }
 
     private fun pickerSurface(name: String): Color {
