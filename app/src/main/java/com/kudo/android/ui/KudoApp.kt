@@ -387,8 +387,11 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                             sort = vm::sort, showAbout = vm::showAbout, dismissAbout = vm::dismissAbout, retryAbout = vm::retryAbout) }
                     }
                     composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) { entry ->
-                        WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
-                            openApp = { appLinks.open(it) }, externalLinkMode = display.externalLinkMode)
+                        key(account.user?.id) {
+                            WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
+                                openApp = { appLinks.open(it) }, externalLinkMode = display.externalLinkMode,
+                                preferences = app.miniApps, accountId = account.user?.id, accountReady = sessionStable)
+                        }
                     }
                     topicDetailComposable("topic/{id}?post={post}",
                         arguments = listOf(navArgument("id") { type = NavType.IntType }, navArgument("post") { type = NavType.IntType; defaultValue = 0 })) { entry ->

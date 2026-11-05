@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kudo.android.ui.LinuxDoLink
 import com.kudo.android.ui.ExternalAppLinkPolicy
 import com.kudo.android.data.ExternalLinkMode
+import com.kudo.android.data.MiniAppPreferences
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
 import kotlinx.coroutines.CancellationException
@@ -55,7 +56,8 @@ private class WebPageState(val saved: Bundle? = null) {
 @Composable
 internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> Unit,
     webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false },
-    externalLinkMode: ExternalLinkMode = ExternalLinkMode.SYSTEM) {
+    externalLinkMode: ExternalLinkMode = ExternalLinkMode.SYSTEM, preferences: MiniAppPreferences? = null,
+    accountId: Int? = null, accountReady: Boolean = true) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
     var title by rememberSaveable(url) { mutableStateOf("网页") }
@@ -76,7 +78,12 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val currentOpenApp by rememberUpdatedState(openApp)
     val currentExternalLinkMode by rememberUpdatedState(externalLinkMode)
     val miniApp = MiniAppLocation.parse(currentUrl)
-    var titleBarEnabled by rememberSaveable(url, miniApp?.id) { mutableStateOf(true) }
+    var temporaryTitleBar by rememberSaveable(url, accountId) { mutableStateOf(true) }
+    val savedTitleBar = preferences?.let { store ->
+        val revision by store.revision.collectAsState()
+        remember(store, accountId, revision) { store.titleBar(accountId) }
+    }
+    val titleBarEnabled = savedTitleBar ?: temporaryTitleBar
     val immersive = miniApp?.id != null && runtimePresentation != false
     val visibleLaunch = launchState?.takeIf { immersive && it.url == currentUrl }
     val launchCover = visibleLaunch?.coversPage == true
@@ -85,6 +92,14 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val fullscreen = remember(url) { WebFullscreenState() }
     val runtimeHeader = immersive && titleBarEnabled && fullscreen.view == null
     val context = LocalContext.current
+    val currentAccountId by rememberUpdatedState(accountId)
+    val currentAccountReady by rememberUpdatedState(accountReady)
+    val handleClipboard by rememberUpdatedState<(MiniAppClipboardRequest) -> Unit>({ request ->
+        val id = request.appId
+        if (!accountReady || miniUi.visibility.targetState) request.cancel()
+        else if (id != null && preferences?.clipboardAllowed(accountId, id, request.write) == true) request.allow(context)
+        else miniUi.request(request)
+    })
     fun close() { miniUi.reset(); fullscreen.exit(); currentBack() }
     fun navigateBack() {
         if (miniUi.showing) miniUi.dismiss()
@@ -99,6 +114,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     BackHandler { navigateBack() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(currentUrl) { miniUi.reset(); page.bridge?.invalidate() }
+    LaunchedEffect(accountReady) { if (!accountReady) miniUi.dismiss() }
     LaunchedEffect(currentUrl, awaitingContent, error, miniUi.revision) {
         val id = miniApp?.id
         if (id != null && !awaitingContent && error == null) {
@@ -177,7 +193,9 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         settings.javaScriptCanOpenWindowsAutomatically = false
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
-                        page.bridge = MiniAppWebBridge(this, { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }, miniUi::request,
+                        val owner = accountId
+                        page.bridge = MiniAppWebBridge(this, { currentAccountReady && currentAccountId == owner && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
+                            { handleClipboard(it) },
                             launch = { launchState = it }) { adapted ->
                             runtimePresentation = adapted
                             val generation = navigationGeneration
@@ -314,7 +332,16 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     MiniAppPanels(miniUi, miniApp, ::retry, {
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
             .setPrimaryClip(ClipData.newPlainText("小程序链接", miniAppPublicUrl(currentUrl)))
-    }, { openBrowser(miniAppPublicUrl(currentUrl)) }, titleBarEnabled, { titleBarEnabled = !titleBarEnabled })
+    }, { openBrowser(miniAppPublicUrl(currentUrl)) }, titleBarEnabled, {
+        if (accountReady) {
+            if (preferences != null) preferences.saveTitleBar(accountId, !titleBarEnabled)
+            else temporaryTitleBar = !titleBarEnabled
+        }
+    }, preferencesReady = accountReady, rememberClipboard = { request ->
+        request.allow(context) {
+            request.appId?.let { if (accountReady) preferences?.rememberClipboard(accountId, it, request.write) }
+        }
+    })
     }
 }
 

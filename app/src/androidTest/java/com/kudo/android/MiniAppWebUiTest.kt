@@ -3,6 +3,8 @@ package com.kudo.android
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.webkit.*
 import androidx.activity.ComponentActivity
@@ -25,6 +27,7 @@ import org.json.JSONObject
 import org.junit.*
 import org.junit.Assert.*
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -38,17 +41,39 @@ class MiniAppWebUiTest {
     private val pageFinishes = AtomicInteger()
     @Volatile private var failInfo = false
     private var emulateBrowserClipboard = false
+    private var visible by mutableStateOf(true)
+    private val base = InstrumentationRegistry.getInstrumentation().targetContext
+    private val preferenceName = "mini_app_web_test_${UUID.randomUUID()}"
+    private val fixture = object : ContextWrapper(base) {
+        override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = super.getSharedPreferences(preferenceName, mode)
+    }
+    private var preferences by mutableStateOf(MiniAppPreferences(fixture))
+    private var accountId by mutableStateOf<Int?>(101)
+    private var accountReady by mutableStateOf(true)
     private var display by mutableStateOf(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f))
+    @After fun cleanupPreferences() { base.deleteSharedPreferences(preferenceName) }
 
     private fun show(start: String = "https://linux.do/apps/$first?room=one#play", external: (String) -> Unit = {}) {
         compose.setContent { KudoTheme(display) {
-            var visible by remember { mutableStateOf(true) }
-            if (visible) WebScreen(start, { visible = false }, external, { FixtureView(it).also { view -> web = view } })
+            if (visible) key(accountId) { WebScreen(start, { visible = false }, external, { FixtureView(it).also { view -> web = view } },
+                preferences = preferences, accountId = accountId, accountReady = accountReady) }
             else Text("原生来源")
         } }
-        compose.waitUntil(10000) { js("document.readyState === 'complete'") == "true" }
-        compose.waitUntil(10000) { compose.onAllNodesWithTag("web-loading").fetchSemanticsNodes().isEmpty() }
+        awaitPage()
         if (start.contains("/apps")) compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
+    }
+
+    private fun awaitPage() {
+        compose.onNodeWithTag("web-content").assertIsDisplayed()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("web-loading").fetchSemanticsNodes().isEmpty() &&
+            js("document.readyState === 'complete'") == "true" }
+    }
+
+    private fun preservingClipboard(block: () -> Unit) {
+        val manager = compose.activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        var previous: ClipData? = null
+        compose.runOnUiThread { previous = manager.primaryClip }
+        try { block() } finally { compose.runOnUiThread { previous?.let(manager::setPrimaryClip) ?: manager.clearPrimaryClip() } }
     }
 
     private fun js(script: String): String {
@@ -161,7 +186,41 @@ class MiniAppWebUiTest {
         }
     }
 
-    @Test fun fullscreenRestoresTheManualTitleBarChoiceAndAnotherAppStartsWithItVisible() {
+    @Test fun hiddenTitleBarSurvivesClosingAndReopeningTheMiniApp() {
+        show()
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("隐藏标题栏").performClick()
+        compose.onNodeWithContentDescription("关闭网页").performClick()
+        compose.onNodeWithText("原生来源").assertIsDisplayed()
+        compose.runOnIdle { preferences = MiniAppPreferences(fixture); visible = true }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("web-loading").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
+        compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+    }
+
+    @Test fun titleBarPreferencesFollowGuestAndEachAccountWithoutLeakingThePreviousChoice() {
+        show()
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("隐藏标题栏").performClick()
+        val previous = web
+        compose.runOnIdle { accountId = 202 }
+        awaitPage()
+        compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(previous.destroyed) }
+        compose.runOnIdle { accountId = null }
+        awaitPage()
+        compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("隐藏标题栏").performClick()
+        compose.runOnIdle { accountId = 101; preferences = MiniAppPreferences(fixture) }
+        awaitPage()
+        compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+        assertFalse(preferences.titleBar(101))
+        assertFalse(preferences.titleBar(null))
+        assertTrue(preferences.titleBar(202))
+    }
+
+    @Test fun fullscreenRestoresTheManualTitleBarChoiceAndAnotherAppKeepsIt() {
         show()
         val original = web
         compose.onNodeWithContentDescription("小程序更多").performClick()
@@ -183,7 +242,10 @@ class MiniAppWebUiTest {
         compose.onNodeWithContentDescription("小程序更多").performClick()
         compose.onNodeWithText("隐藏标题栏").performClick()
         js("history.pushState({}, '', '/apps/$second');document.title='打砖块'")
-        compose.waitUntil(10000) { compose.onAllNodesWithText("打砖块", substring = false).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10000) { js("location.pathname").contains(second) }
+        compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("显示标题栏").performClick()
         compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
         compose.onNodeWithText("2048", substring = false).assertDoesNotExist()
         compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
@@ -372,9 +434,94 @@ class MiniAppWebUiTest {
         siteClipboard("write", "单次原生确认")
         compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序写入剪贴板？").fetchSemanticsNodes().isNotEmpty() }
         assertEquals("true", js("!document.querySelector('.mini-app-permission-dialog[open]')"))
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("不允许").performClick()
         compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
         assertEquals("true", js("!document.querySelector('.mini-app-permission-dialog')"))
+    }
+
+    @Test fun clipboardOffersDenyOnceAndRememberedConsent() {
+        show()
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
+            compose.runOnIdle { display = display.copy(theme = theme, glass = glass) }
+            siteClipboard("write", "https://clipboard-fixture.test/tips")
+            compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序写入剪贴板？").fetchSemanticsNodes().isNotEmpty() }
+            for (label in listOf("不允许", "仅本次允许", "允许且不再询问"))
+                compose.onNodeWithText(label).assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+            capture("mini-app-three-clipboard-$theme-$glass.png")
+            compose.onNodeWithText("不允许").performClick()
+            compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
+        }
+    }
+
+    @Test fun permanentClipboardWritesSurviveReopeningButOtherScopesStillAsk() = preservingClipboard {
+        show()
+        siteClipboard("write", "持久写入授权")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("允许且不再询问").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("允许且不再询问").performClick()
+        compose.waitUntil(5000) { js("window.siteResult").contains("written") }
+        assertTrue(preferences.clipboardAllowed(101, first, true))
+        compose.onNodeWithContentDescription("关闭网页").performClick()
+        compose.onNodeWithText("原生来源").assertIsDisplayed()
+        compose.runOnIdle { preferences = MiniAppPreferences(fixture); visible = true }
+        awaitPage()
+        siteClipboard("write", "重开后直接写入")
+        compose.waitUntil(5000) { js("window.siteResult").contains("written") }
+        compose.onNodeWithText("仅本次允许").assertDoesNotExist()
+        siteClipboard("read")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("不允许").performClick()
+        js("history.pushState({}, '', '/apps/$second')")
+        compose.waitUntil(5000) { js("location.pathname").contains(second) }
+        compose.waitUntil(5000) { compose.onAllNodesWithText("打砖块", substring = false).fetchSemanticsNodes().isNotEmpty() }
+        siteClipboard("write", "另一小程序仍需询问")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("不允许").performClick()
+        for (account in listOf(202, null)) {
+            compose.runOnIdle { accountId = account }
+            awaitPage()
+            siteClipboard("write", "另一身份仍需询问")
+            compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("不允许").performClick()
+        }
+        compose.runOnIdle { accountId = 101 }
+        awaitPage()
+        siteClipboard("write", "原账号恢复授权")
+        compose.waitUntil(5000) { js("window.siteResult").contains("written") }
+        compose.onNodeWithText("仅本次允许").assertDoesNotExist()
+    }
+
+    @Test fun permanentClipboardReadsNeverGrantWritesAndAccountChecksCancelRequests() = preservingClipboard {
+        compose.runOnUiThread { (compose.activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+            .setPrimaryClip(ClipData.newPlainText("fixture", "授权读取测试")) }
+        show()
+        siteClipboard("read")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("允许且不再询问").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("允许且不再询问").performClick()
+        compose.waitUntil(5000) { js("window.siteResult").contains("授权读取测试") }
+        siteClipboard("read")
+        compose.waitUntil(5000) { js("window.siteResult").contains("授权读取测试") }
+        compose.onNodeWithText("仅本次允许").assertDoesNotExist()
+        siteClipboard("write", "临时写入")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("仅本次允许").performClick()
+        compose.waitUntil(5000) { js("window.siteResult").contains("written") }
+        assertFalse(preferences.clipboardAllowed(101, first, true))
+        siteClipboard("write", "未授权写入")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { accountReady = false }
+        compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
+        compose.onNodeWithText("仅本次允许").assertDoesNotExist()
+        siteClipboard("read")
+        compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
+        assertFalse(preferences.clipboardAllowed(101, first, true))
+        compose.runOnIdle { accountReady = true }
+        compose.waitForIdle()
+        siteClipboard("write", "恢复会话后仍需询问")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { accountId = 202 }
+        awaitPage()
+        compose.onNodeWithText("仅本次允许").assertDoesNotExist()
+        assertFalse(preferences.clipboardAllowed(202, first, true))
     }
 
     @Test fun siteClipboardReadWriteRequireConsentEvenWhenBrowserApisSucceed() {
@@ -432,7 +579,7 @@ class MiniAppWebUiTest {
         })()""".trimIndent())
         siteClipboard("read", translated = true)
         compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("不允许").performClick()
         compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
         js("""(()=>{const d=document.createElement('dialog');d.className='mini-app-permission-dialog';
           d.innerHTML='<h2 id=permission-audio>声音权限</h2><p>播放音频</p><p class=mini-app-permission-dialog__preview>声音</p><div><button class=button>取消</button><button class="button --primary" id=audio-allow>开启声音</button></div>';
@@ -452,7 +599,7 @@ class MiniAppWebUiTest {
         js("window.concurrentClip='pending';navigator.clipboard.writeText('并发取消测试').catch(e=>window.concurrentClip=e.code)")
         compose.waitUntil(5000) { js("window.concurrentClip").contains("USER_CANCELLED") }
         compose.onNodeWithText("允许小程序读取剪贴板文字？").assertIsDisplayed()
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("不允许").performClick()
         compose.waitUntil(5000) { js("window.frameClip").contains("USER_CANCELLED") }
         js("window.largeClip='pending';navigator.clipboard.writeText('界'.repeat(1366)).catch(e=>window.largeClip=e.code)")
         compose.waitUntil(5000) { js("window.largeClip").contains("INVALID_ARGUMENTS") }
@@ -468,7 +615,7 @@ class MiniAppWebUiTest {
         siteClipboard("read")
         compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
         assertEquals("\"pending\"", js("window.siteResult"))
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("不允许").performClick()
         compose.waitUntil(5000) { js("window.siteResult").contains("USER_CANCELLED") }
     }
 
@@ -481,7 +628,7 @@ class MiniAppWebUiTest {
             assertEquals("true", js("typeof navigator.clipboard.readText === 'function'"))
             js("window.clipResult='pending';navigator.clipboard.readText().then(x=>window.clipResult=x,e=>window.clipResult=e.code||e.name)")
             compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序读取剪贴板文字？").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("取消").performClick()
+            compose.onNodeWithText("不允许").performClick()
             compose.waitUntil(5000) { js("window.clipResult").contains("USER_CANCELLED") }
             js("window.clipResult='pending';navigator.clipboard.readText().then(x=>window.clipResult=x,e=>window.clipResult=e.code||e.name)")
             compose.waitUntil(5000) { compose.onAllNodesWithText("仅本次允许").fetchSemanticsNodes().isNotEmpty() }
@@ -529,7 +676,7 @@ class MiniAppWebUiTest {
         compose.runOnIdle { assertSame("切换布局不能重建运行中的网页", original, web); assertFalse(original.destroyed) }
         js("navigator.clipboard.readText().catch(()=>{})")
         compose.waitUntil(5000) { compose.onAllNodesWithText("允许小程序读取剪贴板文字？").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("不允许").performClick()
     }
 
     @Test fun backgroundCancelsClipboardAndPausesMediaWithoutReplacingThePage() {

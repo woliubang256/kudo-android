@@ -96,7 +96,8 @@ private fun MiniAppCapsuleButton(icon: ImageVector, tint: Color, description: St
 
 @Composable
 internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, refresh: () -> Unit,
-    copyLink: () -> Unit, browser: () -> Unit, titleBarEnabled: Boolean = true, toggleTitleBar: () -> Unit = {}) {
+    copyLink: () -> Unit, browser: () -> Unit, titleBarEnabled: Boolean = true, toggleTitleBar: () -> Unit = {},
+    preferencesReady: Boolean = true, rememberClipboard: (MiniAppClipboardRequest) -> Unit = {}) {
     val context = LocalContext.current
     CommunitySheet(state.visibility, when (state.panel) {
         MiniAppPanel.MENU -> "小程序更多"
@@ -115,7 +116,7 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                 }
                 if (location?.id != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     MiniAppMenuButton(if (titleBarEnabled) Icons.Rounded.WebAssetOff else Icons.Rounded.WebAsset,
-                        if (titleBarEnabled) "隐藏标题栏" else "显示标题栏", Modifier.weight(1f)) { state.dismiss(); toggleTitleBar() }
+                        if (titleBarEnabled) "隐藏标题栏" else "显示标题栏", Modifier.weight(1f), enabled = preferencesReady) { state.dismiss(); toggleTitleBar() }
                     repeat(3) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -135,9 +136,12 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                 request?.text?.takeIf { request.write && it.isNotBlank() }?.let {
                     Text(it.take(200), style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CommunityButton("取消", state::dismiss, Modifier.weight(1f))
-                    CommunityButton("仅本次允许", { request?.allow(context); state.dismiss() }, Modifier.weight(1f))
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CommunityButton("不允许", state::dismiss, Modifier.fillMaxWidth().heightIn(min = 48.dp), compact = true)
+                    CommunityButton("仅本次允许", { request?.allow(context); state.dismiss() }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = preferencesReady, compact = true)
+                    CommunityButton("允许且不再询问", { request?.let(rememberClipboard); state.dismiss() }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = preferencesReady && request?.appId != null, compact = true)
                 }
             }
         }
@@ -145,8 +149,8 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
 }
 
 @Composable
-private fun MiniAppMenuButton(icon: ImageVector, title: String, modifier: Modifier = Modifier, click: () -> Unit) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = click)
+private fun MiniAppMenuButton(icon: ImageVector, title: String, modifier: Modifier = Modifier, enabled: Boolean = true, click: () -> Unit) {
+    Column(modifier.clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, role = Role.Button, onClick = click)
         .padding(horizontal = 2.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape), contentAlignment = Alignment.Center) {

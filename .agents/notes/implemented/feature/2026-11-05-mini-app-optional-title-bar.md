@@ -10,7 +10,7 @@ Status: implemented
 
 保留官网嵌入运行时和同一个 WebView，仅切换 WebPageScaffold 的标题栏与悬浮胶囊。默认开启标题栏，普通材质，不增加返回、简介或副标题。公开详情按当前应用请求并与关于共用，名称和图标缺失或失败时保留通用图标及页面标题，不阻塞运行；旧应用信息不能显示到新应用。
 
-更多宫格增加“隐藏标题栏／显示标题栏”，本次打开中保存用户选择，进入另一应用恢复默认显示。网页请求全屏的 custom view 期间临时隐藏标题栏，退出后恢复手动选择；全屏内切换只修改退出后的偏好。隐藏状态下胶囊继续悬浮，系统返回仍先退出弹层、再退出网页全屏、再处理历史。
+更多宫格增加“隐藏标题栏／显示标题栏”，选择通过 MiniAppPreferences 在本地按访客及每个登录用户 ID 分别保存，一个账号下所有小程序共用，初始默认显示；关闭重进、换应用及重开存储恢复该账号的选择。网页请求全屏的 custom view 期间临时隐藏标题栏，退出后恢复手动选择；全屏内切换只修改退出后的偏好。隐藏状态下胶囊继续悬浮，系统返回仍先退出弹层、再退出网页全屏、再处理历史。会话检查期间禁用偏好修改，换账号销毁旧网页和弹层，再读取新账号偏好。
 
 ## Existing note audit
 
@@ -30,7 +30,8 @@ Status: implemented
 - 仅整理运行时代码缩进和修正图库测试后，Debug／AndroidTest 再次构建成功，见 `artifacts/title-library-focused-build.txt`；标题栏默认避让、六种组合连续切换及图库修正用例共 3 项复测通过（12.362 秒），见 `artifacts/title-library-focused-device.txt`。
 - 官网 MiniAppImmersiveLiveProbeTest 显式启用后 1 项通过（17.327 秒），两款小程序均达到就绪、保留完整嵌入运行时并验证胶囊底边位于网页上方，见 `artifacts/mini-app-title-live-device.txt` 及 `artifacts/mini-app-title-live-evidence.json`。已目视检查真实图标与名称的 `artifacts/mini-app-title-live-0.png`、`artifacts/mini-app-title-live-1.png`，以及浅深色夹具与两行更多宫格，中文清晰。没有开始新游戏、重置进度或主动同意权限。
 - MiniAppInfoTest 7 项及 ImageLibraryTest 14 项 JVM 用例通过；构建与 Lint 见 `artifacts/title-library-final-build.txt`，Lint 为 0 errors／68 warnings／1 hint。设备 RMX2202／Android 13，显式构建 0.3.1-dev／3002；与覆盖前开发版签名 SHA-256 一致，仅 install -r、install -r -t 和手动 am instrument，首次安装时间保持 2026-10-23 14:55:34，保留登录与用户数据。
+- 账号记忆补充验证：关闭重进、重开存储、访客与两账号往返均恢复自己的选择，换应用保留同账号选择，换账号销毁旧网页；全屏临时隐藏不覆盖保存偏好。用例随本地剪贴板授权一起验证，三轮累计 47 个不同用例获得通过结果，失败批次与定向复测详情见[授权记忆](2026-11-05-mini-app-remembered-clipboard-consent.md)。同设备继续使用 0.3.1-dev／3002 覆盖安装，首次安装时间未变。
 
 ## Consequences
 
-默认标题栏保证非全屏游戏与胶囊不重叠，但减少普通状态可用高度。隐藏后仍可能覆盖游戏右上角，属于用户主动选择。应用全屏依赖系统 WebView 的 custom view 回调；其他系统和 WebView 版本需要后续验收。详情请求新增首屏只读网络调用，失败只影响应用标识；不额外保存偏好到账号存储，不改游戏资源、授权与上传行为。
+默认标题栏保证非全屏游戏与胶囊不重叠，但减少普通状态可用高度。隐藏后仍可能覆盖游戏右上角，属于用户主动选择。应用全屏依赖系统 WebView 的 custom view 回调；其他系统和 WebView 版本需要后续验收。详情请求新增首屏只读网络调用，失败只影响应用标识。标题栏只保存本机账号级显示偏好，不同步网络；剪贴板授权的独立范围由[授权记忆](2026-11-05-mini-app-remembered-clipboard-consent.md)维护。

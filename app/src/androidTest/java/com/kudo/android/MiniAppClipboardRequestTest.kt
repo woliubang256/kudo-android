@@ -23,14 +23,16 @@ class MiniAppClipboardRequestTest {
                 val replies = mutableListOf<String?>()
                 val cancelled = MiniAppClipboardRequest(true, "取消后的写入") { _, error -> replies.add(error) }
                 cancelled.cancel()
-                cancelled.allow(context)
+                cancelled.allow(context) { fail("已取消的请求不能保存授权") }
                 assertEquals(listOf("USER_CANCELLED"), replies)
                 assertEquals("原始测试文字", manager.primaryClip!!.getItemAt(0).text.toString())
 
                 val completed = MiniAppClipboardRequest(true, "本次测试写入") { _, error -> replies.add(error) }
-                completed.allow(context)
+                var grants = 0
+                completed.allow(context) { grants++ }
                 manager.setPrimaryClip(ClipData.newPlainText("fixture", "后续测试文字"))
-                completed.allow(context)
+                completed.allow(context) { grants++ }
+                assertEquals(1, grants)
                 assertEquals("后续测试文字", manager.primaryClip!!.getItemAt(0).text.toString())
                 assertEquals(listOf("USER_CANCELLED", null), replies)
             } finally {
@@ -48,10 +50,10 @@ class MiniAppClipboardRequestTest {
                 manager.setPrimaryClip(ClipData.newPlainText("fixture", "保持测试文字"))
                 var error: String? = null
                 val stale = MiniAppClipboardRequest(true, "旧页面", valid = { false }) { _, code -> error = code }
-                stale.allow(context)
+                stale.allow(context) { fail("已失效请求不能保存授权") }
                 assertEquals("APP_UNLOADED", error)
                 val oversized = MiniAppClipboardRequest(true, "界".repeat(1366)) { _, code -> error = code }
-                oversized.allow(context)
+                oversized.allow(context) { fail("超限请求不能保存授权") }
                 assertEquals("INVALID_ARGUMENTS", error)
                 assertEquals("保持测试文字", manager.primaryClip!!.getItemAt(0).text.toString())
             } finally { previous?.let(manager::setPrimaryClip) ?: manager.clearPrimaryClip() }

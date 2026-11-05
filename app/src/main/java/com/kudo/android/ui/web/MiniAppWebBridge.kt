@@ -19,25 +19,30 @@ import java.util.UUID
 
 internal class MiniAppClipboardRequest(
     val write: Boolean, val text: String?, private val valid: () -> Boolean = { true },
+    val appId: String? = null,
     private val reply: (String?, String?) -> Unit,
 ) {
     var completed by mutableStateOf(false)
         private set
     fun cancel(error: String = "USER_CANCELLED") = finish(null, error)
-    fun allow(context: Context) {
+    fun allow(context: Context, onAllowed: () -> Unit = {}) {
         if (completed) return
         // Claim the request before touching the clipboard, including stale/double UI callbacks.
         completed = true
         if (!valid()) { reply(null, "APP_UNLOADED"); return }
         try {
             val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val value: String?
             if (write) {
-                if (text.orEmpty().toByteArray(Charsets.UTF_8).size > 4096) reply(null, "INVALID_ARGUMENTS")
-                else { manager.setPrimaryClip(ClipData.newPlainText("小程序", text.orEmpty())); reply(null, null) }
+                if (text.orEmpty().toByteArray(Charsets.UTF_8).size > 4096) { reply(null, "INVALID_ARGUMENTS"); return }
+                manager.setPrimaryClip(ClipData.newPlainText("小程序", text.orEmpty()))
+                value = null
             } else {
-                val value = manager.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
-                if (value.toByteArray(Charsets.UTF_8).size > 4096) reply(null, "INVALID_ARGUMENTS") else reply(value, null)
+                value = manager.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
+                if (value.toByteArray(Charsets.UTF_8).size > 4096) { reply(null, "INVALID_ARGUMENTS"); return }
             }
+            onAllowed()
+            reply(value, null)
         } catch (_: SecurityException) {
             reply(null, "PERMISSION_DENIED")
         }
@@ -119,7 +124,7 @@ internal class MiniAppWebBridge(
                             send(reply, id, null, "INVALID_ARGUMENTS")
                         } else {
                             val request = MiniAppClipboardRequest(method == "write", text,
-                                valid = { !closed && active() && view.url == url }) { value, error ->
+                                valid = { !closed && active() && view.url == url }, appId = location.id) { value, error ->
                                 pendingClipboard.remove(key)
                                 send(reply, id, value, error)
                             }
