@@ -96,7 +96,7 @@ private fun MiniAppCapsuleButton(icon: ImageVector, tint: Color, description: St
 
 @Composable
 internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, refresh: () -> Unit,
-    copyLink: () -> Unit, browser: () -> Unit) {
+    copyLink: () -> Unit, browser: () -> Unit, titleBarEnabled: Boolean = true, toggleTitleBar: () -> Unit = {}) {
     val context = LocalContext.current
     CommunitySheet(state.visibility, when (state.panel) {
         MiniAppPanel.MENU -> "小程序更多"
@@ -105,12 +105,19 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
     }, state::dismiss, backdrop = null, glass = GlassMode.TRANSLUCENT,
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 16.dp)) {
         when (state.panel) {
-            MiniAppPanel.MENU -> Row(Modifier.fillMaxWidth().testTag("mini-app-menu-grid"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                MiniAppMenuButton(Icons.Rounded.Refresh, if (location?.id != null) "重新进入小程序" else "刷新网页", Modifier.weight(1f)) { state.dismiss(); refresh() }
-                MiniAppMenuButton(Icons.Rounded.Link, "复制链接", Modifier.weight(1f)) { state.dismiss(); copyLink() }
-                MiniAppMenuButton(Icons.Rounded.Language, "在浏览器打开", Modifier.weight(1f)) { state.dismiss(); browser() }
-                if (location?.id != null) MiniAppMenuButton(Icons.Rounded.Info, "关于", Modifier.weight(1f)) { state.open(MiniAppPanel.ABOUT) }
-                else Spacer(Modifier.weight(1f))
+            MiniAppPanel.MENU -> Column(Modifier.fillMaxWidth().testTag("mini-app-menu-grid")) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MiniAppMenuButton(Icons.Rounded.Refresh, if (location?.id != null) "重新进入小程序" else "刷新网页", Modifier.weight(1f)) { state.dismiss(); refresh() }
+                    MiniAppMenuButton(Icons.Rounded.Link, "复制链接", Modifier.weight(1f)) { state.dismiss(); copyLink() }
+                    MiniAppMenuButton(Icons.Rounded.Language, "在浏览器打开", Modifier.weight(1f)) { state.dismiss(); browser() }
+                    if (location?.id != null) MiniAppMenuButton(Icons.Rounded.Info, "关于", Modifier.weight(1f)) { state.open(MiniAppPanel.ABOUT) }
+                    else Spacer(Modifier.weight(1f))
+                }
+                if (location?.id != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MiniAppMenuButton(if (titleBarEnabled) Icons.Rounded.WebAssetOff else Icons.Rounded.WebAsset,
+                        if (titleBarEnabled) "隐藏标题栏" else "显示标题栏", Modifier.weight(1f)) { state.dismiss(); toggleTitleBar() }
+                    repeat(3) { Spacer(Modifier.weight(1f)) }
+                }
             }
             MiniAppPanel.ABOUT -> {
                 if (state.loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CommunityLoadingIndicator() }

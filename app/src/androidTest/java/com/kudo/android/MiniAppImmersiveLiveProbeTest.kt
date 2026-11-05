@@ -82,6 +82,10 @@ class MiniAppImmersiveLiveProbeTest {
                 assertEquals("true", js("!document.querySelector('.d-header')||getComputedStyle(document.querySelector('.d-header')).display==='none'"))
                 assertEquals("true", js("(()=>{const f=document.querySelector('.mini-app-frame-host'),r=f.contentDocument.querySelector('iframe');return Math.abs(f.clientHeight-innerHeight)<2&&Math.abs(r.clientHeight-innerHeight)<2&&Math.abs(r.clientWidth-innerWidth)<2})()"))
                 compose.onNodeWithContentDescription("返回").assertDoesNotExist()
+                compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+                val game = compose.onNodeWithTag("web-content").fetchSemanticsNode().boundsInRoot
+                val capsule = compose.onNodeWithTag("mini-app-capsule").fetchSemanticsNode().boundsInRoot
+                assertTrue("原生胶囊不能遮挡线上游戏", capsule.bottom <= game.top)
                 compose.onNodeWithContentDescription("小程序更多").performClick()
                 compose.onNodeWithText("关于", substring = false).performClick()
                 compose.waitUntil(20000) { compose.onAllNodesWithTag("mini-app-about").fetchSemanticsNodes().isNotEmpty() }

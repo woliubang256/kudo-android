@@ -100,16 +100,19 @@ class MiniAppWebUiTest {
         compose.runOnIdle { assertTrue(web.destroyed) }
     }
 
-    @Test fun singleAppUsesTheWholeViewportWithoutANativeTitleOrBackRow() {
+    @Test fun defaultTitleBarKeepsTheCapsuleAboveTheGameWithoutABackButton() {
         show()
         compose.onNodeWithContentDescription("返回").assertDoesNotExist()
-        compose.onNodeWithText("测试应用", substring = false).assertDoesNotExist()
+        compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("2048", substring = false).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("小程序图标").assertIsDisplayed()
+        capture("mini-app-default-title-bar.png")
         val viewport = compose.onNodeWithTag("mini-app-viewport").fetchSemanticsNode().boundsInRoot
         val content = compose.onNodeWithTag("web-content").fetchSemanticsNode().boundsInRoot
         assertEquals(viewport.top, content.top, 1f)
         assertEquals(viewport.bottom, content.bottom, 1f)
         val capsule = compose.onNodeWithTag("mini-app-capsule").fetchSemanticsNode().boundsInRoot
-        assertTrue(capsule.top >= viewport.top && capsule.right <= viewport.right)
+        assertTrue("胶囊不能覆盖游戏的右上角", capsule.bottom <= content.top && capsule.right <= viewport.right)
         assertEquals("true", js("location.search.includes('embed_mode=true')"))
         assertEquals("true", js("document.documentElement.hasAttribute('data-kudo-mini-app')"))
         assertEquals("true", js("getComputedStyle(document.querySelector('.d-header')).display === 'none'"))
@@ -133,6 +136,57 @@ class MiniAppWebUiTest {
         assertEquals("true", js("location.pathname==='/apps/$second'&&new URLSearchParams(location.search).get('room')==='two'&&location.hash==='#play'"))
         compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
         compose.onNodeWithText("原生来源").assertDoesNotExist()
+    }
+
+    @Test fun titleBarToggleKeepsTheGameAndWebViewAcrossThemesAndMaterials() {
+        show()
+        val original = web
+        val finishes = pageFinishes.get()
+        js("window.gameMarker='keep playing'")
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
+            compose.runOnIdle { display = display.copy(theme = theme, glass = glass) }
+            compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+            compose.onNodeWithContentDescription("小程序更多").performClick()
+            compose.onNodeWithText("隐藏标题栏").assertIsDisplayed().performClick()
+            compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+            val capsule = compose.onNodeWithTag("mini-app-capsule").fetchSemanticsNode().boundsInRoot
+            val content = compose.onNodeWithTag("web-content").fetchSemanticsNode().boundsInRoot
+            assertTrue(capsule.top >= content.top && capsule.bottom < content.bottom)
+            compose.onNodeWithContentDescription("小程序更多").performClick()
+            compose.onNodeWithText("显示标题栏").performClick()
+            compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+            compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed); assertEquals(finishes, pageFinishes.get()) }
+            assertEquals("\"keep playing\"", js("window.gameMarker"))
+            capture("mini-app-title-bar-${theme.name}-${glass.name}.png")
+        }
+    }
+
+    @Test fun fullscreenRestoresTheManualTitleBarChoiceAndAnotherAppStartsWithItVisible() {
+        show()
+        val original = web
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("隐藏标题栏").performClick()
+        click("fullscreen")
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("mini-app-fullscreen").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("mini-app-fullscreen").assertDoesNotExist()
+        compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+        click("fullscreen")
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("mini-app-fullscreen").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("显示标题栏").performClick()
+        compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+        compose.onNodeWithTag("mini-app-fullscreen").assertIsDisplayed()
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("隐藏标题栏").performClick()
+        js("history.pushState({}, '', '/apps/$second');document.title='打砖块'")
+        compose.waitUntil(10000) { compose.onAllNodesWithText("打砖块", substring = false).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
+        compose.onNodeWithText("2048", substring = false).assertDoesNotExist()
+        compose.runOnIdle { assertSame(original, web); assertFalse(original.destroyed) }
     }
 
     private fun launch(stage: String, value: Int? = null, max: Int = 100) {
@@ -256,9 +310,9 @@ class MiniAppWebUiTest {
         about("2048")
         compose.onNodeWithText("关闭", substring = false).performClick()
         compose.waitForIdle()
+        failInfo = true
         js("history.pushState({}, '', '/apps/$second');document.title='打砖块'")
         compose.waitUntil { js("location.pathname").contains(second) }
-        failInfo = true
         compose.onNodeWithContentDescription("小程序更多").performClick()
         compose.onNodeWithText("关于", substring = false).performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("应用信息加载失败").fetchSemanticsNodes().isNotEmpty() }
@@ -275,6 +329,7 @@ class MiniAppWebUiTest {
         show()
         click("fullscreen")
         compose.waitUntil(10000) { compose.onAllNodesWithTag("mini-app-fullscreen").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
         compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
         compose.onNodeWithContentDescription("小程序更多").performClick()
         compose.onNodeWithText("关于", substring = false).assertIsDisplayed()
@@ -282,6 +337,7 @@ class MiniAppWebUiTest {
         compose.onNodeWithTag("mini-app-fullscreen").assertIsDisplayed()
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("mini-app-fullscreen").assertDoesNotExist()
+        compose.onNodeWithTag("mini-app-title-bar").assertIsDisplayed()
         compose.onNodeWithTag("mini-app-capsule").assertIsDisplayed()
         compose.onNodeWithText("原生来源").assertDoesNotExist()
         compose.onNodeWithContentDescription("关闭网页").performClick()

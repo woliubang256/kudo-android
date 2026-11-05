@@ -76,12 +76,14 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val currentOpenApp by rememberUpdatedState(openApp)
     val currentExternalLinkMode by rememberUpdatedState(externalLinkMode)
     val miniApp = MiniAppLocation.parse(currentUrl)
+    var titleBarEnabled by rememberSaveable(url, miniApp?.id) { mutableStateOf(true) }
     val immersive = miniApp?.id != null && runtimePresentation != false
     val visibleLaunch = launchState?.takeIf { immersive && it.url == currentUrl }
     val launchCover = visibleLaunch?.coversPage == true
     val currentMiniApp by rememberUpdatedState(miniApp)
     val miniUi = remember(url) { MiniAppUiState() }
     val fullscreen = remember(url) { WebFullscreenState() }
+    val runtimeHeader = immersive && titleBarEnabled && fullscreen.view == null
     val context = LocalContext.current
     fun close() { miniUi.reset(); fullscreen.exit(); currentBack() }
     fun navigateBack() {
@@ -97,9 +99,9 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     BackHandler { navigateBack() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(currentUrl) { miniUi.reset(); page.bridge?.invalidate() }
-    LaunchedEffect(miniApp?.id, miniUi.panel, miniUi.visibility.targetState, miniUi.revision) {
+    LaunchedEffect(currentUrl, awaitingContent, error, miniUi.revision) {
         val id = miniApp?.id
-        if (id != null && miniUi.panel == MiniAppPanel.ABOUT && miniUi.visibility.targetState) {
+        if (id != null && !awaitingContent && error == null) {
             miniUi.info = null; miniUi.loading = true; miniUi.error = false
             try { miniUi.info = checkNotNull(page.bridge).info(id) }
             catch (_: TimeoutCancellationException) { miniUi.error = true }
@@ -133,7 +135,10 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().then(if (miniUi.showing) Modifier.clearAndSetSemantics {} else Modifier)) {
     val header: @Composable () -> Unit = {
-        if (miniApp != null) MiniAppTopBar(if (miniApp.id == null) "应用广场" else title.takeUnless { it == "网页" }?.removeSuffix(" - LINUX DO") ?: "小程序",
+        if (immersive) MiniAppRuntimeTopBar(miniUi.info?.takeIf { it.id == miniApp?.id },
+            title.takeUnless { it == "网页" }?.removeSuffix(" - LINUX DO") ?: "小程序",
+            { miniUi.open(MiniAppPanel.MENU) }, ::close)
+        else if (miniApp != null) MiniAppTopBar(if (miniApp.id == null) "应用广场" else title.takeUnless { it == "网页" }?.removeSuffix(" - LINUX DO") ?: "小程序",
             ::navigateBack, { miniUi.open(MiniAppPanel.MENU) }, ::close)
         else
         PageTopBar(title, ::navigateBack) {
@@ -297,17 +302,19 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             }
         }
     }
-    WebPageScaffold(header, Modifier.testTag("web-page"), headerVisible = !immersive,
-        contentModifier = if (immersive) Modifier.safeDrawingPadding().imePadding().testTag("mini-app-viewport") else Modifier,
+    WebPageScaffold(header, Modifier.testTag("web-page"), headerVisible = !immersive || runtimeHeader,
+        contentModifier = if (immersive) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(
+            if (runtimeHeader) WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical))
+            .imePadding().testTag("mini-app-viewport") else Modifier,
         overlay = {
-            if (immersive) MiniAppCapsule({ miniUi.open(MiniAppPanel.MENU) }, ::close,
+            if (immersive && !runtimeHeader) MiniAppCapsule({ miniUi.open(MiniAppPanel.MENU) }, ::close,
                 Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 4.dp))
         }, content = content)
     }
     MiniAppPanels(miniUi, miniApp, ::retry, {
         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
             .setPrimaryClip(ClipData.newPlainText("小程序链接", miniAppPublicUrl(currentUrl)))
-    }, { openBrowser(miniAppPublicUrl(currentUrl)) })
+    }, { openBrowser(miniAppPublicUrl(currentUrl)) }, titleBarEnabled, { titleBarEnabled = !titleBarEnabled })
     }
 }
 
