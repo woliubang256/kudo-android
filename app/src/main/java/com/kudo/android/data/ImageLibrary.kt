@@ -64,6 +64,15 @@ data class ImageLibrary(
     }
 
     fun removeImage(id: String) = copy(images = images.filterNot { it.id == id })
+
+    fun moveImage(id: String, folderId: String): ImageLibrary {
+        require(folders.any { it.id == folderId }) { "目录已不存在，请重新选择" }
+        val image = requireNotNull(images.firstOrNull { it.id == id }) { "图片已不存在，请重新选择" }
+        if (image.folderId == folderId) return this
+        val duplicate = images.any { it.folderId == folderId && it.originalUrl == image.originalUrl }
+        return copy(images = if (duplicate) images.filterNot { it.id == id }
+            else images.map { if (it.id == id) it.copy(folderId = folderId) else it })
+    }
 }
 
 fun validLibraryImageUrl(url: String): Boolean = url.none { it.isISOControl() } &&

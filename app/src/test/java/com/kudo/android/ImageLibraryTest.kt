@@ -48,6 +48,40 @@ class ImageLibraryTest {
         assertEquals(2, library.save(image.copy(id = "three", folderId = "other")).images.size)
     }
 
+    @Test fun movingChangesOnlyTheFolderAndSurvivesReopeningWithoutReordering() {
+        val saved = image.copy(thumbnailUrl = "https://cdn.example.com/thumb.png", alt = "猫 [开心]", filename = "猫.png", ratio = 1.5f)
+        val library = ImageLibrary().addFolder("表情", "emoji").save(saved)
+            .save(image.copy(id = "unrelated", originalUrl = "https://cdn.example.com/other.png"))
+        val moved = library.moveImage(saved.id, "emoji")
+        assertEquals(library.folders, moved.folders)
+        assertEquals(library.images.map { if (it.id == saved.id) saved.copy(folderId = "emoji") else it }, moved.images)
+        assertEquals(moved, decodeImageLibrary(encodeImageLibrary(moved)))
+        assertEquals(1, JSONObject(encodeImageLibrary(moved)).getInt("version"))
+        assertEquals(saved, library.images.last())
+    }
+
+    @Test fun movingMergesDuplicatesWhileKeepingTheTargetAndOtherFolderCopies() {
+        val target = image.copy(id = "target", folderId = "emoji", source = ImageSource(55, 9), savedAt = 456)
+        val other = image.copy(id = "other", folderId = "other")
+        val library = ImageLibrary().addFolder("表情", "emoji").addFolder("其他", "other")
+            .save(image).save(target).save(other)
+        val moved = library.moveImage(image.id, "emoji")
+        assertEquals(listOf(other, target), moved.images)
+        assertEquals(listOf(other, target), decodeImageLibrary(encodeImageLibrary(moved)).images)
+    }
+
+    @Test fun movingToTheCurrentFolderIsANoOp() {
+        val library = ImageLibrary().save(image)
+        assertSame(library, library.moveImage(image.id, DEFAULT_IMAGE_FOLDER))
+    }
+
+    @Test fun movingRejectsDeletedImagesAndFoldersWithoutRestoringStaleRecords() {
+        val library = ImageLibrary().addFolder("表情", "emoji").save(image)
+        assertThrows(IllegalArgumentException::class.java) { library.moveImage(image.id, "deleted") }
+        assertThrows(IllegalArgumentException::class.java) { library.removeImage(image.id).moveImage(image.id, "emoji") }
+        assertEquals(listOf(image), library.images)
+    }
+
     @Test fun folderValidationRejectsEmptyDuplicateAndExcessiveNames() {
         val library = ImageLibrary().addFolder("  Meme ", "meme")
         assertEquals("Meme", library.folders.last().name)
