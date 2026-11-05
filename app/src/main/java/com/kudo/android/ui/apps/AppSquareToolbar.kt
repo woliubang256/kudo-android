@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -40,8 +41,21 @@ internal fun AppSquareToolbar(query: String, expanded: Boolean, grid: Boolean, b
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TopBarIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "返回", back, Modifier.testTag("apps-back"))
         BoxWithConstraints(Modifier.weight(1f).height(48.dp)) {
-            if (!expanded) Text("应用广场", Modifier.align(Alignment.CenterStart).padding(end = 56.dp),
-                style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val available = maxWidth
+            if (progress < 1f) Box(Modifier.fillMaxSize().then(if (progress > 0f) Modifier.clipToBounds() else Modifier)) {
+                Row(Modifier.fillMaxSize().graphicsLayer {
+                    translationX = -available.toPx() * progress
+                    alpha = 1f - progress
+                }.then(if (expanded) Modifier.clearAndSetSemantics {} else Modifier),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("应用广场", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    TopBarIconButton(Icons.Rounded.FilterList, "筛选应用", filter, Modifier.testTag("apps-filter"), enabled = !expanded)
+                    TopBarIconButton(if (grid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                        if (grid) "切换列表布局" else "切换宫格布局", toggleLayout, Modifier.testTag("apps-layout"), enabled = !expanded)
+                    TopBarIconButton(Icons.Rounded.Search, "搜索应用", expand, Modifier.testTag("apps-search"), enabled = !expanded)
+                }
+            }
             if (expanded || progress > 0f) {
                 val backdrop = checkNotNull(LocalToolbarBackdrop.current)
                 Box(Modifier.align(Alignment.CenterEnd).width(48.dp + (maxWidth - 48.dp) * progress)
@@ -66,10 +80,7 @@ internal fun AppSquareToolbar(query: String, expanded: Boolean, grid: Boolean, b
                         } else Spacer(Modifier.width(12.dp))
                     }
                 }
-            } else TopBarIconButton(Icons.Rounded.Search, "搜索应用", expand, Modifier.align(Alignment.CenterEnd))
+            }
         }
-        TopBarIconButton(Icons.Rounded.FilterList, "筛选应用", filter, Modifier.testTag("apps-filter"))
-        TopBarIconButton(if (grid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
-            if (grid) "切换列表布局" else "切换宫格布局", toggleLayout, Modifier.testTag("apps-layout"))
     }
 }

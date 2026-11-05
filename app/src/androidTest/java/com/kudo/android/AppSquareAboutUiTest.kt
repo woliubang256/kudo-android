@@ -94,17 +94,19 @@ class AppSquareAboutUiTest {
         compose.onNodeWithContentDescription("切换列表布局").performClick()
         compose.onNodeWithContentDescription("搜索应用").performClick()
         compose.onNodeWithTag("apps-search-field").performTextInput("2048")
+        compose.onNodeWithTag("apps-back").performClick()
         for (sort in MiniAppSort.entries) {
             compose.onNodeWithContentDescription("筛选应用").performClick()
             compose.onNodeWithTag("apps-sort-${state.sort.apiValue}").assertIsSelected()
             compose.onNodeWithTag("apps-sort-${sort.apiValue}").performClick()
             compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
-            compose.onNodeWithTag("apps-search-field").assertTextEquals("2048")
             compose.onNodeWithTag("apps-list").assertIsDisplayed()
-            compose.runOnIdle { assertEquals(sort, state.sort) }
+            compose.runOnIdle { assertEquals(sort, state.sort); assertEquals("2048", state.query) }
         }
         compose.onNodeWithContentDescription("筛选应用").performClick()
         compose.onNodeWithTag("modal-scrim").performSemanticsAction(SemanticsActions.OnClick) { it() }
         compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
+        compose.onNodeWithContentDescription("搜索应用").performClick()
+        compose.onNodeWithTag("apps-search-field").assertTextEquals("2048")
     }
 }

@@ -31,7 +31,7 @@ class AppSquareUiTest {
     private var display by mutableStateOf(DisplaySettings(theme = ThemeMode.LIGHT))
     private var state by mutableStateOf(AppSquareState(apps = apps, loading = false))
 
-    @Test fun searchExpandsLeftAndLeavesBackAndLayoutFixedAcrossMaterials() {
+    @Test fun rightmostSearchExpandsOverFilterAndLayoutAcrossMaterials() {
         compose.setContent { KudoTheme(display) { Box(Modifier.width(320.dp)) {
             AppSquareScreen(state, { state = state.copy(query = it) }, {}, {}, {}, {}, {})
         } } }
@@ -41,20 +41,25 @@ class AppSquareUiTest {
             val back = compose.onNodeWithTag("apps-back").fetchSemanticsNode().boundsInRoot
             val layout = compose.onNodeWithTag("apps-layout").fetchSemanticsNode().boundsInRoot
             val filter = compose.onNodeWithTag("apps-filter").fetchSemanticsNode().boundsInRoot
+            val search = compose.onNodeWithTag("apps-search").fetchSemanticsNode().boundsInRoot
+            assertTrue(filter.right <= layout.left && layout.right <= search.left)
             compose.onNodeWithContentDescription("搜索应用").performClick()
             compose.onNodeWithTag("apps-search-field").performTextInput("砖块")
             compose.onNodeWithTag("apps-search-field").assertTextEquals("砖块").assertIsFocused()
             assertEquals(back, compose.onNodeWithTag("apps-back").fetchSemanticsNode().boundsInRoot)
-            assertEquals(layout, compose.onNodeWithTag("apps-layout").fetchSemanticsNode().boundsInRoot)
-            assertEquals(filter, compose.onNodeWithTag("apps-filter").fetchSemanticsNode().boundsInRoot)
+            compose.onNodeWithTag("apps-layout").assertDoesNotExist()
+            compose.onNodeWithTag("apps-filter").assertDoesNotExist()
             val surface = compose.onNodeWithTag("apps-search-surface").fetchSemanticsNode().boundsInRoot
-            assertTrue(surface.left >= back.right && surface.right <= filter.left && filter.right <= layout.left)
+            assertTrue(surface.left >= back.right && surface.left < filter.left)
+            assertEquals(search.right, surface.right, 1f)
             compose.onNodeWithTag("apps-grid").performScrollToIndex(30)
             capture("apps-search-${theme.name}-${glass.name}.png")
             compose.onNodeWithContentDescription("清空搜索").performClick()
             compose.onNodeWithTag("apps-search-field").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
             compose.onNodeWithTag("apps-back").performClick()
             compose.onNodeWithTag("apps-search-field").assertDoesNotExist()
+            assertEquals(layout, compose.onNodeWithTag("apps-layout").fetchSemanticsNode().boundsInRoot)
+            assertEquals(filter, compose.onNodeWithTag("apps-filter").fetchSemanticsNode().boundsInRoot)
         }
     }
 

@@ -47,6 +47,11 @@ class AppSquareLiveProbeTest {
             capture("apps-live-grid.png")
             compose.onNodeWithContentDescription("切换列表布局").performClick()
             compose.onNodeWithTag("apps-list").assertIsDisplayed()
+            val listed = vm.state.value.apps.first()
+            listed.usageCount?.let { compose.onNodeWithTag("app-usage-${listed.id}", useUnmergedTree = true)
+                .assertIsDisplayed().assertContentDescriptionEquals("使用 $it 人次") }
+            listed.ratingCount?.takeIf { it > 0 }?.let { count -> compose.onNode(
+                hasContentDescription("$count 人评分") and hasAnyAncestor(hasTestTag("app-${listed.id}")), useUnmergedTree = true).assertIsDisplayed() }
             capture("apps-live-list.png")
             compose.onNodeWithContentDescription("搜索应用").performClick()
             compose.onNodeWithTag("apps-search-field").performTextInput("2048")
@@ -61,6 +66,7 @@ class AppSquareLiveProbeTest {
             compose.onNodeWithTag("mini-app-about").assertIsDisplayed()
             capture("apps-live-about.png")
             compose.onNodeWithText("关闭", substring = false).performClick()
+            compose.onNodeWithTag("apps-back").performClick()
             for (sort in listOf(MiniAppSort.HOT, MiniAppSort.RATING, MiniAppSort.USED)) {
                 compose.onNodeWithContentDescription("筛选应用").performClick()
                 compose.onNodeWithTag("apps-sort-${sort.apiValue}").performClick()

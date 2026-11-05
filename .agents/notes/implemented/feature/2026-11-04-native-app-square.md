@@ -10,7 +10,7 @@ Status: implemented
 
 应用广场通过现有 DiscourseClient 请求官网 `/mini-app-api/apps.json`，与登录会话、网络策略及标准错误处理保持一致。官网实际请求使用 `sort=<排序>&q=<query>&page=<零起始页码>`，响应包含 apps、page、per_page、total、sort 和 query；列表随官网分页，不只过滤已加载的一页。默认 latest（最新上线），另支持 hot（最热，近 7 天去重使用量）、rating（评分最高，同分按评分人数）和 used（使用最多，累计去重使用量）。切换排序保留查询、重置页码并取消及隔离旧响应；分页和重试继续使用当前排序。进入原生广场不创建 WebView，点击具体应用时打开其官网运行页，返回保留广场状态。
 
-顶部依次为返回、应用广场标题、搜索、筛选、布局切换。原生内容与顶部采样源分离，复用 MaterialPageScaffold、TopBarIconButton 和用户选择的材质，匹配现有独立圆形玻璃操作。搜索点击后以右侧为锚向左展开，占用标题区域；返回、筛选与布局切换位置固定。展开后自动聚焦，提供清空，返回先收起搜索再离开目录；请求取消并隔离旧查询结果。筛选使用扁平底部面板，四种排序仅显示名称与当前黄色勾选，不增加解释小字；保留查询与布局。
+顶部依次为返回、应用广场标题、筛选、布局切换、搜索。原生内容与顶部采样源分离，复用 MaterialPageScaffold、TopBarIconButton 和用户选择的材质，匹配现有独立圆形玻璃操作。最右的搜索点击后以右侧为锚向左铺开，占用标题、筛选及布局区域，原操作向左移出并淡出；返回位置固定。展开后不保留隐藏操作的无障碍入口，自动聚焦并提供清空，返回先收起搜索再离开目录；收起后恢复当前排序和布局按钮，请求取消并隔离旧查询结果。筛选使用扁平底部面板，四种排序仅显示名称与当前黄色勾选，不增加解释小字；保留查询与布局。
 
 两种布局分别为图标和名称在左、统计在最右的列表，以及图标在上、名称在下的自适应宫格。列表右侧独立两行：上为五颗星及评价人数（有数据时），下为累计使用人次；标题不挪到统计上方。统计最多占行内宽度的 45%，名称允许两行截断。评分人数为零时不显示未评分占位；缺失统计逐项省略，实际使用零值保留。大数字以万／亿和最多一位小数紧凑显示，不向上取整，无障碍保留实际数值。五颗星共用关于的分数裁切。默认宫格，宫格不加统计，不额外堆放版本、发布人及重复副标题。切换保留查询，布局选择本地记忆。支持浅深色、大字号、加载、空结果、失败重试和后续分页。参考图用于布局与操作，不虚构“最近使用”“我的常用”等站点没有提供的数据分组。
 
@@ -41,9 +41,13 @@ MiniAppEntry 直接保留目录返回的 rating_average、rating_count、usage_c
 - 给整个页面和运行中的 WebView 套同一玻璃容器能让外观一致，但违反既有网页普通材质决定并重新引入采样风险；目录使用原生材质，运行页继续普通材质。
 - 从目录补查使用量能丰富关于信息，但详情没有该字段且用户明确要求缺失就省略，因此只使用详情，不额外合并两个接口。
 - 把名称放第一行、所有统计放第二行能利用全行宽度，但用户明确保留左侧图标和名称，要求两行统计独立放到最右；使用右对齐的窄列，并限制其宽度，避免统计挤占全部名称空间。
+- 搜索时保留筛选与布局按钮能直接切换结果视图，但会压缩窄屏输入区域，且不符合用户要求的展开效果；改为搜索覆盖两项操作，收起后恢复，查询和布局状态继续保留。
 
 ## Testing
 
+- 列表与搜索调整后，离线真机回归 12 项通过（29.492 秒），见 `artifacts/app-square-list-search-device.txt`；其中 AppSquareUiTest 3 项、AppSquareListUiTest 3 项、AppSquareAboutUiTest 4 项，以及运行页关于 2 项。覆盖搜索最右、向左展开后筛选及布局消失、返回固定、收起复位、查询和排序保留，以及 320dp／130% 字号、浅深色与三种材质。已目视检查 `artifacts/apps-search-expanded-dark.png`。
+- 线上 AppSquareLiveProbeTest 另 1 项通过（8.601 秒），见 `artifacts/app-square-list-live-device.txt`，合计本轮 13 项真机用例通过。真实目录、图标、右侧统计、搜索、详情及四种排序均完成核对，未启动小程序或提交评分；评价断言限定到对应应用，避免不同应用同一计数造成误匹配。已目视检查 `artifacts/apps-live-list-statistics.png`，无评分仅显示使用量，有评分显示五星及评价数，中文清晰。探针最终微调后 AndroidTest 构建通过，见 `artifacts/app-square-list-live-build.txt`。
+- 本轮设备仍为 RMX2202／Android 13，开发版 0.3.1-dev／3002；显式传入版本构建，签名与已安装开发版一致，仅用 install -r、install -r -t 和 am instrument，首次安装时间仍为 2026-10-23 14:55:34，保留用户数据。UTF-8、diff-check 和笔记门禁通过；其他系统版本的视觉兼容性尚未实机验收。
 - 列表统计展示经 AppSquareListUiTest 3 项真机用例通过，覆盖 320dp、浅深色和 130% 字号下左侧名称与右侧两行统计不重叠、行序及右边缘对齐、无评分省略、实际零使用量保留、缺失统计不占位、极大计数和宫格不显示统计。共享星星的两个 MiniAppWebUiTest 关于用例同时通过，见 `artifacts/app-square-list-search-device.txt`。已目视检查 `artifacts/apps-list-statistics-light.png` 和 `artifacts/apps-list-statistics-dark-large.png`，中文清晰。
 - AppSquareTest、MiniAppCountTest 和 MiniAppInfoTest 共 15 项 JVM 用例通过；紧凑数字测试覆盖万／亿阈值、向下截断及 Long.MAX_VALUE 不溢出。Debug、AndroidTest 构建和 Lint 通过，见 `artifacts/app-square-list-search-build.txt`；Lint 为 0 errors / 68 warnings / 1 hint。
 - 列表统计的数据扩展经 AppSquareTest 共 7 项 JVM 用例通过，见 `artifacts/app-square-list-data-unit.txt`。新用例检查目录单请求保留小数星及超过 Int 范围的评价／使用量，使用累计而非近期字段，缺失或错误类型省略且实际零值保留。
