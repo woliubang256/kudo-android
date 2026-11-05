@@ -88,6 +88,8 @@ class MiniAppWebUiTest {
         compose.onNodeWithContentDescription("应用图标").assertIsDisplayed()
         compose.onNodeWithText("2048 小游戏").assertIsDisplayed()
         compose.onNodeWithText("1.0.0").assertIsDisplayed()
+        compose.onNodeWithContentDescription("评分 4.35 分，满分 5 分").assertIsDisplayed()
+        compose.onNodeWithText("7 人评分").assertIsDisplayed()
         compose.onNodeWithText("Neo").assertIsDisplayed()
         compose.onNodeWithContentDescription("Neo的头像").assertIsDisplayed()
         assertEquals(1, requests.get())
@@ -266,6 +268,7 @@ class MiniAppWebUiTest {
         compose.waitUntil(10000) { compose.onAllNodesWithText("砖块游戏简介").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("2.0.0").assertIsDisplayed()
         compose.onNodeWithText("另一位发布人").assertIsDisplayed()
+        compose.onNodeWithTag("mini-app-rating").assertDoesNotExist()
     }
 
     @Test fun actualFullscreenKeepsCapsuleAndBackExitsBeforeWebHistory() {
@@ -523,6 +526,7 @@ class MiniAppWebUiTest {
                         val other = path.contains(second)
                         val data = if (failInfo) "{}" else """{"app":{"app_id":"${if (other) second else first}",
                             "name":"${if (other) "打砖块" else "2048"}","description":"${if (other) "砖块游戏简介" else "2048 小游戏"}",
+                            ${if (other) "" else "\"rating_average\":4.35,\"rating_count\":7,"}
                             "version":"${if (other) "2.0.0" else "1.0.0"}","author":{"id":${if (other) 218 else 1},"username":"${if (other) "publisher" else "neo"}","name":"${if (other) "另一位发布人" else "Neo"}","avatar_template":"/user_avatar/linux.do/publisher/{size}/1.png"}}}"""
                         return WebResourceResponse("application/json", "UTF-8", if (failInfo) 503 else 200,
                             if (failInfo) "Unavailable" else "OK", emptyMap(), data.byteInputStream())

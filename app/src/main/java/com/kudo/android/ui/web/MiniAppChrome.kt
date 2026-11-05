@@ -23,12 +23,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil3.compose.SubcomposeAsyncImage
 import com.kudo.android.data.GlassMode
 import com.kudo.android.ui.components.*
 
@@ -50,7 +47,6 @@ internal class MiniAppUiState {
         if (visibility.targetState) request.cancel() else { clipboard = request; open(MiniAppPanel.CLIPBOARD) }
     }
 }
-
 @Composable
 internal fun MiniAppTopBar(title: String, back: () -> Unit, more: () -> Unit, close: () -> Unit) {
     Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).statusBarsPadding()
@@ -118,27 +114,7 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
             }
             MiniAppPanel.ABOUT -> {
                 if (state.loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CommunityLoadingIndicator() }
-                state.info?.let { info ->
-                    Row(Modifier.fillMaxWidth().testTag("mini-app-about"), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        SubcomposeAsyncImage(info.iconUrl, null, Modifier.size(64.dp).clip(RoundedCornerShape(14.dp))
-                            .semantics { contentDescription = "应用图标" },
-                            loading = { Icon(Icons.Rounded.Apps, null, Modifier.padding(14.dp)) },
-                            error = { Icon(Icons.Rounded.Apps, null, Modifier.padding(14.dp)) })
-                        Text(info.name, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                    }
-                    if (info.description.isNotBlank()) Text(info.description, style = MaterialTheme.typography.bodyMedium)
-                    if (info.version.isNotBlank()) MiniAppInfoRow("版本", info.version)
-                    if (info.publisher.isNotBlank()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Text("发布人", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Avatar(info.publisherMember, 28.dp, presentation = AvatarPresentation.PLAIN)
-                            Text(info.publisher, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
+                state.info?.let { MiniAppAboutContent(it) }
                 if (state.error) {
                     Text("应用信息加载失败", style = MaterialTheme.typography.bodyMedium)
                     CommunityButton("重试", { state.revision++ })
@@ -172,13 +148,5 @@ private fun MiniAppMenuButton(icon: ImageVector, title: String, modifier: Modifi
         Box(Modifier.fillMaxWidth().heightIn(min = 36.dp), contentAlignment = Alignment.TopCenter) {
             Text(title, style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
-    }
-}
-
-@Composable
-private fun MiniAppInfoRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
     }
 }
