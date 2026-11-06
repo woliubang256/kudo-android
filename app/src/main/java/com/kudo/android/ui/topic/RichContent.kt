@@ -191,10 +191,31 @@ data class ArticleCalloutType(val raw: String) {
     }
 }
 
-private fun previewSource(element: Element, fallback: String): String {
-    val width = element.attr("width").toFloatOrNull()?.takeIf { it.isFinite() && it > 0 }
+private data class ArticleImageSource(val original: String, val preview: String)
+
+private val pictureImageTypes = setOf("image/svg+xml", "image/png", "image/jpeg", "image/gif",
+    "image/webp", "image/avif", "image/apng", "image/bmp", "image/x-ms-bmp")
+
+private fun articleImageSource(image: Element): ArticleImageSource? {
+    val width = image.attr("width").toFloatOrNull()?.takeIf { it.isFinite() && it > 0 }
+    val picture = image.parent()?.takeIf { it.normalName() == "picture" }
+    val selected = picture?.children()?.asSequence()?.takeWhile { it !== image }
+        ?.filter { it.normalName() == "source" }?.firstNotNullOfOrNull { source ->
+            val type = source.attr("type").substringBefore(';').trim().lowercase()
+            val media = source.attr("media").trim().lowercase()
+            // Parsing has no viewport/theme context; do not assume conditional art direction matches.
+            if ((type.isNotEmpty() && type !in pictureImageTypes) || media !in setOf("", "all", "screen")) null
+            else previewSource(source, null, width)
+        }
+    if (selected != null) return ArticleImageSource(selected, selected)
+    val original = mediaUrl(image.attr("src"))
+    val preview = previewSource(image, original, width) ?: return null
+    return ArticleImageSource(original ?: preview, preview)
+}
+
+private fun previewSource(element: Element, fallback: String?, width: Float?): String? {
     var bestUrl = fallback
-    var bestDensity = 1f
+    var bestDensity = if (fallback == null) 0f else 1f
     element.attr("srcset").split(',').forEach { candidate ->
         val parts = candidate.trim().split(Regex("\\s+"))
         if (parts.size !in 1..2) return@forEach
@@ -279,9 +300,8 @@ fun parseArticle(html: String): List<ArticleBlock> {
                     parseArticle(body.html()), element.hasAttr("open")))
             }
             "img" -> {
-                val raw = element.attr("src")
                 if (element.hasClass("emoji")) result.add(ArticleBlock.TextBlock(element.outerHtml(), quote))
-                else mediaUrl(raw)?.let { url ->
+                else articleImageSource(element)?.let { source ->
                     val lightbox = element.parents().firstOrNull { it.hasClass("lightbox") }
                     val metadata = lightbox?.selectFirst(".meta")
                     val information = metadata?.selectFirst(".informations")?.text().orEmpty()
@@ -291,10 +311,10 @@ fun parseArticle(html: String): List<ArticleBlock> {
                     val ratio = if (width != null && height != null && width > 0 && height > 0) {
                         (width / height).takeIf { it.isFinite() && it > 0 }
                     } else null
-                    val original = lightbox?.attr("href")?.let(::mediaUrl) ?: url
+                    val original = lightbox?.attr("href")?.let(::mediaUrl) ?: source.original
                     val link = if (lightbox == null) element.parents().firstOrNull { it.normalName() == "a" && it.hasAttr("href") }
                         ?.attr("href")?.let(LinuxDoLink::webUrl) else null
-                    result.add(ArticleBlock.Image(if (element.hasClass("animated")) original else previewSource(element, url), element.attr("alt"), ratio,
+                    result.add(ArticleBlock.Image(if (element.hasClass("animated")) original else source.preview, element.attr("alt"), ratio,
                         originalUrl = original,
                         filename = metadata?.selectFirst(".filename")?.text().orEmpty(),
                         dimensions = dimensions, sizeLabel = information.removePrefix(dimensions).trim(),

@@ -85,6 +85,35 @@ class LinkedArticleImageUiTest {
         compose.runOnIdle { assertEquals(listOf(image, "https://redpack-image.test/original.svg"), photos); assertTrue(links.isEmpty()) }
     }
 
+    @Test fun sourceOnlyPictureShowsTheCardAndKeepsItsLinkAndImageMenu() {
+        val target = "https://hb.lafi.sh/packet?source=post#detail"
+        val links = mutableListOf<String>()
+        val photos = mutableListOf<String>()
+        var theme by mutableStateOf(ThemeMode.LIGHT)
+        compose.setContent { KudoTheme(DisplaySettings(theme = theme)) {
+            RichContent("""<p>通关越快奖励越多</p><a href="$target"><picture><source type="image/svg+xml" srcset="$image 1x"><img width="300" height="409" alt="红包卡片"></picture></a><p>游玩小程序</p>""",
+                { photos += it }, { links += it }, galleryKey = "picture")
+        } }
+        awaitImage("article-image-picture-0")
+        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            compose.runOnIdle { theme = mode }
+            compose.onNodeWithText("通关越快奖励越多").assertIsDisplayed()
+            compose.onNodeWithText("游玩小程序").assertIsDisplayed()
+            val card = compose.onNodeWithTag("article-image-picture-0")
+            val pixels = card.captureToImage().toPixelMap()
+            val color = pixels[pixels.width / 2, pixels.height / 5]
+            assertTrue("source-only SVG must render", color.red > .8f && color.green < .4f)
+            val bounds = card.fetchSemanticsNode().boundsInRoot
+            assertEquals(728f / 992f, bounds.width / bounds.height, .01f)
+            capture("picture-redpack-${mode.name.lowercase()}.png")
+        }
+        compose.onNodeWithTag("article-image-picture-0").performClick()
+        compose.runOnIdle { assertEquals(listOf(target), links); assertTrue(photos.isEmpty()) }
+        compose.onNodeWithTag("article-image-picture-0").performTouchInput { longClick() }
+        compose.onNodeWithText("分享图片").assertIsDisplayed()
+        compose.onNodeWithText("下载图片", substring = true).assertIsDisplayed()
+    }
+
     @Test fun spoilerImageRevealsBeforeOpeningItsLink() {
         val links = mutableListOf<String>()
         val photos = mutableListOf<String>()

@@ -8,6 +8,7 @@ import coil3.SingletonImageLoader
 import coil3.asDrawable
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
+import coil3.svg.css
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
@@ -25,6 +26,40 @@ class SvgImageDecoderTest {
         } finally { bitmap.recycle() }
     }
 
+    @Test fun centeredTextSpansKeepTheirObjectBoundingBoxGradients() = runBlocking<Unit> {
+        val sample = """<svg xmlns="http://www.w3.org/2000/svg" width="240" height="100" viewBox="0 0 240 100">
+            <defs><linearGradient id="ink" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient></defs>
+            <rect width="240" height="100" fill="white"/>
+            <style>.caption { font-family:sans-serif; text-anchor:middle; font-size:60px; font-weight:bold; fill:url(#ink); }</style>
+            <text class="caption"><tspan x="120" y="70">TEST</tspan></text></svg>"""
+        val bitmap = render(ByteBuffer.wrap(sample.toByteArray()), 240, 100)
+        try { assertTextGradient(bitmap) } finally { bitmap.recycle() }
+    }
+
+    @Test fun inlineAndRequestCssTextGradientsKeepTheirOriginalPaints() = runBlocking<Unit> {
+        for (requestCss in listOf(false, true)) {
+            val fill = if (requestCss) "" else "style='fill:url(#ink)'"
+            val sample = """<svg xmlns="http://www.w3.org/2000/svg" width="240" height="100" viewBox="0 0 240 100">
+                <defs><linearGradient id="ink" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient></defs>
+                <rect width="240" height="100" fill="white"/>
+                <text x="120" y="70" font-family="sans-serif" font-size="60" font-weight="bold" text-anchor="middle" $fill><tspan>TEST</tspan></text></svg>"""
+            val bitmap = render(ByteBuffer.wrap(sample.toByteArray()), 240, 100, if (requestCss) "text { fill:url(#ink); }" else null)
+            try { assertTextGradient(bitmap) } finally { bitmap.recycle() }
+        }
+    }
+
+    private fun assertTextGradient(bitmap: Bitmap) {
+        var red = 0
+        var blue = 0
+        for (y in 10 until 80) for (x in 20 until 220) {
+            val pixel = bitmap.getPixel(x, y)
+            if (Color.red(pixel) > Color.blue(pixel) + 50) red++
+            if (Color.blue(pixel) > Color.red(pixel) + 50) blue++
+        }
+        assertTrue("文字渐变的红色上半部必须保留", red > 50)
+        assertTrue("文字渐变的蓝色下半部必须保留", blue > 50)
+    }
+
     @Test fun actualTopicSvgDecodesWithTheProductionNetworkAndLoader() = runBlocking<Unit> {
         assumeTrue("实际CDN探针需显式启用", InstrumentationRegistry.getArguments().getString("svgLiveProbe") == "true")
         val bitmap = render(TopicSvgUrl, 1200, 420)
@@ -38,9 +73,9 @@ class SvgImageDecoderTest {
         } finally { bitmap.recycle() }
     }
 
-    private suspend fun render(data: Any, width: Int, height: Int): Bitmap {
+    private suspend fun render(data: Any, width: Int, height: Int, css: String? = null): Bitmap {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val result = SingletonImageLoader.get(context).execute(ImageRequest.Builder(context).data(data).size(width, height).build())
+        val result = SingletonImageLoader.get(context).execute(ImageRequest.Builder(context).data(data).size(width, height).css(css).build())
         assertTrue("SVG应由生产加载器成功解码：$result", result is SuccessResult)
         val drawable = (result as SuccessResult).image.asDrawable(context.resources)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
