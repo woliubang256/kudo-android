@@ -390,7 +390,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                     composable("web?url={url}", arguments = listOf(navArgument("url") { type = NavType.StringType })) { entry ->
                         key(account.user?.id) {
                             WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
-                                openApp = { appLinks.open(it) }, externalLinkMode = display.externalLinkMode,
+                                openApp = { appLinks.open(it, display.externalLinkMode) }, externalLinkMode = display.externalLinkMode,
                                 preferences = app.miniApps, accountId = account.user?.id, accountReady = sessionStable, login = ::login)
                         }
                     }

@@ -11,7 +11,7 @@ internal class ExternalAppLinkLauncher(
     private val launch: (Intent) -> Unit = context::startActivity,
 ) {
     /** Let Android choose the browser or linked app; false keeps the in-app web fallback. */
-    fun open(value: String, mode: ExternalLinkMode = ExternalLinkMode.SYSTEM): Boolean {
+    fun open(value: String, mode: ExternalLinkMode = ExternalLinkMode.IN_APP): Boolean {
         if (mode != ExternalLinkMode.SYSTEM) return false
         val url = ExternalAppLinkPolicy.contentUrl(value) ?: return false
         if (ExternalAppLinkPolicy.isSiteUrl(url)) return false

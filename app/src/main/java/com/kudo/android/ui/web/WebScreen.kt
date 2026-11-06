@@ -56,7 +56,7 @@ private class WebPageState(val saved: Bundle? = null) {
 @Composable
 internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> Unit,
     webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false },
-    externalLinkMode: ExternalLinkMode = ExternalLinkMode.SYSTEM, preferences: MiniAppPreferences? = null,
+    externalLinkMode: ExternalLinkMode = ExternalLinkMode.IN_APP, preferences: MiniAppPreferences? = null,
     accountId: Int? = null, accountReady: Boolean = true, login: () -> Unit = {}) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }

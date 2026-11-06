@@ -39,35 +39,48 @@ class ExternalLinkSettingsUiTest {
         }
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("外部链接打开方式"))
         compose.onNodeWithText("外部链接打开方式").performClick()
-        compose.onNodeWithTag("modal-choice-0").assertIsSelected()
-        compose.onNodeWithTag("modal-choice-1").assertIsNotSelected()
+        compose.onNodeWithTag("modal-choice-0").assertIsNotSelected()
+        compose.onNodeWithTag("modal-choice-1").assertIsSelected()
         val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         File(target.getExternalFilesDir(null), "external-link-mode-settings.png").outputStream().use {
             screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         screenshot.recycle()
-        compose.onNodeWithText("应用内打开").performClick()
+        compose.onNodeWithText("系统打开").performClick()
         compose.runOnIdle {
-            assertEquals(ExternalLinkMode.IN_APP, store.display.value.externalLinkMode)
+            assertEquals(ExternalLinkMode.SYSTEM, store.display.value.externalLinkMode)
             store = AppSettings(context)
-            assertEquals(ExternalLinkMode.IN_APP, store.display.value.externalLinkMode)
+            assertEquals(ExternalLinkMode.SYSTEM, store.display.value.externalLinkMode)
         }
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("外部链接打开方式"))
         compose.onNodeWithText("外部链接打开方式").performClick()
-        compose.onNodeWithTag("modal-choice-1").assertIsSelected()
-        compose.onNodeWithText("系统打开").performClick()
-        compose.runOnIdle { assertEquals(ExternalLinkMode.SYSTEM, AppSettings(context).display.value.externalLinkMode) }
+        compose.onNodeWithTag("modal-choice-0").assertIsSelected()
+        compose.onNodeWithText("应用内打开").performClick()
+        compose.runOnIdle { assertEquals(ExternalLinkMode.IN_APP, AppSettings(context).display.value.externalLinkMode) }
     }
 
-    @Test fun missingAndUnknownPreferencesUseSystemWithoutChangingOtherSettings() {
+    @Test fun missingAndUnknownPreferencesUseInAppWithoutChangingOtherSettings() {
         prefs.edit().clear().putString("theme", "DARK").commit()
-        assertEquals(ExternalLinkMode.SYSTEM, AppSettings(context).display.value.externalLinkMode)
+        assertEquals(ExternalLinkMode.IN_APP, AppSettings(context).display.value.externalLinkMode)
         prefs.edit().putString("external_link_mode", "unknown_future_value").commit()
         val store = AppSettings(context)
-        assertEquals(ExternalLinkMode.SYSTEM, store.display.value.externalLinkMode)
+        assertEquals(ExternalLinkMode.IN_APP, store.display.value.externalLinkMode)
         store.update(store.display.value.copy(externalLinkMode = ExternalLinkMode.IN_APP))
         val restored = AppSettings(context).display.value
         assertEquals(ExternalLinkMode.IN_APP, restored.externalLinkMode)
         assertEquals(com.kudo.android.data.ThemeMode.DARK, restored.theme)
+    }
+
+    @Test fun savedChoicesSurviveRecreationAndUpdatesToOtherSettings() {
+        for (mode in ExternalLinkMode.entries) {
+            prefs.edit().clear().putString("external_link_mode", mode.name).putString("theme", "DARK").commit()
+            val store = AppSettings(context)
+            assertEquals(mode, store.display.value.externalLinkMode)
+            store.update(store.display.value.copy(fontScale = 1.1f))
+            val restored = AppSettings(context).display.value
+            assertEquals(mode, restored.externalLinkMode)
+            assertEquals(1.1f, restored.fontScale, .0001f)
+            assertEquals(com.kudo.android.data.ThemeMode.DARK, restored.theme)
+        }
     }
 }

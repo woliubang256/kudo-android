@@ -10,7 +10,7 @@ enum class GlassMode(val label: String) { LIQUID("液态玻璃"), BLUR("背景�
 enum class TopicListStyle(val label: String) { FEED("信息流"), TITLE("传统标题") }
 enum class NavigationAction(val label: String) { COMPOSE("发帖"), SEARCH("搜索") }
 enum class ExternalLinkMode(val label: String) { SYSTEM("系统打开"), IN_APP("应用内打开") }
-data class DisplaySettings(val theme: ThemeMode = ThemeMode.SYSTEM, val glass: GlassMode = GlassMode.LIQUID, val fontScale: Float = 1f, val topicListStyle: TopicListStyle = TopicListStyle.FEED, val showSignatures: Boolean = true, val navigationAction: NavigationAction = NavigationAction.COMPOSE, val showScrollToTop: Boolean = true, val compactPinnedTopics: Boolean = true, val externalLinkMode: ExternalLinkMode = ExternalLinkMode.SYSTEM, val blurNsfwImages: Boolean = true)
+data class DisplaySettings(val theme: ThemeMode = ThemeMode.SYSTEM, val glass: GlassMode = GlassMode.LIQUID, val fontScale: Float = 1f, val topicListStyle: TopicListStyle = TopicListStyle.FEED, val showSignatures: Boolean = true, val navigationAction: NavigationAction = NavigationAction.COMPOSE, val showScrollToTop: Boolean = true, val compactPinnedTopics: Boolean = true, val externalLinkMode: ExternalLinkMode = ExternalLinkMode.IN_APP, val blurNsfwImages: Boolean = true)
 data class Draft(val title: String = "", val raw: String = "", val categoryId: Int = 0, val recipients: String = "", val tags: List<String> = emptyList())
 
 internal fun decodeDraftTags(value: String?): List<String> = runCatching { JSONArray(value ?: "[]").tagNames() }.getOrDefault(emptyList())
@@ -26,7 +26,7 @@ class AppSettings(context: Context) {
         NavigationAction.entries.firstOrNull { it.name == prefs.getString("navigation_action", "") } ?: NavigationAction.COMPOSE,
         prefs.getBoolean("show_scroll_to_top", true),
         prefs.getBoolean("compact_pinned_topics", true),
-        ExternalLinkMode.entries.firstOrNull { it.name == prefs.getString("external_link_mode", "") } ?: ExternalLinkMode.SYSTEM,
+        ExternalLinkMode.entries.firstOrNull { it.name == prefs.getString("external_link_mode", "") } ?: ExternalLinkMode.IN_APP,
         prefs.getBoolean("blur_nsfw_images", true),
     ))
     val display = _display.asStateFlow()

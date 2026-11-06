@@ -8,6 +8,8 @@ Status: implemented
 
 ## Decision
 
+本篇的 SYSTEM 默认值与缺失／未知值回退由[外部链接默认应用内打开](2026-11-07-external-links-default-in-app.md)部分取代；以下原默认的理由保留。已有有效偏好、两种模式的分流、域名边界与显式浏览器行为继续由本篇管理。
+
 AppSettings 持久化 ExternalLinkMode（SYSTEM 默认、IN_APP），缺失或未知值回退 SYSTEM；设置的“链接打开”组提供同名 Action Sheet，复用既有选中黄色与关闭交互，说明系统可能使用浏览器或关联应用。没有存储值的既有用户同样默认 SYSTEM。
 
 ExternalAppLinkLauncher 在 SYSTEM 模式对普通外站发送原始隐式 ACTION_VIEW，不指定包或组件、不自行筛选或强制 chooser；准确的 HTTPS 夸克分享链接按[夸克包名例外](../bug-fix/2026-10-16-quark-share-package-routing.md)指定 `com.quark.browser`；IN_APP 模式返回 false。linux.do 及以 .linux.do 结尾的真实子域名始终返回 false，伪装后缀不是站内。受限夸克 scheme 校验继续有效，启动异常交还网页回退。

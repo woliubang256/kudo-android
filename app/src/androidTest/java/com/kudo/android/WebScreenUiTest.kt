@@ -47,7 +47,9 @@ class WebScreenUiTest {
     private fun create(context: Context) = FixtureWebView(context).also { views += it }
     private fun current() = views.last()
     private fun show(close: () -> Unit = {}, external: (String) -> Unit = {}, app: (String) -> Boolean = { false }) {
-        compose.setContent { KudoTheme(DisplaySettings()) { WebScreen(start, close, external, ::create, app) } }
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            WebScreen(start, close, external, ::create, app, externalLinkMode = ExternalLinkMode.SYSTEM)
+        } }
         awaitPage("指南")
     }
     private fun awaitPage(title: String) {
@@ -221,6 +223,24 @@ class WebScreenUiTest {
             assertEquals("https://other-fixture.test/page", opened.last())
             assertEquals(start, current().url)
         }
+    }
+
+    @Test fun omittedModeKeepsExternalLinksInWebHistoryAndBrowserActionStillWorks() {
+        val opened = mutableListOf<String>()
+        val browser = mutableListOf<String>()
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            WebScreen(start, {}, { browser += it }, ::create, { opened += it; true })
+        } }
+        awaitPage("指南")
+        click("quark"); awaitPage("夸克网页")
+        compose.runOnIdle {
+            assertTrue(opened.isEmpty())
+            assertEquals(1, views.size)
+            assertEquals("https://pan.quark.cn/s/Abc123?pwd=1234", current().url)
+        }
+        compose.onNodeWithContentDescription("在浏览器打开").performClick()
+        compose.runOnIdle { assertEquals(listOf("https://pan.quark.cn/s/Abc123?pwd=1234"), browser) }
+        compose.onNodeWithContentDescription("返回").performClick(); awaitPage("指南")
     }
 
     @Test fun openingModeChangesApplyWithoutReloadAndInAppSharesNeverHandOff() {
