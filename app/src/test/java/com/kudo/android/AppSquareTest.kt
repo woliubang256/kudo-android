@@ -32,6 +32,7 @@ class AppSquareTest {
             assertEquals("/mini-app-api/apps.json", request.encodedPath)
             assertEquals("中文 & 2048", request.queryParameter("q"))
             assertEquals("latest", request.queryParameter("sort"))
+            assertEquals("false", request.queryParameter("favorite"))
             assertEquals("1", request.queryParameter("page"))
             assertEquals(listOf(first), result.apps)
             assertFalse(result.hasMore)
@@ -104,6 +105,8 @@ class AppSquareTest {
                 repository.miniApps(" 游戏 & test ", sort = sort)
                 val url = server.takeRequest().requestUrl!!
                 assertEquals(sort.apiValue, url.queryParameter("sort"))
+                assertEquals(if (sort == MiniAppSort.FAVORITES) "true" else "false", url.queryParameter("favorite"))
+                if (sort == MiniAppSort.FAVORITES) assertEquals("latest", url.queryParameter("sort"))
                 assertEquals("游戏 & test", url.queryParameter("q"))
                 assertEquals("0", url.queryParameter("page"))
             }
@@ -112,11 +115,11 @@ class AppSquareTest {
             assertEquals("/mini-app-api/public/${first.id}/info", server.takeRequest().path)
             assertEquals(4.35, details.ratingAverage!!, .001)
             assertEquals(7L, details.ratingCount!!)
-            assertEquals(5, server.requestCount)
+            assertEquals(MiniAppSort.entries.size + 1, server.requestCount)
             server.enqueue(MockResponse().setBody("""{"app":{"app_id":"${second.id}","name":"错误应用"}}"""))
             assertTrue(runCatching { repository.miniAppDetails(first.id) }.exceptionOrNull() is IllegalArgumentException)
             assertTrue(runCatching { repository.miniAppDetails("../bad") }.exceptionOrNull() is IllegalArgumentException)
-            assertEquals(6, server.requestCount)
+            assertEquals(MiniAppSort.entries.size + 2, server.requestCount)
         } finally { server.shutdown() }
     }
 
@@ -149,6 +152,37 @@ class AppSquareTest {
             assertEquals(listOf(second), vm.state.value.apps)
             assertEquals(MiniAppSort.RATING, vm.state.value.sort)
         } finally { release.complete(Unit); vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); Dispatchers.resetMain() }
+    }
+
+    @Test fun favoritesKeepSearchAndPaginationRetriesUntilAnotherSortIsSelected() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+        val calls = java.util.Collections.synchronizedList(mutableListOf<Triple<String, Int, MiniAppSort>>())
+        var fail = true
+        val vm = AppSquareViewModel { query, page, sort ->
+            calls.add(Triple(query, page, sort))
+            if (page == 1 && fail) throw IllegalStateException("离线")
+            MiniAppDirectoryPage(listOf(if (page == 0) first else second), page == 0)
+        }
+        try {
+            vm.finished()
+            vm.sort(MiniAppSort.FAVORITES); vm.finished()
+            vm.search(" 游戏 "); advanceTimeBy(300); runCurrent(); vm.finished()
+            vm.more()
+            assertNotNull(vm.finished().moreError)
+            assertEquals(listOf(first), vm.state.value.apps)
+            fail = false; vm.more()
+            assertEquals(listOf(first, second), vm.finished().apps)
+            assertEquals(MiniAppSort.FAVORITES, vm.state.value.sort)
+            vm.sort(MiniAppSort.LATEST)
+            assertEquals(listOf(first), vm.finished().apps)
+            assertEquals(" 游戏 ", vm.state.value.query)
+            assertEquals(0, vm.state.value.page)
+            assertEquals(listOf(
+                Triple("", 0, MiniAppSort.LATEST), Triple("", 0, MiniAppSort.FAVORITES),
+                Triple("游戏", 0, MiniAppSort.FAVORITES), Triple("游戏", 1, MiniAppSort.FAVORITES),
+                Triple("游戏", 1, MiniAppSort.FAVORITES), Triple("游戏", 0, MiniAppSort.LATEST),
+            ), calls)
+        } finally { vm.viewModelScope.coroutineContext[Job]?.cancelAndJoin(); Dispatchers.resetMain() }
     }
 
     @Test fun newSearchCancelsDebounceAndCannotBeOverwrittenByAnOlderResponse() = runTest {

@@ -89,7 +89,7 @@ class AppSquareAboutUiTest {
         compose.setContent { KudoTheme(DisplaySettings()) {
             AppSquareScreen(state, { state = state.copy(query = it) }, {}, {}, {}, {}, {}, sort = {
                 state = state.copy(sort = it)
-            })
+            }, loggedIn = true)
         } }
         compose.onNodeWithContentDescription("切换列表布局").performClick()
         compose.onNodeWithContentDescription("搜索应用").performClick()
@@ -97,8 +97,8 @@ class AppSquareAboutUiTest {
         compose.onNodeWithTag("apps-back").performClick()
         for (sort in MiniAppSort.entries) {
             compose.onNodeWithContentDescription("筛选应用").performClick()
-            compose.onNodeWithTag("apps-sort-${state.sort.apiValue}").assertIsSelected()
-            compose.onNodeWithTag("apps-sort-${sort.apiValue}").performClick()
+            compose.onNodeWithTag("apps-sort-${state.sort.key}").assertIsSelected()
+            compose.onNodeWithTag("apps-sort-${sort.key}").performClick()
             compose.onNodeWithTag("liquid-action-sheet").assertDoesNotExist()
             compose.onNodeWithTag("apps-list").assertIsDisplayed()
             compose.runOnIdle { assertEquals(sort, state.sort); assertEquals("2048", state.query) }

@@ -10,6 +10,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.*
 import com.kudo.android.ui.apps.*
 import com.kudo.android.ui.theme.KudoTheme
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -19,6 +21,48 @@ import java.io.File
 /** Opt-in read-only probe through the installed app's actual session and network route. */
 class AppSquareLiveProbeTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun signedInFavoritesUseTheOfficialSessionAndCanReturnToLatest() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("appSquareLive") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val repository = (context.applicationContext as KudoApplication).container.repository
+        val signedIn = runBlocking { withTimeout(45000) { repository.currentUser() != null } }
+        val report = File(context.getExternalFilesDir(null), "apps-favorites-live-result.txt")
+        report.writeText("signedIn=$signedIn", Charsets.UTF_8)
+        assumeTrue("需要手机上已有登录会话", signedIn)
+        lateinit var vm: AppSquareViewModel
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            vm = androidx.lifecycle.viewmodel.compose.viewModel {
+                AppSquareViewModel(load = repository::miniApps)
+            }
+            val state by vm.state.collectAsStateWithLifecycle()
+            AppSquareScreen(state, vm::search, vm::retry, vm::more, {}, {}, {},
+                sort = vm::sort, loggedIn = true)
+        } }
+        fun awaitResults() {
+            compose.waitUntil(45000) { !vm.state.value.loading }
+            assertNull(vm.state.value.error)
+        }
+        awaitResults()
+        compose.onNodeWithContentDescription("筛选应用").performClick()
+        compose.onNodeWithText("已收藏").performClick()
+        awaitResults()
+        assertEquals(MiniAppSort.FAVORITES, vm.state.value.sort)
+        assertEquals(0, vm.state.value.page)
+        report.appendText("\nfavoritesLoaded=true, count=${vm.state.value.apps.size}", Charsets.UTF_8)
+        compose.onNodeWithContentDescription("搜索应用").performClick()
+        compose.onNodeWithTag("apps-search-field").performTextInput("2048")
+        awaitResults()
+        assertEquals(MiniAppSort.FAVORITES, vm.state.value.sort)
+        compose.onNodeWithTag("apps-back").performClick()
+        compose.onNodeWithContentDescription("筛选应用").performClick()
+        compose.onNodeWithText("最新上线").performClick()
+        awaitResults()
+        assertEquals(MiniAppSort.LATEST, vm.state.value.sort)
+        assertEquals("2048", vm.state.value.query)
+        assertTrue(vm.state.value.apps.any { it.name.contains("2048") })
+        report.appendText("\nfavoritesSearch=true, returnedToLatest=true", Charsets.UTF_8)
+    }
 
     @Test fun nativeDirectoryLoadsAndSearchesTheOfficialServer() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("appSquareLive") == "true")

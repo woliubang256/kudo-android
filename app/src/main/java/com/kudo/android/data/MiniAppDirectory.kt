@@ -10,8 +10,11 @@ data class MiniAppEntry(val id: String, val name: String, val iconUrl: String?,
 
 data class MiniAppDirectoryPage(val apps: List<MiniAppEntry>, val hasMore: Boolean)
 
-enum class MiniAppSort(val apiValue: String, val title: String) {
+enum class MiniAppSort(val apiValue: String, val title: String, val favorite: Boolean = false) {
     HOT("hot", "最热"), LATEST("latest", "最新上线"), RATING("rating", "评分最高"), USED("used", "使用最多"),
+    FAVORITES("latest", "已收藏", favorite = true);
+
+    val key: String get() = if (favorite) "favorites" else apiValue
 }
 
 private val miniAppId = Regex("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}")
@@ -40,7 +43,8 @@ internal fun parseMiniAppDirectory(data: JSONObject, page: Int): MiniAppDirector
 suspend fun CommunityRepository.miniApps(query: String = "", page: Int = 0, sort: MiniAppSort = MiniAppSort.LATEST): MiniAppDirectoryPage {
     require(page >= 0)
     return parseMiniAppDirectory(client.get("/mini-app-api/apps.json",
-        mapOf("sort" to sort.apiValue, "q" to query.trim(), "page" to page.toString())), page)
+        mapOf("sort" to sort.apiValue, "q" to query.trim(), "page" to page.toString(),
+            "favorite" to sort.favorite.toString())), page)
 }
 
 suspend fun CommunityRepository.miniAppDetails(id: String): MiniAppDetails {

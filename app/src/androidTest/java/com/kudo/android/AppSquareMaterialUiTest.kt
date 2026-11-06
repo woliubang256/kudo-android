@@ -39,13 +39,14 @@ class AppSquareMaterialUiTest {
                 AppSquareScreen(state, {}, {}, {}, {}, {}, {}, showAbout = {
                     state = state.copy(about = AppSquareAboutState(it,
                         MiniAppDetails(it.id, "2048", "小游戏简介", null, "1.0.0", Member(1, "neo", "Neo", ""), 4.35, 7), false))
-                }, dismissAbout = { state = state.copy(about = null) })
+                }, dismissAbout = { state = state.copy(about = null) }, loggedIn = true)
             }
         } }
         for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
             compose.runOnIdle { display = display.copy(theme = theme, glass = glass); source = Color.Blue }
             if (about) compose.onNodeWithTag("app-${apps.first().id}").performTouchInput { longClick() }
             else compose.onNodeWithContentDescription("筛选应用").performClick()
+            if (!about) compose.onNodeWithText("已收藏").assertIsDisplayed()
             val sheetNode = compose.onNodeWithTag("liquid-action-sheet").assertIsDisplayed()
             val layer = compose.onNodeWithTag("editor-tool-backdrop-source").fetchSemanticsNode().layoutInfo
             var parent = sheetNode.fetchSemanticsNode().layoutInfo.parentInfo

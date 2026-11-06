@@ -37,10 +37,11 @@ import com.kudo.android.ui.theme.LogoYellow
 internal fun AppSquareScreen(state: AppSquareState, search: (String) -> Unit, retry: () -> Unit,
     more: () -> Unit, back: () -> Unit, login: () -> Unit, open: (String) -> Unit,
     initialGrid: Boolean = true, saveGrid: (Boolean) -> Unit = {}, sort: (MiniAppSort) -> Unit = {},
-    showAbout: (MiniAppEntry) -> Unit = {}, dismissAbout: () -> Unit = {}, retryAbout: () -> Unit = {}) {
+    showAbout: (MiniAppEntry) -> Unit = {}, dismissAbout: () -> Unit = {}, retryAbout: () -> Unit = {},
+    loggedIn: Boolean = false) {
     EditorToolBackdropHost {
         AppSquareContent(state, search, retry, more, back, login, open, initialGrid, saveGrid,
-            sort, showAbout, dismissAbout, retryAbout)
+            sort, showAbout, dismissAbout, retryAbout, loggedIn)
     }
 }
 
@@ -48,7 +49,7 @@ internal fun AppSquareScreen(state: AppSquareState, search: (String) -> Unit, re
 private fun AppSquareContent(state: AppSquareState, search: (String) -> Unit, retry: () -> Unit,
     more: () -> Unit, back: () -> Unit, login: () -> Unit, open: (String) -> Unit,
     initialGrid: Boolean, saveGrid: (Boolean) -> Unit, sort: (MiniAppSort) -> Unit,
-    showAbout: (MiniAppEntry) -> Unit, dismissAbout: () -> Unit, retryAbout: () -> Unit) {
+    showAbout: (MiniAppEntry) -> Unit, dismissAbout: () -> Unit, retryAbout: () -> Unit, loggedIn: Boolean) {
     var grid by rememberSaveable { mutableStateOf(initialGrid) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var filtering by remember { mutableStateOf(false) }
@@ -94,18 +95,22 @@ private fun AppSquareContent(state: AppSquareState, search: (String) -> Unit, re
                     state.error != null -> ErrorState(state.error, retry, login)
                     state.moreError != null -> ErrorState(state.moreError, more, login)
                     state.apps.isEmpty() -> Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-                        Text(if (state.query.isBlank()) "暂无应用" else "没有找到应用", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(when {
+                            state.query.isNotBlank() -> "没有找到应用"
+                            state.sort == MiniAppSort.FAVORITES -> "暂无收藏的应用"
+                            else -> "暂无应用"
+                        }, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
     }
     if (filtering) EditorToolSheet("筛选应用", { filtering = false }) { close ->
-        MiniAppSort.entries.forEach { option ->
+        MiniAppSort.entries.filter { loggedIn || !it.favorite }.forEach { option ->
             Row(Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = {
                 close(); sort(option)
             }).semantics { selected = state.sort == option }.heightIn(min = 48.dp)
-                .padding(horizontal = 12.dp, vertical = 10.dp).testTag("apps-sort-${option.apiValue}"),
+                .padding(horizontal = 12.dp, vertical = 10.dp).testTag("apps-sort-${option.key}"),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(option.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                 if (state.sort == option) Icon(Icons.Rounded.Check, null, Modifier.size(22.dp), tint = LogoYellow)
