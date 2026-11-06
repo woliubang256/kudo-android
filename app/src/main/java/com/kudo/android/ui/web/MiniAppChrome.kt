@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.kudo.android.data.GlassMode
 import com.kudo.android.ui.components.*
 
-internal enum class MiniAppPanel { MENU, ABOUT, CLIPBOARD }
+internal enum class MiniAppPanel { MENU, ABOUT, CLIPBOARD, RATING, TIP, REPORT }
 
 internal class MiniAppUiState {
     val visibility = MutableTransitionState(false)
@@ -97,13 +97,19 @@ private fun MiniAppCapsuleButton(icon: ImageVector, tint: Color, description: St
 @Composable
 internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, refresh: () -> Unit,
     copyLink: () -> Unit, browser: () -> Unit, titleBarEnabled: Boolean = true, toggleTitleBar: () -> Unit = {},
-    preferencesReady: Boolean = true, rememberClipboard: (MiniAppClipboardRequest) -> Unit = {}) {
+    preferencesReady: Boolean = true, rememberClipboard: (MiniAppClipboardRequest) -> Unit = {},
+    actions: MiniAppActionsController? = null, login: () -> Unit = {}) {
     val context = LocalContext.current
     CommunitySheet(state.visibility, when (state.panel) {
         MiniAppPanel.MENU -> "小程序更多"
         MiniAppPanel.ABOUT -> "关于应用"
         MiniAppPanel.CLIPBOARD -> "剪贴板权限"
+        MiniAppPanel.RATING -> "评分"
+        MiniAppPanel.TIP -> "打赏开发者"
+        MiniAppPanel.REPORT -> "举报应用"
     }, state::dismiss, backdrop = null, glass = GlassMode.TRANSLUCENT,
+        dismissEnabled = actions?.busy != true,
+        showTitle = state.panel in setOf(MiniAppPanel.RATING, MiniAppPanel.TIP, MiniAppPanel.REPORT),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 16.dp)) {
         when (state.panel) {
             MiniAppPanel.MENU -> Column(Modifier.fillMaxWidth().testTag("mini-app-menu-grid")) {
@@ -117,7 +123,13 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                 if (location?.id != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     MiniAppMenuButton(if (titleBarEnabled) Icons.Rounded.WebAssetOff else Icons.Rounded.WebAsset,
                         if (titleBarEnabled) "隐藏标题栏" else "显示标题栏", Modifier.weight(1f), enabled = preferencesReady) { state.dismiss(); toggleTitleBar() }
-                    repeat(3) { Spacer(Modifier.weight(1f)) }
+                    listOf(Triple(Icons.Rounded.Star, "评分", MiniAppPanel.RATING),
+                        Triple(Icons.Rounded.CardGiftcard, "打赏", MiniAppPanel.TIP),
+                        Triple(Icons.Rounded.Flag, "举报", MiniAppPanel.REPORT)).forEach { (icon, label, panel) ->
+                        MiniAppMenuButton(icon, label, Modifier.weight(1f), enabled = preferencesReady && actions?.busy != true) {
+                            state.open(panel); actions?.open(panel)
+                        }
+                    }
                 }
             }
             MiniAppPanel.ABOUT -> {
@@ -143,6 +155,9 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                     CommunityButton("允许且不再询问", { request?.let(rememberClipboard); state.dismiss() }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         enabled = preferencesReady && request?.appId != null, compact = true)
                 }
+            }
+            MiniAppPanel.RATING, MiniAppPanel.TIP, MiniAppPanel.REPORT -> actions?.let {
+                MiniAppActionContent(state.panel, it) { state.dismiss(); login() }
             }
         }
     }

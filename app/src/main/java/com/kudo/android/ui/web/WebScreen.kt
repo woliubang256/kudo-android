@@ -57,7 +57,7 @@ private class WebPageState(val saved: Bundle? = null) {
 internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> Unit,
     webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false },
     externalLinkMode: ExternalLinkMode = ExternalLinkMode.SYSTEM, preferences: MiniAppPreferences? = null,
-    accountId: Int? = null, accountReady: Boolean = true) {
+    accountId: Int? = null, accountReady: Boolean = true, login: () -> Unit = {}) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
     var title by rememberSaveable(url) { mutableStateOf("网页") }
@@ -89,6 +89,17 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val launchCover = visibleLaunch?.coversPage == true
     val currentMiniApp by rememberUpdatedState(miniApp)
     val miniUi = remember(url) { MiniAppUiState() }
+    val actionScope = rememberCoroutineScope()
+    val actions = remember(currentUrl, accountId, accountReady) {
+        miniApp?.id?.let { id -> MiniAppActionsController(actionScope, id, accountId != null && accountReady,
+            request = { operation, payload -> checkNotNull(page.bridge).action(operation, payload) },
+            ratingSaved = { rating ->
+                miniUi.info = miniUi.info?.copy(ratingAverage = rating.average, ratingCount = rating.count)
+                miniUi.revision++
+            }) }
+    }
+    DisposableEffect(actions) { onDispose { actions?.dispose() } }
+    LaunchedEffect(miniUi.visibility.targetState) { if (!miniUi.visibility.targetState) actions?.close() }
     val fullscreen = remember(url) { WebFullscreenState() }
     val runtimeHeader = immersive && titleBarEnabled && fullscreen.view == null
     val context = LocalContext.current
@@ -102,7 +113,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     })
     fun close() { miniUi.reset(); fullscreen.exit(); currentBack() }
     fun navigateBack() {
-        if (miniUi.showing) miniUi.dismiss()
+        if (miniUi.showing) { if (actions?.busy != true) miniUi.dismiss() }
         else if (fullscreen.view != null) fullscreen.exit()
         else { val view = page.view; if (view?.canGoBack() == true) view.goBack() else currentBack() }
     }
@@ -196,6 +207,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         val owner = accountId
                         page.bridge = MiniAppWebBridge(this, { currentAccountReady && currentAccountId == owner && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
                             { handleClipboard(it) },
+                            sessionValid = { currentAccountReady && currentAccountId == owner },
                             launch = { launchState = it }) { adapted ->
                             runtimePresentation = adapted
                             val generation = navigationGeneration
@@ -341,7 +353,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
         request.allow(context) {
             request.appId?.let { if (accountReady) preferences?.rememberClipboard(accountId, it, request.write) }
         }
-    })
+    }, actions = actions, login = login)
     }
 }
 

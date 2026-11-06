@@ -263,10 +263,9 @@ class WebScreenUiTest {
         // Separate the fixture's adjacent touch targets before checking scheme navigation.
         javascript("document.querySelectorAll('a').forEach(a=>a.style.display='block')")
         click("quark-scheme")
-        compose.runOnIdle { assertEquals("Navigation requests: $navigations", 2, attempted.size) }
         awaitPage("夸克网页")
         compose.runOnIdle {
-            assertEquals(2, attempted.size)
+            assertEquals("Navigation requests: $navigations", 2, attempted.size)
             assertTrue(attempted.last().startsWith("qklink://"))
             assertEquals("https://pan.quark.cn/s/Abc123?pwd=1234", current().url)
         }

@@ -231,6 +231,10 @@ class MiniAppWebUiTest {
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("mini-app-fullscreen").assertDoesNotExist()
         compose.onNodeWithTag("mini-app-title-bar").assertDoesNotExist()
+        // Native removal precedes Chromium's asynchronous fullscreen exit.
+        compose.waitUntil(10000) { js("document.fullscreenElement === null") == "true" }
+        // Allow the browser's real-time gesture suppression after exiting fullscreen.
+        android.os.SystemClock.sleep(500)
         click("fullscreen")
         compose.waitUntil(10000) { compose.onAllNodesWithTag("mini-app-fullscreen").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("小程序更多").performClick()

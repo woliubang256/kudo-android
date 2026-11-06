@@ -58,6 +58,7 @@ internal class MiniAppClipboardRequest(
 internal class MiniAppWebBridge(
     private val view: WebView, private val active: () -> Boolean,
     private val clipboard: (MiniAppClipboardRequest) -> Unit,
+    private val sessionValid: () -> Boolean = active,
     private val launch: (MiniAppLaunchState) -> Unit = {},
     private val presentation: (Boolean) -> Unit = {},
 ) {
@@ -65,6 +66,9 @@ internal class MiniAppWebBridge(
     private val pendingClipboard = mutableMapOf<Triple<Boolean, String, String>, MiniAppClipboardRequest>()
     private var script: ScriptHandler? = null
     private var presentationScript: ScriptHandler? = null
+    private var actionScript: ScriptHandler? = null
+    private data class ActionReply(val appId: String, val url: String, val result: CompletableDeferred<JSONObject>)
+    private val pendingActions = mutableMapOf<String, ActionReply>()
     private val supported = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
     private var closed = false
     private val compatibility by lazy {
@@ -72,6 +76,9 @@ internal class MiniAppWebBridge(
     }
     private val presentationCode by lazy {
         view.context.assets.open("mini-app-presentation.js").bufferedReader(Charsets.UTF_8).use { it.readText() }
+    }
+    private val actionCode by lazy {
+        view.context.assets.open("mini-app-actions.js").bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
     val canReportPresentation get() = supported
 
@@ -98,6 +105,18 @@ internal class MiniAppWebBridge(
                 if (data.optString("type") == "clipboard-cancel") {
                     if (key != null) pendingClipboard[key]?.cancel(data.optString("error")
                         .takeIf { it in setOf("USER_CANCELLED", "TIMEOUT", "APP_UNLOADED") } ?: "USER_CANCELLED")
+                    return@addWebMessageListener
+                }
+                if (data.optString("type") == "action-result" && mainFrame) {
+                    if (!sessionValid()) return@addWebMessageListener
+                    val pending = pendingActions[data.optString("id")] ?: return@addWebMessageListener
+                    if (pending.url != view.url || pending.url != data.optString("url") ||
+                        pending.appId != location.id || pending.appId != data.optString("appId")) return@addWebMessageListener
+                    pendingActions.remove(data.optString("id"))
+                    if (data.opt("error") is String) pending.result.completeExceptionally(
+                        MiniAppActionFailure(data.getString("error").take(500), data.opt("uncertain") == true))
+                    else data.optJSONObject("data")?.let { pending.result.complete(it) }
+                        ?: pending.result.completeExceptionally(MiniAppActionFailure("操作结果暂不可用", true))
                     return@addWebMessageListener
                 }
                 if (!active()) {
@@ -136,6 +155,7 @@ internal class MiniAppWebBridge(
             }
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                 script = WebViewCompat.addDocumentStartJavaScript(view, compatibility, setOf("https://linux.do"))
+                actionScript = WebViewCompat.addDocumentStartJavaScript(view, actionCode, setOf("https://linux.do"))
             }
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
@@ -147,7 +167,23 @@ internal class MiniAppWebBridge(
         if (!closed) view.evaluateJavascript(presentationCode, null)
         if (supported && !closed && MiniAppLocation.parse(view.url.orEmpty()) != null) {
             view.evaluateJavascript(compatibility, null)
+            view.evaluateJavascript(actionCode, null)
         }
+    }
+
+    suspend fun action(operation: MiniAppOperation, payload: JSONObject = JSONObject()): JSONObject {
+        check(supported && !closed && active()) { "当前页面暂不可操作" }
+        val url = view.url.orEmpty()
+        val id = MiniAppLocation.parse(url)?.id ?: error("当前页面不是小程序")
+        val token = UUID.randomUUID().toString()
+        val result = CompletableDeferred<JSONObject>()
+        pendingActions[token] = ActionReply(id, url, result)
+        view.evaluateJavascript("window.__kudoMiniAppAction?.(${JSONObject.quote(token)}, ${JSONObject.quote(operation.wire)}, $payload)", null)
+        try {
+            return withTimeout(30000) { result.await() }
+        } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
+            throw MiniAppActionFailure("操作超时，请稍后核对结果", operation in setOf(MiniAppOperation.TIP, MiniAppOperation.REPORT))
+        } finally { pendingActions.remove(token) }
     }
 
     suspend fun info(id: String): MiniAppInfo = withTimeout(15000) {
@@ -174,6 +210,8 @@ internal class MiniAppWebBridge(
     }
 
     fun invalidate() {
+        pendingActions.values.forEach { it.result.cancel() }
+        pendingActions.clear()
         pendingClipboard.values.toList().forEach { it.cancel("APP_UNLOADED") }
         pendingClipboard.clear()
         pendingInfo.values.forEach { it.second.cancel() }
@@ -185,6 +223,7 @@ internal class MiniAppWebBridge(
         invalidate()
         script?.remove()
         presentationScript?.remove()
+        actionScript?.remove()
         if (supported) WebViewCompat.removeWebMessageListener(view, "KudoMiniApp")
     }
 

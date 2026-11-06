@@ -390,7 +390,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         key(account.user?.id) {
                             WebScreen(entry.arguments!!.getString("url")!!, { nav.popBackStack() }, ::openBrowser,
                                 openApp = { appLinks.open(it) }, externalLinkMode = display.externalLinkMode,
-                                preferences = app.miniApps, accountId = account.user?.id, accountReady = sessionStable)
+                                preferences = app.miniApps, accountId = account.user?.id, accountReady = sessionStable, login = ::login)
                         }
                     }
                     topicDetailComposable("topic/{id}?post={post}",
