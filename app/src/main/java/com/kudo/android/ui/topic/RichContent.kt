@@ -88,6 +88,7 @@ import com.kudo.android.ui.components.LocalAvatarMetadata
 import com.kudo.android.ui.components.mediaUrl
 import com.kudo.android.ui.LinuxDoLink
 import com.kudo.android.ui.ExternalAppLinkPolicy
+import com.kudo.android.ui.web.MiniAppLocation
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
@@ -254,11 +255,12 @@ fun parseArticle(html: String): List<ArticleBlock> {
     fun walk(element: Element, quote: Boolean = false) {
         if (element.hasClass("footnotes-list") || element.hasClass("footnotes") || element.hasClass("footnotes-sep")) return
         if (element.hasClass("spoiler")) {
-            if (element.normalName() == "div" || element.select("img:not(.emoji)").isNotEmpty()) {
+            if (element.normalName() == "div" || element.select("img:not(.emoji)").isNotEmpty() || hasMiniAppLink(element)) {
                 result.add(ArticleBlock.Spoiler(parseArticle(element.html()))); return
             }
             result.add(ArticleBlock.TextBlock(element.outerHtml(), quote)); return
         }
+        plainMiniAppLink(element)?.let { result.add(it); return }
         if (element.hasClass("meta") && element.parents().any { it.hasClass("lightbox") || it.hasClass("lightbox-wrapper") }) return
         if (element.hasClass("poll") && element.hasAttr("data-poll-name")) {
             result.add(ArticleBlock.Poll(element.attr("data-poll-name"))); return
@@ -355,15 +357,16 @@ fun parseArticle(html: String): List<ArticleBlock> {
                 }
             }
             "p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "summary" -> {
-                if (element.select(".spoiler img:not(.emoji)").isNotEmpty()) {
+                if (element.select(".spoiler img:not(.emoji)").isNotEmpty() || hasMiniAppLink(element)) {
                     val pending = StringBuilder()
                     fun flush() {
                         if (pending.isNotEmpty()) {
-                            result.addAll(parseArticle(pending.toString()).map { if (it is ArticleBlock.TextBlock) it.copy(quote = quote) else it })
+                            val fragment = element.clone().empty().html(pending.toString()).outerHtml()
+                            result.addAll(parseArticle(fragment).map { if (it is ArticleBlock.TextBlock) it.copy(quote = quote) else it })
                             pending.clear()
                         }
                     }
-                    element.childNodes().flatMap(::spoilerFragments).forEach { fragment ->
+                    element.childNodes().flatMap(::articleFragments).forEach { fragment ->
                         if (fragment.region != null) { flush(); walk(fragment.region, quote) } else pending.append(fragment.html)
                     }
                     flush(); return
@@ -395,7 +398,17 @@ fun parseArticle(html: String): List<ArticleBlock> {
     return result
 }
 
-private data class SpoilerFragment(val html: String = "", val region: Element? = null)
+private data class ArticleFragment(val html: String = "", val region: Element? = null)
+
+private fun plainMiniAppLink(element: Element): ArticleBlock.Embed? {
+    if (element.normalName() != "a" || element.hasClass("spoiler") || element.select("img, code, pre").isNotEmpty() ||
+        element.parents().any { it.normalName() in setOf("code", "pre") }) return null
+    val url = LinuxDoLink.webUrl(element.attr("href")) ?: return null
+    if (MiniAppLocation.parse(url)?.id == null) return null
+    return ArticleBlock.Embed(url, element.text().ifBlank { "小程序" })
+}
+
+private fun hasMiniAppLink(element: Element): Boolean = element.select("a[href]").any { plainMiniAppLink(it) != null }
 
 /** List items may omit p wrappers; keep adjacent inline nodes in one paragraph. */
 private fun listItemBody(element: Element): String = buildString {
@@ -412,12 +425,14 @@ private fun listItemBody(element: Element): String = buildString {
     flush()
 }
 
-private fun spoilerFragments(node: Node): List<SpoilerFragment> {
-    if (node !is Element) return listOf(SpoilerFragment(node.outerHtml()))
-    if (node.hasClass("spoiler") && node.select("img:not(.emoji)").isNotEmpty()) return listOf(SpoilerFragment(region = node))
-    if (node.select(".spoiler img:not(.emoji)").isEmpty()) return listOf(SpoilerFragment(node.outerHtml()))
-    return node.childNodes().flatMap(::spoilerFragments).map { fragment ->
-        if (fragment.region != null) fragment else SpoilerFragment(node.clone().empty().append(fragment.html).outerHtml())
+private fun articleFragments(node: Node): List<ArticleFragment> {
+    if (node !is Element || node.normalName() in setOf("code", "pre")) return listOf(ArticleFragment(node.outerHtml()))
+    if (node.hasClass("spoiler") && (node.select("img:not(.emoji)").isNotEmpty() || hasMiniAppLink(node))) return listOf(ArticleFragment(region = node))
+    if (plainMiniAppLink(node) != null) return listOf(ArticleFragment(region = node))
+    val fragments = node.childNodes().flatMap(::articleFragments)
+    if (fragments.none { it.region != null }) return listOf(ArticleFragment(node.outerHtml()))
+    return fragments.map { fragment ->
+        if (fragment.region != null) fragment else ArticleFragment(node.clone().empty().append(fragment.html).outerHtml())
     }
 }
 

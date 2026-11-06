@@ -2,6 +2,7 @@ package com.kudo.android
 
 import androidx.activity.ComponentActivity
 import android.content.Context
+import android.graphics.Bitmap
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.platform.app.InstrumentationRegistry
 import com.kudo.android.data.DisplaySettings
 import com.kudo.android.data.MiniAppEntry
 import com.kudo.android.data.MiniAppPreviewCache
@@ -23,11 +25,44 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.*
+import java.io.File
 
 class MiniAppArticleUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val id = "01a19ba5-b9d2-766f-9fb9-b7eddc10e0c7"
     private val target = "https://linux.do/apps/$id?embed_mode=true&hb=fixture-packet#detail"
+
+    @Test fun plainLinksShowNamedCardsInBothThemesAndKeepTheirOwnLaunchUrls() {
+        val first = target.replace("embed_mode=true&", "")
+        val second = first.replace("fixture-packet", "another-packet")
+        val links = mutableListOf<String>()
+        var calls = 0
+        var dark by mutableStateOf(false)
+        compose.setContent { KudoTheme(DisplaySettings(theme = if (dark) ThemeMode.DARK else ThemeMode.LIGHT)) {
+            val scope = rememberCoroutineScope()
+            val cache = remember { MiniAppPreviewCache(scope, { calls++; MiniAppEntry(id, "Bingo", null) }) }
+            DisposableEffect(cache) { onDispose { cache.close() } }
+            CompositionLocalProvider(LocalMiniAppPreviews provides cache) {
+                RichContent("""<p>游玩小程序：<a href="${first.replace("&", "&amp;")}">Bingo</a>再试<a href="$second">另一局</a>祝好运</p>""", {}, { links += it })
+            }
+        } }
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Bingo").fetchSemanticsNodes().size == 2 }
+        for (night in listOf(false, true)) {
+            compose.runOnIdle { dark = night }
+            compose.onNodeWithText("游玩小程序：").assertIsDisplayed()
+            compose.onNodeWithText("再试").assertIsDisplayed()
+            compose.onNodeWithText("祝好运").assertIsDisplayed()
+            compose.onAllNodesWithTag("mini-app-card").assertCountEquals(2)
+            compose.onAllNodesWithTag("mini-app-card-icon", useUnmergedTree = true)[0].assertIsDisplayed()
+            val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            try { File(compose.activity.getExternalFilesDir(null), "mini-app-plain-${if (night) "dark" else "light"}.png").outputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            } } finally { bitmap.recycle() }
+        }
+        compose.onAllNodesWithTag("mini-app-card")[0].performClick()
+        compose.onAllNodesWithTag("mini-app-card")[1].performClick()
+        compose.runOnIdle { assertEquals(listOf(first, second), links); assertEquals(1, calls) }
+    }
 
     @Test fun miniAppIframeHasAnAppCardAndPreservesLaunchParameters() {
         val links = mutableListOf<String>()
