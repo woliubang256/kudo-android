@@ -220,6 +220,51 @@ class ThreadAndDecorationTest {
         }
     }
 
+    @Test fun retryRemainsLoadingUntilItsOwnRequestCompletes() = runTest {
+        val attempts = AtomicInteger()
+        val retryStarted = CountDownLatch(1)
+        val releaseRetry = CountDownLatch(1)
+        withVm(dispatch = { request -> when (request.path) {
+            "/t/5.json" -> topic(json(1), json(2, 1, 1), json(4, 3))
+            "/posts/2/replies.json?after=1" -> if (attempts.incrementAndGet() == 1) null else {
+                retryStarted.countDown()
+                check(releaseRetry.await(5, TimeUnit.SECONDS))
+                "[${json(3, 2)}]"
+            }
+            else -> null
+        } }) { vm ->
+            val initial = vm.await { !it.loading && !it.contextLoading && it.contextError != null }
+            val root = initial.detail!!.posts.first { it.number == 2 }
+            // Complete the observer on another thread before the failing request continues into finally.
+            val retryObserver = object : CoroutineDispatcher() {
+                override fun dispatch(context: kotlin.coroutines.CoroutineContext, block: Runnable) {
+                    val worker = Thread(block, "reply-retry-observer")
+                    worker.start()
+                    worker.join(5_000)
+                    check(!worker.isAlive)
+                }
+            }
+            val retry = launch(retryObserver, start = CoroutineStart.UNDISPATCHED) {
+                vm.state.first { it.replyLoads[2]?.let { load -> !load.loading && load.error != null } == true }
+                vm.loadReplies(root)
+            }
+            try {
+                vm.loadReplies(root)
+                withContext(Dispatchers.IO) { assertTrue(retryStarted.await(5, TimeUnit.SECONDS)) }
+                retry.join()
+                assertTrue("重试请求完成前必须保持加载状态", vm.state.value.replyLoads[2]!!.loading)
+                assertNull(vm.state.value.replyLoads[2]!!.error)
+                releaseRetry.countDown()
+                val completed = vm.await { it.replyLoads[2]?.loading == false && it.related.any { post -> post.number == 3 } }
+                assertEquals(listOf(3, 4), completed.threads.first { it.root.number == 2 }.replies.map(Post::number))
+                assertNull(completed.contextError)
+            } finally {
+                releaseRetry.countDown()
+                retry.cancelAndJoin()
+            }
+        }
+    }
+
     private suspend fun TopicViewModel.await(predicate: (TopicState) -> Boolean) = withContext(Dispatchers.Default) { withTimeout(8_000) { state.first(predicate) } }
     private suspend fun TestScope.withVm(number: Int? = null, dispatch: (RecordedRequest) -> String?, block: suspend (TopicViewModel) -> Unit) {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))

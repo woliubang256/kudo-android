@@ -12,6 +12,8 @@ reply_to_post_number > 1 的帖子按实际父链归入一级评论，更深后�
 
 一级评论下浅灰框预览3条，作者与实际回复对象由[楼中楼归属展示](2026-10-14-nested-reply-attribution.md)定义；完整讨论展示富文本和图片，操作留在原楼层。服务器 /posts/{id}/replies.json 每页最多20条，after 是最后返回的楼层；游标跟随未过滤的返回值，再只接收 reply_to_post_number 指向当前父帖的回复。展开后按需逐个父帖分页，合并去重，刷新撤销旧任务。已加载的回复立即复用，不全量预取整个话题。
 
+每次回复加载只在 finally 中发布一次完成状态，同时写入 loading=false 与失败原因；catch 仅记录异常。观察到失败即可发起重试，旧请求不再有后续状态更新覆盖新请求的加载状态。
+
 最初“操作留在原楼层”由[弹窗互动](2026-10-14-nested-reply-actions.md)部分取代：完整讨论采用头像左、内容右、正文下时间和操作的平面布局，增加同一爱心/表情回应及回复入口；其他操作留在原楼层。分组、分页、忽略内容和富文本图片的契约继续保留。
 
 主列表分页或深链遇到未加载的父帖时按楼层补齐祖先，辅助缓存不替代主阅读流。深链按[原楼层定位](2026-10-10-reply-timeline-and-preview.md)进入主时间线。点赞、收藏、忽略和编辑器仍用实际 Post，发布保留目标楼层；最初隐藏“A 回复 B”的展示决定由[楼中楼归属展示](2026-10-14-nested-reply-attribution.md)取代。
@@ -27,8 +29,13 @@ reply_to_post_number > 1 的帖子按实际父链归入一级评论，更深后�
 - reply_ids 递归列表一次获取后代：请求少，但网站默认排除关联多个被引用帖子的回复；逐父帖分页并校验实际 reply_to 可避免遗漏和错误归组。
 - 在加权正文 Text 后放图片按钮：点击区域独立且布局简单，但按钮会停在正文分配区域的末端，无法紧跟最后一行文字；图片入口使用 InlineTextContent 参与文字排版。
 - 直接追加图片占位符并依赖两行省略：无需额外测量，但长文字会把唯一的图片入口一起省略；有图片时先按实际字体和可用宽度测量，必要时省略文字并保留入口。
+- 在 catch 中立即发布失败可尽早显示错误，但 finally 再结束加载会覆盖已经启动的重试；将失败与完成合并到 finally 的一次状态更新，保留立即重试能力。
 
 ## Testing
+
+0.3.7 发布检查发现失败请求在 catch 中发布 loading=false 后，finally 再次结束加载；若此时已经重试，旧请求会提前清掉新请求的 loading。新增 retryRemainsLoadingUntilItsOwnRequestCompletes 用例，同步等待独立观察线程在错误状态发出时立即重试，并阻塞第二次响应；旧代码明确在“重试请求完成前必须保持加载状态”断言失败（artifacts/v0.3.7-retry-race-red.txt）。普通 Unconfined 观察者会在事件循环中延后恢复，不能稳定暴露该交错，因而使用线程握手而不依赖延迟或重复次数。
+
+合并完成状态后，本地全部 694 项 JVM 测试通过（含 ThreadAndDecorationTest 的 10 项），Lint 通过，0 errors、71 warnings、1 hint；显式保持 versionName=0.3.5-dev、versionCode=3006，见 artifacts/v0.3.7-retry-race-green.txt。此轮未安装设备包；既有真机数据保留。
 
 ThreadAndDecorationTest 的5项测试与全部129项JVM通过，覆盖分组、无效和缺失父帖、深链祖先补齐、引用混入、未过滤游标和逐父分页、失败重试。补齐父帖后旧错误未消失先由新断言复现，再修复，日志 artifacts/nested-context-error-repro.txt 与 community-features-regression-build.txt。回复加载失败现在一次状态更新同时结束 loading 并写入 error，重试不会在失败和结束之间的瞬时状态被丢弃；`failedThreadCanRetryAndMissingAncestorDoesNotHideTheReply` 等待这两个条件共同成立，避免 CI 调度差异造成超时。首轮真机用例发现中文编码损坏，修复前日志 artifacts/community-features-first-device.txt。
 

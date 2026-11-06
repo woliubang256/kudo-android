@@ -411,6 +411,7 @@ class TopicViewModel(
         val token = generation
         _state.update { it.copy(replyLoads = it.replyLoads + (root.id to previous.copy(loading = true, error = null))) }
         replyJobs[root.id] = viewModelScope.launch {
+            var failure: Exception? = null
             try {
                 // Empty quote-only pages can be skipped, but never walk an unbounded thread in one action.
                 repeat(if (preview) 1 else 8) {
@@ -434,13 +435,10 @@ class TopicViewModel(
                     if (replies.isNotEmpty()) return@launch
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (token == generation) _state.update { current ->
-                val load = current.replyLoads[root.id] ?: ReplyLoad()
-                current.copy(replyLoads = current.replyLoads + (root.id to load.copy(loading = false, error = e)))
-            } }
+            catch (e: Exception) { failure = e }
             finally { if (token == generation) _state.update { current ->
                 val load = current.replyLoads[root.id] ?: ReplyLoad()
-                current.copy(replyLoads = current.replyLoads + (root.id to load.copy(loading = false)))
+                current.copy(replyLoads = current.replyLoads + (root.id to load.copy(loading = false, error = failure)))
             } }
         }
     }
