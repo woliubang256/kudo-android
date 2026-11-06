@@ -14,15 +14,22 @@ import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal class MiniAppAudioRequest(private val choice: (Boolean?) -> Unit) {
+internal enum class MiniAppPermissionKind(val wire: String, val title: String, val deny: String, val allow: String) {
+    AUDIO("audio", "允许播放声音？", "静音进入", "开启声音"),
+    VIDEO("video", "允许播放视频？", "取消", "仅本次允许"),
+    FULLSCREEN("fullscreen", "允许进入全屏？", "取消", "仅本次允许"),
+}
+
+internal class MiniAppPermissionRequest(val kind: MiniAppPermissionKind, val preview: String?,
+    private val choice: (Boolean?) -> Unit) {
     var completed by mutableStateOf(false)
         private set
     var choosing by mutableStateOf(false)
         private set
-    fun select(muted: Boolean) {
+    fun select(allow: Boolean) {
         if (completed || choosing) return
         choosing = true
-        choice(muted)
+        choice(allow)
     }
     fun cancel() {
         if (completed) return
@@ -32,32 +39,37 @@ internal class MiniAppAudioRequest(private val choice: (Boolean?) -> Unit) {
     fun finish() { completed = true }
 }
 
-/** Adapts only the official audio dialog; the website still owns both callbacks and playback. */
-internal class MiniAppAudioPermission(
+/** Adapts identified site dialogs; the website still owns confirmation, execution and errors. */
+internal class MiniAppPermissionBridge(
     private val view: WebView, private val active: () -> Boolean,
-    private val show: (MiniAppAudioRequest) -> Unit,
+    private val show: (MiniAppPermissionRequest) -> Unit,
 ) {
     private data class Pending(val document: String, val id: String, val url: String, val appId: String,
-        val request: MiniAppAudioRequest)
+        val request: MiniAppPermissionRequest)
     private var pending: Pending? = null
     private var script: ScriptHandler? = null
     private var closed = false
     private val supported = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
-    private val code by lazy { view.context.assets.open("mini-app-audio.js").bufferedReader(Charsets.UTF_8).use { it.readText() } }
+    private val code by lazy { view.context.assets.open("mini-app-permission.js").bufferedReader(Charsets.UTF_8).use { it.readText() } }
 
     init {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            WebViewCompat.addWebMessageListener(view, "KudoMiniAppAudio", setOf("https://linux.do")) { _, message, origin, main, _ ->
+            WebViewCompat.addWebMessageListener(view, "KudoMiniAppPermission", setOf("https://linux.do")) { _, message, origin, main, _ ->
                 if (closed || !main || origin != "https://linux.do".toUri()) return@addWebMessageListener
-                val data = message.data?.takeIf { it.length <= 2048 }?.let { runCatching { JSONObject(it) }.getOrNull() }
+                val data = message.data?.takeIf { it.length <= 4096 }?.let { runCatching { JSONObject(it) }.getOrNull() }
                     ?: return@addWebMessageListener
                 val doc = data.optString("document").takeIf { it.length in 1..64 } ?: return@addWebMessageListener
                 val id = data.optString("id").takeIf { it.length in 1..64 } ?: return@addWebMessageListener
                 val url = data.optString("url")
                 val appId = data.optString("appId")
+                val kind = MiniAppPermissionKind.entries.find { it.wire == data.optString("kind") } ?: return@addWebMessageListener
+                val preview = data.optString("preview")
+                if (preview.length > 200 || (kind == MiniAppPermissionKind.VIDEO && preview.isBlank()) ||
+                    (kind != MiniAppPermissionKind.VIDEO && preview.isNotEmpty())) return@addWebMessageListener
                 val old = pending
                 if (data.optString("type") == "finished") {
-                    if (old != null && old.document == doc && old.id == id && old.url == url && old.appId == appId) {
+                    if (old != null && old.document == doc && old.id == id && old.url == url && old.appId == appId &&
+                        old.request.kind == kind) {
                         pending = null; old.request.finish()
                     }
                     return@addWebMessageListener
@@ -66,13 +78,13 @@ internal class MiniAppAudioPermission(
                     appId.isEmpty()) return@addWebMessageListener
                 if (old != null) return@addWebMessageListener
                 lateinit var p: Pending
-                val request = MiniAppAudioRequest { muted ->
-                    if (muted == null) {
+                val request = MiniAppPermissionRequest(kind, preview.takeIf { it.isNotEmpty() }) { allow ->
+                    if (allow == null) {
                         if (pending === p) { pending = null; command(p, "cancel") }
                     } else if (valid(p)) {
                         // Relay only this explicit choice to its original button so the site's
                         // browser activation path is preserved, without relaxing media settings.
-                        command(p, if (muted) "muted" else "enabled") { result -> relay(p, result) }
+                        command(p, if (allow) "allow" else "deny") { result -> relay(p, result) }
                     } else { pending = null; p.request.finish(); command(p, "cancel") }
                 }
                 p = Pending(doc, id, url, appId, request)
@@ -90,13 +102,13 @@ internal class MiniAppAudioPermission(
         invalidate(); closed = true
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) script?.remove()
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER))
-            WebViewCompat.removeWebMessageListener(view, "KudoMiniAppAudio")
+            WebViewCompat.removeWebMessageListener(view, "KudoMiniAppPermission")
     }
 
     private fun valid(p: Pending) = !closed && pending === p && !p.request.completed && active() && view.url == p.url
     private fun command(p: Pending, command: String, callback: ((String) -> Unit)? = null) {
         if (closed) return
-        view.evaluateJavascript("window.__kudoMiniAppAudio?.(${JSONObject.quote(p.document)}, ${JSONObject.quote(p.id)}, ${JSONObject.quote(command)})", callback)
+        view.evaluateJavascript("window.__kudoMiniAppPermission?.(${JSONObject.quote(p.document)}, ${JSONObject.quote(p.id)}, ${JSONObject.quote(command)})", callback)
     }
     private fun relay(p: Pending, result: String) {
         if (!valid(p)) { p.request.cancel(); return }
@@ -117,6 +129,6 @@ internal class MiniAppAudioPermission(
             try { view.dispatchTouchEvent(event) } finally { event.recycle() }
         }
         dispatch(MotionEvent.ACTION_DOWN)
-        view.postDelayed({ dispatch(if (valid(p)) MotionEvent.ACTION_UP else MotionEvent.ACTION_CANCEL) }, 40)
+        view.postDelayed({ if (!closed) dispatch(if (valid(p)) MotionEvent.ACTION_UP else MotionEvent.ACTION_CANCEL) }, 40)
     }
 }

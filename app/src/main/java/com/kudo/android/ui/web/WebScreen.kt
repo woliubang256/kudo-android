@@ -106,6 +106,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val currentAccountId by rememberUpdatedState(accountId)
     val currentAccountReady by rememberUpdatedState(accountReady)
     val handleClipboard by rememberUpdatedState<(MiniAppClipboardRequest) -> Unit>({ request ->
+        miniUi.clearCompletedRequest()
         val id = request.appId
         if (!accountReady || miniUi.visibility.targetState) request.cancel()
         else if (id != null && preferences?.clipboardAllowed(accountId, id, request.write) == true) request.allow(context)
@@ -143,8 +144,8 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     LaunchedEffect(miniUi.clipboard?.completed) {
         if (miniUi.clipboard?.completed == true) miniUi.dismiss()
     }
-    LaunchedEffect(miniUi.audio?.completed) {
-        if (miniUi.audio?.completed == true) miniUi.dismiss()
+    LaunchedEffect(miniUi.permission?.completed) {
+        if (miniUi.permission?.completed == true) miniUi.dismiss()
     }
     DisposableEffect(lifecycle, page) {
         val observer = LifecycleEventObserver { _, event ->
@@ -211,7 +212,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         page.bridge = MiniAppWebBridge(this, { currentAccountReady && currentAccountId == owner && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
                             { handleClipboard(it) },
                             sessionValid = { currentAccountReady && currentAccountId == owner },
-                            launch = { launchState = it }, audio = { miniUi.request(it) }) { adapted ->
+                            launch = { launchState = it }, permission = { miniUi.request(it) }) { adapted ->
                             runtimePresentation = adapted
                             val generation = navigationGeneration
                             postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {

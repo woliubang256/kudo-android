@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.kudo.android.data.GlassMode
 import com.kudo.android.ui.components.*
 
-internal enum class MiniAppPanel { MENU, ABOUT, CLIPBOARD, AUDIO, RATING, TIP, REPORT }
+internal enum class MiniAppPanel { MENU, ABOUT, CLIPBOARD, AUDIO, VIDEO, FULLSCREEN, RATING, TIP, REPORT }
 
 internal class MiniAppUiState {
     val visibility = MutableTransitionState(false)
@@ -39,16 +39,28 @@ internal class MiniAppUiState {
     var error by mutableStateOf(false)
     var revision by mutableIntStateOf(0)
     var clipboard by mutableStateOf<MiniAppClipboardRequest?>(null)
-    var audio by mutableStateOf<MiniAppAudioRequest?>(null)
+    var permission by mutableStateOf<MiniAppPermissionRequest?>(null)
     val showing get() = visibility.currentState || visibility.targetState
     fun open(panel: MiniAppPanel) { this.panel = panel; visibility.targetState = true }
-    fun dismiss() { clipboard?.cancel(); clipboard = null; audio?.cancel(); audio = null; visibility.targetState = false }
+    fun dismiss() { clipboard?.cancel(); clipboard = null; permission?.cancel(); permission = null; visibility.targetState = false }
     fun reset() { dismiss(); info = null; error = false; loading = false }
+    fun clearCompletedRequest() {
+        if (clipboard?.completed == true || permission?.completed == true) dismiss()
+    }
     fun request(request: MiniAppClipboardRequest) {
+        clearCompletedRequest()
         if (visibility.targetState) request.cancel() else { clipboard = request; open(MiniAppPanel.CLIPBOARD) }
     }
-    fun request(request: MiniAppAudioRequest) {
-        if (visibility.targetState) request.cancel() else { audio = request; open(MiniAppPanel.AUDIO) }
+    fun request(request: MiniAppPermissionRequest) {
+        clearCompletedRequest()
+        if (visibility.targetState) request.cancel() else {
+            permission = request
+            open(when (request.kind) {
+                MiniAppPermissionKind.AUDIO -> MiniAppPanel.AUDIO
+                MiniAppPermissionKind.VIDEO -> MiniAppPanel.VIDEO
+                MiniAppPermissionKind.FULLSCREEN -> MiniAppPanel.FULLSCREEN
+            })
+        }
     }
 }
 @Composable
@@ -109,6 +121,8 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
         MiniAppPanel.ABOUT -> "关于应用"
         MiniAppPanel.CLIPBOARD -> "剪贴板权限"
         MiniAppPanel.AUDIO -> "声音权限"
+        MiniAppPanel.VIDEO -> "视频权限"
+        MiniAppPanel.FULLSCREEN -> "全屏权限"
         MiniAppPanel.RATING -> "评分"
         MiniAppPanel.TIP -> "打赏开发者"
         MiniAppPanel.REPORT -> "举报应用"
@@ -161,13 +175,21 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                         enabled = preferencesReady && request?.appId != null, compact = true)
                 }
             }
-            MiniAppPanel.AUDIO -> {
-                Text("允许播放声音？", style = MaterialTheme.typography.titleMedium)
+            MiniAppPanel.AUDIO, MiniAppPanel.VIDEO, MiniAppPanel.FULLSCREEN -> {
+                val kind = when (state.panel) {
+                    MiniAppPanel.AUDIO -> MiniAppPermissionKind.AUDIO
+                    MiniAppPanel.VIDEO -> MiniAppPermissionKind.VIDEO
+                    else -> MiniAppPermissionKind.FULLSCREEN
+                }
+                Text(kind.title, style = MaterialTheme.typography.titleMedium)
+                state.permission?.preview?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                }
                 Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CommunityButton("静音进入", { state.audio?.select(true) }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        enabled = state.audio?.choosing == false, compact = true)
-                    CommunityButton("开启声音", { state.audio?.select(false) }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        enabled = state.audio?.choosing == false, compact = true)
+                    CommunityButton(kind.deny, { state.permission?.select(false) }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = state.permission?.choosing == false, compact = true)
+                    CommunityButton(kind.allow, { state.permission?.select(true) }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = state.permission?.choosing == false, compact = true)
                 }
             }
             MiniAppPanel.RATING, MiniAppPanel.TIP, MiniAppPanel.REPORT -> actions?.let {

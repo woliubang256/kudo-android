@@ -166,6 +166,76 @@ class MiniAppAudioPermissionUiTest {
         awaitResult("enabled")
     }
 
+    private fun requestMedia(kind: String, translated: Boolean = false, timeout: Int = 60000) {
+        js("requestMedia('$kind',$translated,$timeout);true")
+        compose.waitUntil(5000) { compose.onAllNodesWithText(if (kind == "video") "允许播放视频？" else "允许进入全屏？")
+            .fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    private fun mediaResult(value: String) {
+        compose.waitUntil(8000) { js("window.operationResult") == "\"$value\"" }
+    }
+
+    @Test fun videoAndFullscreenChoicesExecuteTheOriginalWebsiteCallbacks() {
+        show()
+        val original = web
+        for (kind in listOf("video", "fullscreen")) for (allow in listOf(false, true)) {
+            requestMedia(kind)
+            assertEquals("0", js("window.operationCalls"))
+            assertEquals("false", js("!!document.querySelector('dialog[open]')"))
+            compose.onNodeWithText(if (allow) "仅本次允许" else "取消").performClick()
+            mediaResult(if (!allow) "cancelled" else if (kind == "video") "video-handle" else "fullscreen-active")
+            assertEquals(if (allow) "1" else "0", js("window.operationCalls"))
+            assertEquals("true", js("window.operationTrusted && window.operationActive"))
+            compose.runOnIdle { assertSame(original, web); assertTrue(web.settings.mediaPlaybackRequiresUserGesture) }
+            if (allow && kind == "fullscreen") {
+                assertEquals("true", js("!!document.fullscreenElement"))
+                js("document.exitFullscreen();true")
+                compose.waitUntil(5000) { js("!document.fullscreenElement") == "true" }
+            }
+        }
+    }
+
+    @Test fun videoAndFullscreenAreReadableAcrossThemesAndMaterials() {
+        show()
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
+            compose.runOnIdle { display = display.copy(theme = theme, glass = glass) }
+            for (kind in listOf("video", "fullscreen")) {
+                requestMedia(kind)
+                compose.onNodeWithText("仅本次允许").assertIsDisplayed()
+                if (kind == "video") compose.onNodeWithText("pattern").assertIsDisplayed()
+                else compose.onNodeWithText("pattern").assertDoesNotExist()
+                compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+                if (glass == GlassMode.LIQUID) {
+                    val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+                    File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null),
+                        "mini-app-$kind-${theme.name.lowercase()}.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                }
+                compose.onNodeWithText("取消").performClick()
+                mediaResult("cancelled")
+            }
+        }
+    }
+
+    @Test fun translatedMediaAndWebsiteTimeoutKeepTheirOriginalSemantics() {
+        show()
+        requestMedia("video", translated = true)
+        compose.onNodeWithText("仅本次允许").performClick()
+        mediaResult("video-handle")
+        requestMedia("fullscreen", translated = true)
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        mediaResult("cancelled")
+        requestMedia("video", timeout = 1000)
+        mediaResult("timeout")
+        compose.waitUntil(5000) { compose.onAllNodesWithText("允许播放视频？").fetchSemanticsNodes().isEmpty() }
+        assertEquals("0", js("window.operationCalls"))
+        requestMedia("video")
+        js("window.failOperation=true")
+        compose.onNodeWithText("仅本次允许").performClick()
+        mediaResult("site-failure")
+        assertEquals("1", js("window.operationCalls"))
+    }
+
     private inner class FixtureView(context: Context) : WebView(context) {
         @Volatile var finishedUrl = ""
         var swallowInput = false
@@ -200,6 +270,28 @@ class MiniAppAudioPermissionUiTest {
                             }catch(error){window.audioResult=error.name}finally{URL.revokeObjectURL(source);d.remove()}};
                           cancel.addEventListener('click',event=>choose(true,event));allow.addEventListener('click',event=>choose(false,event));
                           d.addEventListener('cancel',event=>{event.preventDefault();if(!settled){settled=true;d.close();d.remove();window.audioResult='cancelled'}});
+                          document.body.append(d);d.showModal();
+                        };
+                        window.requestMedia=(kind,translated=false,timeout=60000)=>{
+                          window.operationResult='pending';window.operationCalls=0;window.failOperation=false;
+                          window.operationTrusted=window.operationActive=undefined;
+                          let preload=document.getElementById('data-preloaded');if(!preload){preload=document.createElement('script');preload.id='data-preloaded';preload.type='application/json';document.head.append(preload)}
+                          preload.textContent=JSON.stringify({['mini-app/production/'+location.pathname.split('/').pop()+'/']:{configuration:{channel:'production',translations:{native:{
+                            action:{video:{play:translated?'Play video':'播放视频'},fullscreen:{request:translated?'Enter fullscreen':'进入全屏'}},rejectAction:translated?'Cancel':'取消',allowAction:translated?'Allow once':'仅本次允许'
+                          }}}}});
+                          const d=document.createElement('dialog');d.className='mini-app-permission-dialog';
+                          const h=document.createElement('h2');h.id='permission-'+crypto.randomUUID();h.textContent='能力测试 请求操作';d.setAttribute('aria-labelledby',h.id);
+                          const action=document.createElement('p');action.textContent=kind==='video'?(translated?'Play video':'播放视频'):(translated?'Enter fullscreen':'进入全屏');
+                          const preview=document.createElement('p');preview.className='mini-app-permission-dialog__preview';preview.textContent=kind==='video'?'pattern':'';
+                          const buttons=document.createElement('div'),cancel=document.createElement('button'),allow=document.createElement('button');cancel.type=allow.type='button';cancel.className='button';allow.className='button --primary';
+                          cancel.textContent=translated?'Cancel':'取消';allow.textContent=translated?'Allow once':'仅本次允许';buttons.append(cancel,allow);d.append(h,action,preview,buttons);
+                          let settled=false;const finish=result=>{clearTimeout(timer);d.close();d.remove();window.operationResult=result};
+                          const reject=event=>{if(settled)return;settled=true;window.operationTrusted=event.isTrusted;window.operationActive=navigator.userActivation.isActive;finish('cancelled')};
+                          cancel.addEventListener('click',reject);d.addEventListener('cancel',event=>{event.preventDefault();reject(event)});
+                          allow.addEventListener('click',async event=>{if(settled)return;settled=true;cancel.disabled=allow.disabled=true;window.operationTrusted=event.isTrusted;window.operationActive=navigator.userActivation.isActive;d.close();
+                            try{window.operationCalls++;if(window.failOperation)throw Error('site-failure');if(kind==='fullscreen'){await document.querySelector('.mini-app-loader').requestFullscreen();finish(document.fullscreenElement?'fullscreen-active':'inactive')}
+                              else{await Promise.resolve();finish('video-handle')}}catch(error){finish(error.message)}});
+                          const timer=setTimeout(()=>{if(!settled){settled=true;finish('timeout')}},timeout);
                           document.body.append(d);d.showModal();
                         };
                         </script></body></html>"""

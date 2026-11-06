@@ -16,7 +16,7 @@ Status: implemented
 
 原生进度采用普通材质，跟随浅深主题，下载和解包使用 LogoYellow 进度条。遮罩阻止点击与无障碍访问底层页面；官网权限 dialog 打开时移除遮罩，保持其原有交互。原生重试重新加载当前完整 URL，保留原 WebView 与原生来源，不复制官网的加载、解压或权限逻辑。
 
-已识别的剪贴板权限改由[单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)显示于外层原生面板，不要求官网 dialog 实际 open；[音频会话确认](2026-11-06-mini-app-native-audio-consent.md)同样由原生面板显示，只将用户选择交回官网按钮。其他权限仍沿用上述让位机制。
+已识别的剪贴板权限改由[单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)显示于外层原生面板，不要求官网 dialog 实际 open；[音频会话确认](2026-11-06-mini-app-native-audio-consent.md)及[视频、全屏操作弹窗](2026-11-07-mini-app-native-operation-dialogs.md)同样由原生面板显示，只将用户选择交回官网按钮。其他权限仍沿用上述让位机制。
 
 ## Existing note audit
 

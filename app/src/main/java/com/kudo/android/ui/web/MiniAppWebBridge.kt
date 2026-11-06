@@ -60,10 +60,10 @@ internal class MiniAppWebBridge(
     private val clipboard: (MiniAppClipboardRequest) -> Unit,
     private val sessionValid: () -> Boolean = active,
     private val launch: (MiniAppLaunchState) -> Unit = {},
-    audio: (MiniAppAudioRequest) -> Unit = { it.cancel() },
+    permission: (MiniAppPermissionRequest) -> Unit = { it.cancel() },
     private val presentation: (Boolean) -> Unit = {},
 ) {
-    private val audioPermission = MiniAppAudioPermission(view, active, audio)
+    private val permissionBridge = MiniAppPermissionBridge(view, active, permission)
     private val pendingInfo = mutableMapOf<String, Pair<String, CompletableDeferred<MiniAppInfo>>>()
     private val pendingClipboard = mutableMapOf<Triple<Boolean, String, String>, MiniAppClipboardRequest>()
     private var script: ScriptHandler? = null
@@ -166,7 +166,7 @@ internal class MiniAppWebBridge(
     }
 
     fun installCompatibility() {
-        audioPermission.install()
+        permissionBridge.install()
         if (!closed) view.evaluateJavascript(presentationCode, null)
         if (supported && !closed && MiniAppLocation.parse(view.url.orEmpty()) != null) {
             view.evaluateJavascript(compatibility, null)
@@ -213,7 +213,7 @@ internal class MiniAppWebBridge(
     }
 
     fun invalidate() {
-        audioPermission.invalidate()
+        permissionBridge.invalidate()
         pendingActions.values.forEach { it.result.cancel() }
         pendingActions.clear()
         pendingClipboard.values.toList().forEach { it.cancel("APP_UNLOADED") }
@@ -223,7 +223,7 @@ internal class MiniAppWebBridge(
     }
 
     fun close() {
-        audioPermission.close()
+        permissionBridge.close()
         closed = true
         invalidate()
         script?.remove()
