@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.kudo.android.data.GlassMode
 import com.kudo.android.ui.components.*
 
-internal enum class MiniAppPanel { MENU, ABOUT, CLIPBOARD, RATING, TIP, REPORT }
+internal enum class MiniAppPanel { MENU, ABOUT, CLIPBOARD, AUDIO, RATING, TIP, REPORT }
 
 internal class MiniAppUiState {
     val visibility = MutableTransitionState(false)
@@ -39,12 +39,16 @@ internal class MiniAppUiState {
     var error by mutableStateOf(false)
     var revision by mutableIntStateOf(0)
     var clipboard by mutableStateOf<MiniAppClipboardRequest?>(null)
+    var audio by mutableStateOf<MiniAppAudioRequest?>(null)
     val showing get() = visibility.currentState || visibility.targetState
     fun open(panel: MiniAppPanel) { this.panel = panel; visibility.targetState = true }
-    fun dismiss() { clipboard?.cancel(); clipboard = null; visibility.targetState = false }
+    fun dismiss() { clipboard?.cancel(); clipboard = null; audio?.cancel(); audio = null; visibility.targetState = false }
     fun reset() { dismiss(); info = null; error = false; loading = false }
     fun request(request: MiniAppClipboardRequest) {
         if (visibility.targetState) request.cancel() else { clipboard = request; open(MiniAppPanel.CLIPBOARD) }
+    }
+    fun request(request: MiniAppAudioRequest) {
+        if (visibility.targetState) request.cancel() else { audio = request; open(MiniAppPanel.AUDIO) }
     }
 }
 @Composable
@@ -104,6 +108,7 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
         MiniAppPanel.MENU -> "小程序更多"
         MiniAppPanel.ABOUT -> "关于应用"
         MiniAppPanel.CLIPBOARD -> "剪贴板权限"
+        MiniAppPanel.AUDIO -> "声音权限"
         MiniAppPanel.RATING -> "评分"
         MiniAppPanel.TIP -> "打赏开发者"
         MiniAppPanel.REPORT -> "举报应用"
@@ -154,6 +159,15 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                         enabled = preferencesReady, compact = true)
                     CommunityButton("允许且不再询问", { request?.let(rememberClipboard); state.dismiss() }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         enabled = preferencesReady && request?.appId != null, compact = true)
+                }
+            }
+            MiniAppPanel.AUDIO -> {
+                Text("允许播放声音？", style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CommunityButton("静音进入", { state.audio?.select(true) }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = state.audio?.choosing == false, compact = true)
+                    CommunityButton("开启声音", { state.audio?.select(false) }, Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        enabled = state.audio?.choosing == false, compact = true)
                 }
             }
             MiniAppPanel.RATING, MiniAppPanel.TIP, MiniAppPanel.REPORT -> actions?.let {

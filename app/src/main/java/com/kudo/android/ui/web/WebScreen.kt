@@ -143,6 +143,9 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     LaunchedEffect(miniUi.clipboard?.completed) {
         if (miniUi.clipboard?.completed == true) miniUi.dismiss()
     }
+    LaunchedEffect(miniUi.audio?.completed) {
+        if (miniUi.audio?.completed == true) miniUi.dismiss()
+    }
     DisposableEffect(lifecycle, page) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -208,7 +211,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                         page.bridge = MiniAppWebBridge(this, { currentAccountReady && currentAccountId == owner && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) },
                             { handleClipboard(it) },
                             sessionValid = { currentAccountReady && currentAccountId == owner },
-                            launch = { launchState = it }) { adapted ->
+                            launch = { launchState = it }, audio = { miniUi.request(it) }) { adapted ->
                             runtimePresentation = adapted
                             val generation = navigationGeneration
                             postVisualStateCallback(generation.toLong(), object : WebView.VisualStateCallback() {
