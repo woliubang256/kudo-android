@@ -44,6 +44,7 @@ import com.kudo.android.ui.feed.*
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.topic.*
 import com.kudo.android.ui.web.WebScreen
+import com.kudo.android.ui.web.MiniAppTasks
 import kotlinx.coroutines.launch
 
 @Composable
@@ -91,6 +92,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         val homeTabsRevision by app.homeTabs.revision.collectAsStateWithLifecycle()
         val configuredHomeTabs = remember(homeTabsRevision, account.user?.id) { app.homeTabs.load(account.user?.id) }
         val sessionStable = account.sessionReady && !account.checkingSession
+        SideEffect { if (sessionStable) MiniAppTasks.account(account.user?.id) }
         val homeUpdate = model("home-update") { HomeUpdateViewModel(GitHubUpdates()::latest) }
         val nav = rememberNavController()
         val topicTransitions = remember(nav, account.user?.id) { TopicTransitions(nav) }
@@ -125,6 +127,9 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             catch (_: Exception) { showMessage("没有可打开此链接的浏览器") }
         }
         fun login() { nav.navigate("login") { launchSingleTop = true } }
+        LaunchedEffect(MiniAppTasks.loginRequested) {
+            if (MiniAppTasks.loginRequested) { login(); MiniAppTasks.consumeLogin() }
+        }
         fun authenticated(action: () -> Unit) { if (account.user == null) login() else action() }
         fun topic(id: Int, number: Int? = null) { topicTransitions.openTopic(id, number) }
         fun user(username: String) { avatarTransitions.openUser(username) }
@@ -133,7 +138,11 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             if (slug.isNotBlank()) nav.navigate("tag/${Uri.encode(slug)}?id=${tag.id ?: 0}&name=${Uri.encode(tag.name)}") { launchSingleTop = true }
         }
         fun invalidLink() { showMessage("无法打开此链接") }
-        fun openWebPage(url: String) { nav.openWebPage(url, ::invalidLink) }
+        fun openMiniApp(url: String) {
+            if (sessionStable) MiniAppTasks.open(context, url, account.user?.id)
+            else showMessage("正在确认登录状态，请稍后重试")
+        }
+        fun openWebPage(url: String) { nav.openWebPage(url, ::invalidLink, miniApp = ::openMiniApp) }
         fun openLink(url: String) {
             if (app.downloads.isLikelyDownload(url)) {
                 app.downloads.enqueue(url)?.let { showMessage("已加入下载队列") }
@@ -144,7 +153,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             val target = LinuxDoLink.parseContent(fallback)
             if (target is LinuxDoDestination.Topic) topic(target.id, target.number)
             else if (target is LinuxDoDestination.User) user(target.username)
-            else nav.openContentLink(fallback, { selected = 0 }, ::invalidLink)
+            else nav.openContentLink(fallback, { selected = 0 }, ::invalidLink, ::openMiniApp)
         }
         fun editor(id: Int? = null, number: Int? = null, categoryId: Int? = null) { authenticated { nav.navigate("compose?topic=${id ?: 0}&reply=${number ?: 0}&category=${categoryId ?: 0}") } }
         ApkInstallHost {
@@ -162,7 +171,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }
         }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { account.checkSession() } }
-        IncomingLinuxDoLink(nav, incomingUrl, linkSequence, { selected = 0 }, consumeLink)
+        IncomingLinuxDoLink(nav, incomingUrl, linkSequence, { selected = 0 },
+            ready = sessionStable, miniApp = ::openMiniApp, consume = consumeLink)
         com.kudo.android.notifications.NotificationPermission(account.user?.id)
         IncomingNotification(nav, incomingNotification, account.sessionReady, account.user?.id, linkSequence,
             { selected = 3 }, account::readNotificationTarget, { app.notifications.consume(it); consumeNotification() })

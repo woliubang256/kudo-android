@@ -57,7 +57,8 @@ private class WebPageState(val saved: Bundle? = null) {
 internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> Unit,
     webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false },
     externalLinkMode: ExternalLinkMode = ExternalLinkMode.IN_APP, preferences: MiniAppPreferences? = null,
-    accountId: Int? = null, accountReady: Boolean = true, login: () -> Unit = {}) {
+    accountId: Int? = null, accountReady: Boolean = true, login: () -> Unit = {},
+    infoChanged: (MiniAppInfo) -> Unit = {}) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
     var title by rememberSaveable(url) { mutableStateOf("网页") }
@@ -138,6 +139,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             finally { miniUi.loading = false }
         }
     }
+    LaunchedEffect(miniUi.info) { miniUi.info?.let(infoChanged) }
     LaunchedEffect(miniUi.clipboard) {
         if (miniUi.clipboard != null) { delay(60000); miniUi.clipboard?.cancel("TIMEOUT"); miniUi.dismiss() }
     }

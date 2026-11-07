@@ -55,6 +55,19 @@ class DeepLinkUiTest {
 
     private fun open(url: String) { compose.runOnIdle { sequence++; incoming = url } }
 
+    @Test fun miniAppTaskHandoffPreservesSourceAndCompleteLaunchParameters() {
+        show()
+        val launched = mutableListOf<String>()
+        val url = "https://linux.do/apps/01a1a755-8210-7a3f-877b-6b09df8dce08?room=one&room=two#play"
+        compose.runOnIdle {
+            nav.openContentLink("/t/123", {})
+            nav.openContentLink(url, {}, miniApp = { launched += it })
+            nav.openWebPage(url, miniApp = { launched += it })
+        }
+        compose.onNodeWithText("帖子：123 楼层：0").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf(url, url), launched) }
+    }
+
     @Test fun initialAndRepeatedMiniAppDeepLinksRetainParametersAndCanReturnToTheirSource() {
         val url = "https://linux.do/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281?hb=fixture-packet&room=one&room=two&next=%2Ft%2F123#play"
         incoming = url
