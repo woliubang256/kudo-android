@@ -46,6 +46,7 @@ class MiniAppMusicFloatingUiTest {
     private var page by mutableStateOf(0)
     private var red by mutableStateOf(false)
     private var ink = Color.Unspecified
+    private var startPlaying = true
 
     @After fun clear() { compose.runOnUiThread { MiniAppTasks.floating.clear() } }
 
@@ -55,7 +56,7 @@ class MiniAppMusicFloatingUiTest {
             SideEffect { ink = color }
             MiniAppFloatingHost(101, true, pageKey = runtime) {
                 Box(Modifier.fillMaxSize()) {
-                    if (runtime) WebScreen(request.url, {}, {}, { FixtureView(it).also { web = it } },
+                    if (runtime) WebScreen(request.url, {}, {}, { FixtureView(it, startPlaying).also { web = it } },
                         accountId = 101, musicRequest = request)
                     else Text("论坛内容")
                 }
@@ -98,14 +99,74 @@ class MiniAppMusicFloatingUiTest {
             media.transportControls.skipToPrevious()
             compose.waitUntil { media.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) == "测试歌曲" }
             val entry = MiniAppFloatingEntry(request, -100, null, null)
+            val beforeClose = (web as FixtureView).pauses.get()
             compose.runOnIdle { MiniAppTasks.minimize(entry); MiniAppTasks.close(compose.activity, entry) }
-            compose.waitUntil { sessions().isEmpty() }
+            compose.waitUntil { sessions().isEmpty() && (web as FixtureView).pauses.get() > beforeClose }
             assertNull(MiniAppMusic.current)
             val pauses = (web as FixtureView).pauses.get()
             media.transportControls.play()
             compose.runOnIdle { assertNull(MiniAppMusic.current) }
             assertEquals(pauses, (web as FixtureView).pauses.get())
         } finally { instrumentation.uiAutomation.dropShellPermissionIdentity() }
+    }
+
+    @Test fun systemMediaMetadataIncludesBlobCoverAndRealSeekProgress() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        instrumentation.uiAutomation.adoptShellPermissionIdentity("android.permission.MEDIA_CONTENT_CONTROL")
+        try {
+            show()
+            val manager = context.getSystemService(MediaSessionManager::class.java)
+            compose.waitUntil { manager.getActiveSessions(null).any { it.packageName == context.packageName } }
+            val media = manager.getActiveSessions(null).single { it.packageName == context.packageName }
+            compose.waitUntil(6000) { media.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) != null }
+            assertEquals("测试专辑", media.metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM))
+            assertEquals(200000L, media.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION))
+            assertTrue(media.playbackState!!.position in 11500L..12500L)
+            val art = media.metadata!!.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            assertTrue(android.graphics.Color.red(art.getPixel(0, 0)) > 200)
+            assertTrue(media.playbackState!!.actions and PlaybackState.ACTION_SEEK_TO != 0L)
+            media.transportControls.seekTo(60000)
+            compose.waitUntil { media.playbackState?.position in 59500L..60500L }
+            media.transportControls.skipToNext()
+            compose.waitUntil { media.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) == "下一首测试歌曲" }
+            compose.waitUntil { media.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)?.let {
+                android.graphics.Color.blue(it.getPixel(0, 0)) > 200 && android.graphics.Color.red(it.getPixel(0, 0)) < 30
+            } == true }
+            // Changing tracks to a missing cover must clear the old track's art.
+            compose.runOnIdle { MiniAppMusic.current!!.command("next") }
+            compose.waitUntil { media.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) == "没有封面的歌曲" }
+            compose.waitUntil { media.metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) == null }
+        } finally { instrumentation.uiAutomation.dropShellPermissionIdentity() }
+    }
+
+    @Test fun loadingPausedPlayerDoesNotCreateSystemPlaybackCard() {
+        startPlaying = false
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        instrumentation.uiAutomation.adoptShellPermissionIdentity("android.permission.MEDIA_CONTENT_CONTROL")
+        try {
+            show()
+            val manager = context.getSystemService(MediaSessionManager::class.java)
+            assertTrue(manager.getActiveSessions(null).none { it.packageName == context.packageName })
+            compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+            compose.runOnIdle { MiniAppMusic.current!!.command("play") }
+            compose.waitUntil { manager.getActiveSessions(null).any { it.packageName == context.packageName } }
+            compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+        } finally { instrumentation.uiAutomation.dropShellPermissionIdentity() }
+    }
+
+    @Test fun malformedAndOversizedArtworkIsRejected() {
+        val decoder = com.kudo.android.media.MiniAppMusicArtwork
+        assertNull(decoder.decode("https://example.com/cover.jpg"))
+        assertNull(decoder.decode("data:image/jpeg;base64,%%%"))
+        assertNull(decoder.decode("data:image/jpeg;base64," + "A".repeat(100000)))
+        val bitmap = Bitmap.createBitmap(1024, 1, Bitmap.Config.ARGB_8888)
+        val bytes = java.io.ByteArrayOutputStream().use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream); stream.toByteArray()
+        }
+        bitmap.recycle()
+        assertNull(decoder.decode("data:image/jpeg;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)))
     }
 
     @Test fun musicHandleRequiresItsOwnMinimizedEntryAndRestoreKeepsPlaying() {
@@ -336,8 +397,15 @@ class MiniAppMusicFloatingUiTest {
         }
     }
 
-    private class FixtureView(context: Context) : WebView(context) {
+    private class FixtureView(context: Context, private val startPlaying: Boolean) : WebView(context) {
         val pauses = AtomicInteger()
+        private fun png(color: Int): String {
+            val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+            return java.io.ByteArrayOutputStream().use { output ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+                android.util.Base64.encodeToString(output.toByteArray(), android.util.Base64.NO_WRAP)
+            }.also { bitmap.recycle() }
+        }
         override fun setWebViewClient(client: WebViewClient) {
             super.setWebViewClient(object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
@@ -349,9 +417,21 @@ class MiniAppMusicFloatingUiTest {
                     val body = when {
                         path == "/mini-app-api/frame-host" -> """<iframe sandbox="allow-scripts" src="https://linux.do/mini-app-api/production/$MUSIC_APP_ID/runtime"></iframe>"""
                         path.endsWith("/runtime") -> """<div id="track-title">测试歌曲</div><div id="track-artist">测试歌手</div>
-                          <button id="toggle" class="is-playing" onclick="this.classList.toggle('is-playing');if(!this.classList.contains('is-playing'))new Image().src='https://linux.do/fixture/pause?n='+Date.now()">播放</button>
+                          <div id="track-album">测试专辑</div><img id="cover"><span id="elapsed">0:12</span><span id="duration">3:20</span>
+                          <input id="seek" type="range" min="0" max="1000" value="60" onchange="document.getElementById('elapsed').textContent='1:00'">
+                          <button id="toggle" class="${if (startPlaying) "is-playing" else ""}" onclick="this.classList.toggle('is-playing');if(!this.classList.contains('is-playing'))new Image().src='https://linux.do/fixture/pause?n='+Date.now()">播放</button>
                           <button id="previous" onclick="document.getElementById('track-title').textContent='测试歌曲'">上一首</button>
-                          <button id="next" onclick="document.getElementById('track-title').textContent='下一首测试歌曲'">下一首</button>"""
+                          <button id="next" onclick="window.fixtureNext()">下一首</button>
+                          <script>
+                            let count=0;
+                            function cover(encoded) { const img=document.getElementById('cover');
+                              if(img.src.startsWith('blob:'))URL.revokeObjectURL(img.src);
+                              if(!encoded){img.removeAttribute('src');return;}
+                              img.src=URL.createObjectURL(new Blob([Uint8Array.from(atob(encoded),x=>x.charCodeAt(0))],{type:'image/png'})); }
+                            cover('${png(android.graphics.Color.RED)}');
+                            window.fixtureNext=()=>{ count++;document.getElementById('track-title').textContent=count===1?'下一首测试歌曲':'没有封面的歌曲';
+                              cover(count===1?'${png(android.graphics.Color.BLUE)}':''); };
+                          </script>"""
                         else -> """<main><div class="mini-app-page"><div class="mini-app-loader"><iframe class="mini-app-frame-host" src="https://linux.do/mini-app-api/frame-host"></iframe></div></div></main>"""
                     }
                     val html = "<!doctype html><html><head><meta name='viewport' content='width=device-width'></head><body>$body</body></html>"
