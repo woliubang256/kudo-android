@@ -12,6 +12,8 @@
 | [Kyant Shapes 1.2.0](https://github.com/Kyant0/Shapes) | Apache-2.0 | 官方示例的 Capsule 胶囊形状 |
 | [OkHttp](https://github.com/square/okhttp) / [Okio](https://github.com/square/okio) | Apache-2.0 | HTTP 与 I/O |
 | [Coil](https://github.com/coil-kt/coil) | Apache-2.0 | 图片加载 |
+| [Sentry Java / Android Core 8.63.0](https://github.com/getsentry/sentry-java/tree/8.63.0) | MIT | 用户授权后采集必要崩溃与 ANR 信息；[随包许可](app/src/main/assets/licenses/sentry-LICENSE.txt) |
+| [Epitaph 0.2.0](https://github.com/abovevacant/epitaph/tree/v0.2.0) | MIT | Sentry Core 的传递依赖，未启用 tombstone 采集；许可见同一随包文件 |
 | [Jsoup](https://jsoup.org/) | [MIT](https://jsoup.org/license) | HTML 内容解析 |
 | [Font Awesome Free 6.7.2](https://github.com/FortAwesome/Font-Awesome/tree/6.7.2) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)（图标） | 与 Linux.do 官网一致的23种分类图标 |
 | [JUnit 4](https://junit.org/junit4/) | [EPL-1.0](https://www.eclipse.org/legal/epl-v10.html) | 测试，不进入正式应用运行代码 |

@@ -24,19 +24,34 @@ internal class ReportingPrivacy(private val diagnostics: ReportingEnvironment) {
                         isInApp = frame.isInApp
                     }
                 }) }
-                mechanism = Mechanism().apply { type = "generic"; isHandled = original.mechanism?.isHandled }
+                mechanism = Mechanism().apply {
+                    type = original.mechanism?.type?.takeIf { it in setOf("ANR", "UncaughtExceptionHandler", "generic") } ?: "generic"
+                    isHandled = original.mechanism?.isHandled
+                }
             }
         }
         if (exceptions.isEmpty()) return null // No free-form messages, logs or arbitrary payloads.
+        // Cached crashes may belong to the previous app version; retain only a validated release.
+        val safeRelease = source.release?.takeIf {
+            it.matches(Regex("${Regex.escape(diagnostics.packageName)}@[0-9A-Za-z.\\-]+\\+[0-9]+"))
+        } ?: diagnostics.release
+        val safeVersion = safeRelease.substringAfter('@').substringBeforeLast('+')
+        val safeBuild = safeRelease.substringAfterLast('+')
         return SentryEvent(source.timestamp).apply {
             eventId = source.eventId
             level = if (source.level == SentryLevel.FATAL) SentryLevel.FATAL else SentryLevel.ERROR
             platform = "java"
-            release = diagnostics.release
-            dist = diagnostics.build
+            release = safeRelease
+            dist = safeBuild
             exceptions.let { setExceptions(it) }
+            val buildImages = source.debugMeta?.images.orEmpty().mapNotNull { original ->
+                original.uuid?.takeIf { original.type == "proguard" && it.matches(Regex(
+                    "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) }
+                    ?.let { uuid -> DebugImage().apply { type = "proguard"; this.uuid = uuid } }
+            }.take(1)
+            if (buildImages.isNotEmpty()) debugMeta = DebugMeta().apply { images = buildImages }
             contexts.setApp(App().apply {
-                appIdentifier = diagnostics.packageName; appVersion = diagnostics.version; appBuild = diagnostics.build
+                appIdentifier = diagnostics.packageName; appVersion = safeVersion; appBuild = safeBuild
             })
             contexts.setOperatingSystem(OperatingSystem().apply {
                 name = "Android"; version = diagnostics.osVersion; build = diagnostics.osBuild

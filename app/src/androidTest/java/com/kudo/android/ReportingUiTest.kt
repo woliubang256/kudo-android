@@ -149,7 +149,7 @@ class ReportingUiTest {
     }
     private fun openSwitch() {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Sentry 错误上报"))
-        compose.onNodeWithTag("sentry-reporting-switch").performClick()
+        compose.onNodeWithTag("sentry-reporting-switch").assertContentDescriptionEquals("Sentry 错误上报").performClick()
         compose.onNodeWithTag("liquid-dialog").assertIsDisplayed()
     }
     private fun screenshot(name: String) {

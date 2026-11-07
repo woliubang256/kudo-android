@@ -507,7 +507,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
                         val limits by app.requestSettings.configuration.collectAsStateWithLifecycle()
                         SettingsScreen(display, app.settings::update, account.user, account::logout, { nav.popBackStack() }, ::openWebPage,
                             { nav.navigate("ignored-users") }, "${if (network.enabled) network.summary else "DoH 已关闭"} · ${limits.concurrent} 路并发",
-                            { nav.navigate("doh-settings") })
+                            { nav.navigate("doh-settings") }, reporting = reporting,
+                            restart = { com.kudo.android.reporting.AppRestart.request(context) })
                     }
                     composable("image-library") { com.kudo.android.ui.library.ImageLibraryScreen({ nav.popBackStack() }) { topic(it.topicId, it.postNumber) } }
                     composable("downloads") { DownloadsScreen(app.downloads) { nav.popBackStack() } }

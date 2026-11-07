@@ -19,7 +19,7 @@ class KudoApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         // The restart helper never creates collectors, network clients or a WebView container.
-        if (getProcessName().endsWith(":restart")) return
+        if (com.kudo.android.reporting.currentProcessName(this) != packageName) return
         reporting = com.kudo.android.reporting.ErrorReporting.controller(this)
         reporting.start()
         // WebSettings in AppContainer must initialize on the application's main thread.

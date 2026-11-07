@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -150,7 +152,7 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                             Text("Sentry 错误上报", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                             CommunitySwitch(reportingConsent?.value == com.kudo.android.reporting.ReportingConsent.ALLOWED,
                                 { requestedReporting = it; show("reporting") }, enabled = !showing,
-                                modifier = Modifier.testTag("sentry-reporting-switch"))
+                                modifier = Modifier.testTag("sentry-reporting-switch").semantics { contentDescription = "Sentry 错误上报" })
                         }
                     }
                 }

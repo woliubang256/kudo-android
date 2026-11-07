@@ -16,6 +16,8 @@ Status: implemented
 
 ## Existing note audit
 
+[用户授权错误上报](2026-11-08-opt-in-sentry-reporting.md)在设置增加应用级 Sentry 开关，关于页同步必要信息收集与网络来源 IP 说明，并在致谢及包内补充 Sentry / Epitaph 许可；原有关于入口和模态布局保留。
+
 检索关于、设置、未登录和模态。[访客账号布局](../../implemented/feature/2026-10-10-guest-account-layout.md)部分重叠，独立入口、版本和 slogan 保留；[设置模态](../../implemented/feature/2026-10-08-glass-settings-modals.md)继续提供焦点隔离、可滚动说明与退出确认。没有完全吸收或过时提案。
 
 ## Alternatives considered

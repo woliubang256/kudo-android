@@ -26,7 +26,8 @@ class AboutPageUiTest {
 
     @Test fun settingsKeepsShortSiteLinkTitleAndMovesAllAboutEntriesOut() {
         compose.setContent { KudoTheme(DisplaySettings()) { SettingsScreen(DisplaySettings(), {}, null, {}, {}, {}) } }
-        compose.onNodeWithText("站内链接").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("站内链接"))
+        compose.onNodeWithText("站内链接").assertIsDisplayed()
         compose.onNodeWithText("Linux.do 站内链接").assertDoesNotExist()
         for (label in listOf("关于酷DO", "开源致谢", "隐私说明", "社区指南")) compose.onNodeWithText(label).assertDoesNotExist()
         capture("settings-reorganized.png")

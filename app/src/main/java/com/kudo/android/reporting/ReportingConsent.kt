@@ -30,7 +30,7 @@ class ReportingController internal constructor(private val store: ReportingConse
     internal val promptOwner = mutablePromptOwner.asStateFlow()
     private var attempted = false
     private var started = false
-    var active: Boolean = false
+    @Volatile var active: Boolean = false
         private set
 
     @Synchronized
