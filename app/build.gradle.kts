@@ -28,6 +28,7 @@ if (sentryCiUpload) {
         autoUploadProguardMapping.set(true)
         autoInstallation.enabled.set(false)
         tracingInstrumentation.enabled.set(false)
+        runtimeOptimizations.enabled.set(false)
         includeSourceContext.set(false)
         autoUploadSourceContext.set(false)
         uploadNativeSymbols.set(false)
@@ -55,6 +56,8 @@ tasks.register("verifySentryBuild") {
             check(uploads == listOf("uploadSentryProguardMappingsRelease")) { "Only Release mappings may be uploaded: $uploads" }
             check(options.includeProguardMapping.get() && options.autoUploadProguardMapping.get())
             check(!options.autoInstallation.enabled.get() && !options.tracingInstrumentation.enabled.get())
+            check(!options.runtimeOptimizations.enabled.get()) { "CI mapping upload must not modify runtime SDK behavior." }
+            check(tasks.names.none { it.startsWith("generateSentryBuildTimeOptions") })
             check(!options.includeSourceContext.get() && !options.autoUploadSourceContext.get())
             check(!options.uploadNativeSymbols.get() && !options.autoUploadNativeSymbols.get())
             check(!options.includeNativeSources.get() && !options.includeDependenciesReport.get())

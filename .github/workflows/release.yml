@@ -158,10 +158,21 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
           VERSION_NAME: ${{ steps.version.outputs.version_name }}
           VERSION_CODE: ${{ steps.version.outputs.version_code }}
-        run: >-
-          bash ./gradlew :app:assembleRelease
-          "-PversionName=$VERSION_NAME" "-PversionCode=$VERSION_CODE"
-          --no-daemon --no-configuration-cache --no-build-cache --console=plain
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          for name in SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            value="${!name:-}"
+            if [[ -z "${value//[[:space:]]/}" ]]; then
+              echo "::error::$name is required for CI Sentry mapping upload."
+              exit 1
+            fi
+          done
+          bash ./gradlew :app:verifySentryBuild :app:assembleRelease \
+            "-PsentryCiUpload=true" \
+            "-PversionName=$VERSION_NAME" "-PversionCode=$VERSION_CODE" \
+            --no-daemon --no-configuration-cache --no-build-cache --console=plain
 
       - name: Verify signature and APK version, then create checksum
         if: github.ref_type == 'tag'

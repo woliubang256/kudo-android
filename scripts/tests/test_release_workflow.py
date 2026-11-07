@@ -137,6 +137,53 @@ cargo() { printf 'cargo %s\\n' "$*" >> calls.txt; }
         publish = self.workflow.split("  publish:\n", 1)[1]
         self.assertIn("    if: github.ref_type == 'tag'\n", publish)
 
+    def test_sentry_upload_only_receives_credentials_in_the_signed_tag_step(self):
+        signed = self.step("Build signed release")
+        self.assertIn("        if: github.ref_type == 'tag'\n", signed)
+        for entry in ("SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}",
+                      "SENTRY_ORG: ${{ vars.SENTRY_ORG }}", "SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}"):
+            self.assertIn(entry, signed)
+            self.assertEqual(1, self.workflow.count(entry))
+        self.assertIn('"-PsentryCiUpload=true"', signed)
+        self.assertNotIn("sentryCiUpload", self.step("Unit tests and Android Lint"))
+
+    def test_sentry_missing_configuration_stops_before_gradle_without_printing_token(self):
+        signed = self.step("Build signed release")
+        self.assertIn("        run: |\n", signed)
+        shell = "\n".join(line[10:] for line in signed.split("        run: |\n", 1)[1].splitlines())
+        bash = r"C:\Program Files\Git\bin\bash.exe" if os.name == "nt" else shutil.which("bash")
+        if not bash or not Path(bash).is_file():
+            self.skipTest("Bash is required for the workflow fixture")
+        configured = {"SENTRY_AUTH_TOKEN": "fixture-secret-never-print", "SENTRY_ORG": "fixture-org", "SENTRY_PROJECT": "fixture-project"}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "build.sh").write_text("set -euo pipefail\n" + shell + "\n", encoding="utf-8", newline="\n")
+            (root / "gradlew").write_text("printf '%s\\n' \"$@\" > gradle-calls.txt\n", encoding="ascii", newline="\n")
+            scenarios = [(None, None)] + [(key, value) for key in configured for value in (None, "", "   ")]
+            for missing, replacement in scenarios:
+                with self.subTest(missing=missing, replacement=replacement):
+                    calls = root / "gradle-calls.txt"
+                    calls.unlink(missing_ok=True)
+                    values = dict(configured)
+                    if missing:
+                        if replacement is None:
+                            values.pop(missing)
+                        else:
+                            values[missing] = replacement
+                    environment = {key: value for key, value in os.environ.items() if not key.startswith("SENTRY_")}
+                    environment.update(values, VERSION_NAME="0.3.7", VERSION_CODE="3008")
+                    result = subprocess.run([bash, "build.sh"], cwd=root, capture_output=True, text=True, env=environment)
+                    self.assertNotIn(configured["SENTRY_AUTH_TOKEN"], result.stdout + result.stderr)
+                    if missing:
+                        self.assertNotEqual(0, result.returncode)
+                        self.assertFalse(calls.exists(), "Missing configuration must not build or upload")
+                        self.assertIn(missing, result.stdout + result.stderr)
+                    else:
+                        self.assertEqual(0, result.returncode, result.stderr)
+                        arguments = calls.read_text(encoding="ascii").splitlines()
+                        for argument in (":app:verifySentryBuild", ":app:assembleRelease", "-PsentryCiUpload=true", "-PversionName=0.3.7", "-PversionCode=3008"):
+                            self.assertIn(argument, arguments)
+
 
 if __name__ == "__main__":
     unittest.main()
