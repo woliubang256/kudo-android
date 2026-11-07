@@ -40,7 +40,9 @@ internal fun MiniAppFloatingHost(owner: Int?, enabled: Boolean,
     val foreground = lifecycle.isAtLeast(Lifecycle.State.RESUMED)
     val glass = LocalDisplaySettings.current.glass
     val entries = if (enabled && foreground) MiniAppTasks.floating.filter { it.request.key.accountId == owner } else emptyList()
-    val music = MiniAppMusic.current?.takeIf { enabled && foreground && it.key.accountId == owner && !it.hidden && it.state.canControl }
+    val music = MiniAppMusic.current?.takeIf { session ->
+        !session.hidden && session.state.canControl && entries.any { it.request.key == session.key }
+    }
     val backdrop = rememberMiniAppFloatingBackdrop(entries.isNotEmpty() || music != null, glass)
     var panel by remember(owner) { mutableStateOf<MiniAppFloatingPanel?>(null) }
     var fraction by rememberSaveable(owner) { mutableFloatStateOf(.46f) }
