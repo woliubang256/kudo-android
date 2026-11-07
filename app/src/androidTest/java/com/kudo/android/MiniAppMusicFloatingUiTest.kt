@@ -2,6 +2,11 @@ package com.kudo.android
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.app.Notification
+import android.app.NotificationManager
+import android.media.MediaMetadata
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.webkit.*
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
@@ -63,6 +68,44 @@ class MiniAppMusicFloatingUiTest {
         val latch = CountDownLatch(1); var value = ""
         compose.runOnUiThread { web.evaluateJavascript(code) { value = it; latch.countDown() } }
         assertTrue(latch.await(5, TimeUnit.SECONDS)); return value
+    }
+
+    @Test fun systemMediaControlsFollowOriginalPlayerAndRetireOnClose() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        instrumentation.uiAutomation.adoptShellPermissionIdentity("android.permission.MEDIA_CONTENT_CONTROL")
+        try {
+            show()
+            compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+            val manager = context.getSystemService(MediaSessionManager::class.java)
+            fun sessions() = manager.getActiveSessions(null).filter { it.packageName == context.packageName }
+            compose.waitUntil(6000) { sessions().isNotEmpty() }
+            val media = sessions().single()
+            compose.waitUntil { media.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) == "测试歌曲" }
+            assertEquals("测试歌手", media.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST))
+            assertEquals(PlaybackState.STATE_PLAYING, media.playbackState?.state)
+            val notification = context.getSystemService(NotificationManager::class.java).activeNotifications
+                .single { it.notification.category == Notification.CATEGORY_TRANSPORT }.notification
+            assertEquals(media.sessionToken, notification.extras.getParcelable<android.media.session.MediaSession.Token>(Notification.EXTRA_MEDIA_SESSION))
+            media.transportControls.pause()
+            compose.waitUntil { MiniAppMusic.current?.state?.playing == false && media.playbackState?.state == PlaybackState.STATE_PAUSED }
+            assertTrue("System pause must reach the original webpage", (web as FixtureView).pauses.get() > 0)
+            assertEquals(1, sessions().size)
+            media.transportControls.play()
+            compose.waitUntil { MiniAppMusic.current?.state?.playing == true && media.playbackState?.state == PlaybackState.STATE_PLAYING }
+            media.transportControls.skipToNext()
+            compose.waitUntil { media.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) == "下一首测试歌曲" }
+            media.transportControls.skipToPrevious()
+            compose.waitUntil { media.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) == "测试歌曲" }
+            val entry = MiniAppFloatingEntry(request, -100, null, null)
+            compose.runOnIdle { MiniAppTasks.minimize(entry); MiniAppTasks.close(compose.activity, entry) }
+            compose.waitUntil { sessions().isEmpty() }
+            assertNull(MiniAppMusic.current)
+            val pauses = (web as FixtureView).pauses.get()
+            media.transportControls.play()
+            compose.runOnIdle { assertNull(MiniAppMusic.current) }
+            assertEquals(pauses, (web as FixtureView).pauses.get())
+        } finally { instrumentation.uiAutomation.dropShellPermissionIdentity() }
     }
 
     @Test fun musicHandleRequiresItsOwnMinimizedEntryAndRestoreKeepsPlaying() {

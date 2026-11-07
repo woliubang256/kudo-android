@@ -1,7 +1,6 @@
 package com.kudo.android.ui.web
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.webkit.WebView
 import androidx.compose.runtime.*
@@ -18,14 +17,12 @@ internal object MiniAppMusic {
         if (!controller.state.canControl) { if (current === controller) clear(controller); return }
         if (current !== controller) current?.command("pause")
         current = controller
-        if (controller.state.playing) runCatching {
-            controller.context.startForegroundService(Intent(controller.context, MiniAppMusicService::class.java))
-        } else controller.context.stopService(Intent(controller.context, MiniAppMusicService::class.java))
+        MiniAppMusicService.update(controller)
     }
     fun clear(controller: MiniAppMusicController) {
         if (current !== controller) return
         current = null
-        controller.context.stopService(Intent(controller.context, MiniAppMusicService::class.java))
+        MiniAppMusicService.clear(controller.context)
     }
     fun close(key: MiniAppTaskKey) { current?.takeIf { it.key == key }?.close() }
 }
