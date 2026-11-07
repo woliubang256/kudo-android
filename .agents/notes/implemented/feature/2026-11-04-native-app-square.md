@@ -28,7 +28,7 @@ MiniAppEntry 直接保留目录返回的 rating_average、rating_count、usage_c
 
 应用详情按所选 UUID 独立请求 `/mini-app-api/public/<app-id>/info`，共用[小程序公开信息解析](2026-11-04-mini-app-square.md)，不从目录拼装另一套关于数据。详情请求与目录请求分别取消和隔离，关闭、换应用、换查询或排序后，旧请求不能重开弹窗或覆盖新应用。缺失使用次数按用户要求省略，不补查目录或创建运行中的 WebView。
 
-列表与宫格的长按通过同一 combinedClickable 打开关于，普通点击继续进入应用。长按与打开筛选前清除搜索焦点并收起键盘，保留展开状态、查询和布局，避免输入法遮挡弹层。关于与筛选复用 EditorToolBackdropHost 和 EditorToolSheet，以不包含弹层的目录兄弟层为采样源，跟随当前三种材质。加载、失败重试和关闭保持可用；关于内容与小程序运行页共用 MiniAppAboutContent，但运行页外壳仍强制普通材质。
+列表与宫格的长按通过同一 combinedClickable 打开关于，普通点击继续进入应用。长按与打开筛选前清除搜索焦点并收起键盘，保留展开状态、查询和布局，避免输入法遮挡弹层。关于与筛选复用 EditorToolBackdropHost 和 EditorToolSheet，以不包含弹层的目录兄弟层为采样源，跟随当前三种材质。加载、失败重试和关闭保持可用；关于内容与小程序运行页共用 MiniAppAboutContent，运行页外壳由[独立窗口采样](2026-11-08-mini-app-menu-material.md)跟随全局设置，不能继承目录的采样图层。
 
 列表和宫格共用 LazyGridState，返回 H5 来源时保留查询与滚动位置。查询变更的 revision 仅应用一次并保存已应用值，不能在屏幕每次重新进入组合时无条件滚回顶部。官网精确 /apps 路径的原生入口、正文链接和外部导航均指向原生 apps 路由，具体 /apps/<UUID> 保留完整网页 URL；WebView 内的跳转仍遵守网页连续浏览规则。
 

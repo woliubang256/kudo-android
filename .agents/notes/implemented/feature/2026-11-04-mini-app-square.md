@@ -16,7 +16,7 @@ Status: implemented
 
 运行时进度使用[小程序原生启动进度](2026-11-04-mini-app-native-launch-progress.md)的受限快照通道；官网继续负责下载、解包、沙箱和权限，原生仅接管启动视觉。
 
-更多宫格的评分、积分打赏与举报由[小程序社区操作](2026-11-06-mini-app-community-actions.md)扩展，使用官网会话下的固定操作集与当前运行版本，成功评分同步关于统计；普通材质、来源限制和既有权限边界继续保持。
+更多宫格的评分、积分打赏与举报由[小程序社区操作](2026-11-06-mini-app-community-actions.md)扩展，使用官网会话下的固定操作集与当前运行版本，成功评分同步关于统计；菜单及子面板的普通材质限制由[跟随全局材质](2026-11-08-mini-app-menu-material.md)部分接管，来源限制和既有权限边界继续保持。
 
 胶囊可见高度为 32dp，更多与关闭各保留 48dp 触控区，按压反馈限制在 32dp 可见表面内。图标缩到 20dp，更多保留用户提供的 SVG 路径，中间点直径为两侧的 1.5 倍，不把三点改为等大；关闭保留用户提供的圆环加实心点。深色采用半透明深底与浅色图标，浅色采用半透明白底与深色图标，使用半 dp 细边和 16dp 分隔线。不采样 WebView，不接入模糊或折射。MiniAppWebUiTest 同时验证胶囊视觉高度与两枚按钮的触控尺寸，微调后的 7 项运行页回归通过，记录在 `artifacts/native-apps-refined-device.txt`；实机胶囊见 `artifacts/mini-app-capsule-dark.png`。
 
@@ -26,7 +26,7 @@ Status: implemented
 
 公开信息由 data 层的 MiniAppDetails 统一解析，WebView 桥保留 MiniAppInfo 类型别名以共用身份、图标、作者及评分规则。官网详情实际返回 rating_average、rating_count；评分接受 0～5 的有限数值，人数接受非负整数，缺失或类型错误保留为空。详情不返回 usage_count、recent_usage_count，因此关于省略使用次数，不另查目录补齐，也不把缺失值当作零。
 
-MiniAppAboutContent 在目录与运行页共用图标、名字、简介、版本、发布人及只读五颗星。分数通过逐颗裁切保留小数，不四舍五入为整数星；整组提供准确数值的无障碍描述。人数独立展示，零人显示暂无评分，缺失人数或评分各自省略。运行页的 CommunitySheet 继续显式 backdrop=null、TRANSLUCENT，复用内容不能带入目录采样源。
+MiniAppAboutContent 在目录与运行页共用图标、名字、简介、版本、发布人及只读五颗星。分数通过逐颗裁切保留小数，不四舍五入为整数星；整组提供准确数值的无障碍描述。人数独立展示，零人显示暂无评分，缺失人数或评分各自省略。运行页关于使用[独立窗口采样](2026-11-08-mini-app-menu-material.md)跟随全局材质，复用内容不能带入目录的 Compose 采样源。
 
 发布人只展示头像和名字，不额外展示用户名。名字沿用 name、缺失时回退 username；公开 author 的 id、username、name 与安全头像地址组成 Member，复用 Avatar 的 PLAIN 展示，不请求额外用户资料或补齐头像挂件。Neo 按用户名识别，使用边长 10% 的圆角正方形，其他用户仍圆形，沿用[统一头像规则](2026-10-08-avatar-presentation.md)，不能用显示名字判断身份。头像读取公开 author 的 avatar_template 或 avatar_url，模板替换尺寸后按官网地址解析，只接受无账号口令的 HTTPS 图片；加载失败沿用统一头像占位。
 
@@ -36,7 +36,7 @@ MiniAppAboutContent 在目录与运行页共用图标、名字、简介、版本
 
 ## Existing note audit
 
-[应用内网页](../../implemented/feature/2026-10-10-in-app-web-links.md)部分重叠：复用官网会话、连续历史和受限网页容器，仅对小程序增加工具栏与能力；[网页普通材质](../../implemented/bug-fix/2026-10-29-webview-ordinary-material.md)保留，胶囊和弹窗均不采样 WebView。外部链接打开方式保持既有策略。未发现同主题 proposed 或 rejected 笔记。
+[应用内网页](../../implemented/feature/2026-10-10-in-app-web-links.md)部分重叠：复用官网会话、连续历史和受限网页容器，仅对小程序增加工具栏与能力；[网页普通材质](../../implemented/bug-fix/2026-10-29-webview-ordinary-material.md)保留，胶囊不接入高级材质，原生菜单的独立窗口采样见[更多面板材质](2026-11-08-mini-app-menu-material.md)。外部链接打开方式保持既有策略。未发现同主题 proposed 或 rejected 笔记。
 
 ## Alternatives considered
 
@@ -65,6 +65,6 @@ MiniAppAboutContent 在目录与运行页共用图标、名字、简介、版本
 
 ## Consequences
 
-官网接口或 DOM 结构可能变化；提供明确错误而不从地址猜字段。SDK 存储按应用及正式/沙箱隔离，不自动按账号切换，不宣称分用户。原生剪贴板回退导致的二次确认现由[单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)接管，其失败回退边界见该篇。固定胶囊会占用部分屏幕，但全屏后仍保留退出入口。网页及弹层统一普通材质，不重新引入采样 WebView 的闪退风险；其他原生页面仍遵循全局设置。
+官网接口或 DOM 结构可能变化；提供明确错误而不从地址猜字段。SDK 存储按应用及正式/沙箱隔离，不自动按账号切换，不宣称分用户。原生剪贴板回退导致的二次确认现由[单次原生确认](2026-11-05-mini-app-native-clipboard-consent.md)接管，其失败回退边界见该篇。固定胶囊会占用部分屏幕，但全屏后仍保留退出入口。网页与胶囊使用普通材质，原生更多及其子面板通过独立窗口跟随全局设置，WebView 不进入这些面板的 Compose 采样图层。
 
 测试机和当前 WebView 的通过不能代替其他系统版本的兼容验收。沙箱开发路由不在正式应用胶囊与公开关于接口的识别范围内，继续按普通网页浏览；缺少 DOCUMENT_START_SCRIPT 时只能在顶层页面补装，嵌入 frame-host 的兼容能力仍取决于内核。真实登录后的剪贴板、账号资料和业务网络授权仍需账号验收，不以匿名官网加载或离线夹具的成功替代。

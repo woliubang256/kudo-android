@@ -46,6 +46,7 @@ internal fun CommunitySheet(
     containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surface,
     backdrop: Backdrop? = LocalSheetBackdrop.current,
     glass: GlassMode = LocalDisplaySettings.current.glass,
+    surfaceAlpha: Float? = null,
     contentPadding: PaddingValues = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
     actions: @Composable RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -116,7 +117,7 @@ internal fun CommunitySheet(
                     if (canBlur) blur((if (light) 18.dp else 10.dp).toPx())
                     if (canRefract) lens(20.dp.toPx(), 40.dp.toPx(), depthEffect = true)
                 }, onDrawSurface = {
-                    drawRect(containerColor.copy(alpha = if (canBlur) if (light) .68f else .52f else .94f))
+                    drawRect(containerColor.copy(alpha = if (canBlur) surfaceAlpha ?: if (light) .68f else .52f else .94f))
                 }) else Modifier.background(containerColor))
                 .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = if (backdrop != null) .16f else .08f), panelShape)
                 .nestedScroll(nestedScroll).focusRequester(focus)

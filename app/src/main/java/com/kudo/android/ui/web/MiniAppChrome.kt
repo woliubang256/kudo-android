@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.kudo.android.data.GlassMode
 import com.kudo.android.ui.components.*
 
 internal enum class MiniAppPanel { MENU, ABOUT, CLIPBOARD, AUDIO, VIDEO, FULLSCREEN, RATING, TIP, REPORT }
@@ -115,7 +114,7 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
     copyLink: () -> Unit, browser: () -> Unit, titleBarEnabled: Boolean = true, toggleTitleBar: () -> Unit = {},
     preferencesReady: Boolean = true, rememberClipboard: (MiniAppClipboardRequest) -> Unit = {},
     actions: MiniAppActionsController? = null, login: () -> Unit = {}, minimize: (() -> Unit)? = null,
-    pinShortcut: (() -> Unit)? = null) {
+    pinShortcut: (() -> Unit)? = null) = MiniAppPanelWindow(state, dismissEnabled = actions?.busy != true) { backdrop, glass ->
     val context = LocalContext.current
     CommunitySheet(state.visibility, when (state.panel) {
         MiniAppPanel.MENU -> "小程序更多"
@@ -127,7 +126,8 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
         MiniAppPanel.RATING -> "评分"
         MiniAppPanel.TIP -> "打赏开发者"
         MiniAppPanel.REPORT -> "举报应用"
-    }, state::dismiss, backdrop = null, glass = GlassMode.TRANSLUCENT,
+    }, state::dismiss, backdrop = backdrop, glass = glass,
+        surfaceAlpha = if (MaterialTheme.colorScheme.surface.luminance() < .5f) .74f else null,
         dismissEnabled = actions?.busy != true,
         showTitle = state.panel in setOf(MiniAppPanel.RATING, MiniAppPanel.TIP, MiniAppPanel.REPORT),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 16.dp)) {

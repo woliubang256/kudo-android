@@ -10,7 +10,7 @@ Status: implemented
 
 在既有官网来源限定的 WebView 桥上增加原生发起、请求编号匹配的固定操作集。通过当前页面会话访问 production info、rating、tip、report 与站点举报配置；CSRF 只保留在官网脚本内，不传给原生。游戏 iframe 不能选择接口或触发原生写操作。
 
-原生宫格补齐三项，弹窗沿用小程序普通材质，不采样 WebView。五星点选可修改，成功后同步原生关于统计；打赏读取服务端金额、余额及 next_tip_at，选定后显式确认，同一笔失败重试沿用 request_id；举报只使用 enabled 且 applies_to 包含 DiscourseMiniApp::App 的原因，排除 notify_user，必要说明遵循站点字数配置。举报的 release_id 来自当前宿主实际 launch 响应，缺失时拒绝提交，不能拿最新 info 的版本代替已运行版本。
+原生宫格补齐三项，弹窗材质由[更多面板材质](2026-11-08-mini-app-menu-material.md)接管，通过独立窗口跟随全局设置，WebView 不进入 Compose 采样图层。五星点选可修改，成功后同步原生关于统计；打赏读取服务端金额、余额及 next_tip_at，选定后显式确认，同一笔失败重试沿用 request_id；举报只使用 enabled 且 applies_to 包含 DiscourseMiniApp::App 的原因，排除 notify_user，必要说明遵循站点字数配置。举报的 release_id 来自当前宿主实际 launch 响应，缺失时拒绝提交，不能拿最新 info 的版本代替已运行版本。
 
 请求绑定完整页面地址、应用 ID 和当前账号上下文。切页、退出、账号变化使旧读取与回调失效；提交中阻止重复点击，网络结果未确认时保留打赏幂等编号，举报则阻止重复提交并提示网站核对。已经扣款导致的余额下降或冷却不阻止用原编号核对；结果未确认前不能改金额发起另一笔。成功及错误消息保留，其他内容不加操作说明小字。
 

@@ -10,8 +10,11 @@ import android.webkit.*
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -51,10 +54,13 @@ class MiniAppWebUiTest {
     private var accountId by mutableStateOf<Int?>(101)
     private var accountReady by mutableStateOf(true)
     private var display by mutableStateOf(DisplaySettings(theme = ThemeMode.DARK, fontScale = 1.3f))
+    private var panelInk = android.graphics.Color.WHITE
     @After fun cleanupPreferences() { base.deleteSharedPreferences(preferenceName) }
 
     private fun show(start: String = "https://linux.do/apps/$first?room=one#play", external: (String) -> Unit = {}) {
         compose.setContent { KudoTheme(display) {
+            val color = MaterialTheme.colorScheme.onSurface
+            SideEffect { panelInk = color.toArgb() }
             if (visible) key(accountId) { WebScreen(start, { visible = false }, external, { FixtureView(it).also { view -> web = view } },
                 preferences = preferences, accountId = accountId, accountReady = accountReady) }
             else Text("原生来源")
@@ -184,6 +190,62 @@ class MiniAppWebUiTest {
             assertEquals("\"keep playing\"", js("window.gameMarker"))
             capture("mini-app-title-bar-${theme.name}-${glass.name}.png")
         }
+    }
+
+    @Test fun moreMenuAndAboutFollowMaterialsWithoutReloadingTheGame() {
+        show()
+        val original = web
+        val finishes = pageFinishes.get()
+        js("window.materialMarker='same game';document.body.innerHTML='<div id=material-background style=\"position:fixed;inset:0;background:#205adf\"></div>'")
+        fun blue(): Int {
+            val color = panelPixel()
+            return android.graphics.Color.blue(color) - android.graphics.Color.red(color)
+        }
+        fun material(glass: GlassMode) {
+            if (glass != GlassMode.TRANSLUCENT) compose.waitUntil(6000) { blue() > 25 }
+            else assertTrue("Ordinary material must use its neutral surface", kotlin.math.abs(blue()) < 20)
+        }
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
+            compose.runOnIdle { display = display.copy(theme = theme, glass = glass) }
+            compose.onNodeWithContentDescription("小程序更多").performClick()
+            compose.onNodeWithTag("mini-app-menu-grid").assertIsDisplayed()
+            material(glass)
+            capture("mini-app-menu-material-${theme.name.lowercase()}-${glass.name.lowercase()}.png")
+            compose.onNodeWithText("关于", substring = false).performClick()
+            compose.waitUntil { compose.onAllNodesWithTag("mini-app-about").fetchSemanticsNodes().isNotEmpty() }
+            material(glass)
+            capture("mini-app-about-material-${theme.name.lowercase()}-${glass.name.lowercase()}.png")
+            compose.onNodeWithText("关闭", substring = false).performClick()
+            compose.waitUntil { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isEmpty() }
+            compose.runOnIdle { assertSame(original, web); assertEquals(finishes, pageFinishes.get()) }
+            assertEquals("\"same game\"", js("window.materialMarker"))
+        }
+    }
+
+    @Test fun menuSamplingTracksThePageWithoutCapturingItselfAndStaysReadable() {
+        display = display.copy(theme = ThemeMode.DARK, glass = GlassMode.LIQUID)
+        show()
+        js("document.body.innerHTML='<div id=material-background style=\"position:fixed;inset:0;background:#205adf\"></div>'")
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.waitUntil(6000) { panelPixel().let { android.graphics.Color.blue(it) - android.graphics.Color.red(it) > 25 } }
+        js("document.getElementById('material-background').style.background='#de2626'")
+        compose.waitUntil(6000) { panelPixel().let { android.graphics.Color.red(it) - android.graphics.Color.blue(it) > 25 } }
+        val start = android.os.SystemClock.uptimeMillis()
+        compose.waitUntil(3000) { android.os.SystemClock.uptimeMillis() - start > 1000 }
+        val stable = panelPixel()
+        assertTrue("Repeated copies must not accumulate the sheet and its scrim", android.graphics.Color.red(stable) - android.graphics.Color.blue(stable) > 25)
+        js("document.getElementById('material-background').style.background='#ffffff'")
+        compose.waitUntil(6000) { panelPixel().let { kotlin.math.abs(android.graphics.Color.red(it) - android.graphics.Color.blue(it)) < 8 && android.graphics.Color.red(it) > 50 } }
+        capture("mini-app-menu-material-dark-white.png")
+        val contrast = androidx.core.graphics.ColorUtils.calculateContrast(panelInk, panelPixel())
+        assertTrue("Menu text must remain readable over a white webpage: $contrast", contrast >= 4.5)
+    }
+
+    private fun panelPixel(): Int {
+        val sheet = compose.onNodeWithTag("liquid-action-sheet", useUnmergedTree = true).fetchSemanticsNode()
+        val point = sheet.layoutInfo.coordinates.positionOnScreen() + Offset(sheet.boundsInRoot.width * .25f, 20f)
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        return try { bitmap.getPixel(point.x.toInt(), point.y.toInt()) } finally { bitmap.recycle() }
     }
 
     @Test fun hiddenTitleBarSurvivesClosingAndReopeningTheMiniApp() {

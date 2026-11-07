@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.webkit.*
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -14,6 +13,8 @@ import androidx.lifecycle.Lifecycle
 import com.kudo.android.data.*
 import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.web.WebScreen
+import com.kudo.android.ui.web.FloatingMaterialKey
+import com.kudo.android.ui.web.FloatingSampleKey
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -63,10 +64,10 @@ class MiniAppActionsUiTest {
         compose.waitUntil { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isEmpty() }
     }
     private fun capture(name: String) {
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
-        File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), name).outputStream().use {
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        try { File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), name).outputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-        }
+        } } finally { bitmap.recycle() }
     }
 
     @Test fun ratingCanBeChangedAndUpdatesAboutWithoutReloadingTheGame() {
@@ -112,7 +113,7 @@ class MiniAppActionsUiTest {
         compose.onNodeWithText("已禁用原因").assertDoesNotExist()
         compose.onNodeWithText("联系作者").assertDoesNotExist()
         compose.onNodeWithText("其他内容").performClick()
-        compose.onNodeWithTag("mini-app-report-message").performTextInput("太短")
+        compose.onNodeWithTag("mini-app-report-message").performClick().performTextInput("太短")
         compose.onNodeWithText("提交举报").assertIsNotEnabled()
         compose.onNodeWithTag("mini-app-report-message").performTextReplacement("这是完整的举报说明")
         compose.onNodeWithText("提交举报").performScrollTo().performClick()
@@ -133,15 +134,21 @@ class MiniAppActionsUiTest {
         assertEquals("0", js("writes.length"))
     }
 
-    @Test fun actionsRemainOrdinaryAndReadableAcrossThemesAndMaterials() {
+    @Test fun actionsFollowMaterialsAndRemainReadableAcrossThemes() {
         show()
         for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
             compose.runOnIdle { display = display.copy(theme = theme, glass = glass) }
-            open("评分", "4.25 / 5 · 8 人评分")
-            (1..5).forEach { compose.onNodeWithContentDescription("评为 $it 分，满分 5 分").assertIsDisplayed() }
-            compose.onNodeWithTag("material-page-content").assertDoesNotExist()
-            if (glass == GlassMode.LIQUID) capture("mini-app-rating-${theme.name.lowercase()}.png")
-            closePanel()
+            for ((label, ready) in listOf("评分" to "4.25 / 5 · 8 人评分", "打赏" to "余额：10 积分", "举报" to "其他内容")) {
+                open(label, ready)
+                val panel = compose.onNodeWithTag("mini-app-material-panel", useUnmergedTree = true)
+                panel.assert(SemanticsMatcher.expectValue(FloatingMaterialKey, glass))
+                if (glass != GlassMode.TRANSLUCENT) compose.waitUntil(6000) { panel.fetchSemanticsNode().config[FloatingSampleKey] }
+                else panel.assert(SemanticsMatcher.expectValue(FloatingSampleKey, false))
+                if (label == "评分") (1..5).forEach { compose.onNodeWithContentDescription("评为 $it 分，满分 5 分").assertIsDisplayed() }
+                compose.onNodeWithTag("material-page-content").assertDoesNotExist()
+                if (glass == GlassMode.LIQUID) capture("mini-app-${label}-${theme.name.lowercase()}-material.png")
+                closePanel()
+            }
         }
         compose.onNodeWithContentDescription("小程序更多").performClick()
         listOf("评分", "打赏", "举报").forEach { compose.onNodeWithText(it, substring = false).assertIsDisplayed() }
@@ -163,6 +170,39 @@ class MiniAppActionsUiTest {
         closePanel()
         open("举报", "上次举报结果尚未确认，请到网站核对后再操作")
         assertEquals("1", js("writes.length"))
+    }
+
+    @Test fun busyPanelRejectsSystemBackScrimAndDragUntilTheWebsiteFinishes() {
+        show()
+        open("评分", "4.25 / 5 · 8 人评分")
+        js("window.holdRating=true")
+        compose.onNodeWithContentDescription("评为 5 分，满分 5 分").performClick()
+        compose.waitUntil { js("typeof window.finishRating==='function'") == "true" }
+        InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+        compose.onNodeWithTag("modal-scrim").performClick()
+        compose.onNodeWithTag("sheet-drag-handle").performTouchInput { swipeDown() }
+        compose.onNodeWithTag("mini-app-material-panel").assertIsDisplayed()
+        assertEquals("1", js("writes.length"))
+        js("window.finishRating();window.finishRating=undefined")
+        compose.waitUntil { compose.onAllNodesWithText("评分已更新").fetchSemanticsNodes().isNotEmpty() }
+        InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+        compose.waitUntil { compose.onAllNodesWithTag("liquid-action-sheet").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test fun reportInputRetainsFocusAndTextWhenMaterialChanges() {
+        show()
+        open("举报", "其他内容")
+        compose.onNodeWithText("其他内容").performClick()
+        val input = compose.onNodeWithTag("mini-app-report-message")
+        input.performClick().performTextInput("切换材质后保留的举报内容")
+        for (glass in GlassMode.entries) {
+            compose.runOnIdle { display = display.copy(glass = glass) }
+            input.assertIsFocused().assertTextContains("切换材质后保留的举报内容")
+            compose.onNodeWithTag("mini-app-material-panel", useUnmergedTree = true)
+                .assert(SemanticsMatcher.expectValue(FloatingMaterialKey, glass))
+        }
+        capture("mini-app-report-material-keyboard.png")
+        assertEquals("0", js("writes.length"))
     }
 
     @Test fun alreadyStartedRatingFinishesWhileBackgroundedAndDoesNotLeaveTheMenuBusy() {
