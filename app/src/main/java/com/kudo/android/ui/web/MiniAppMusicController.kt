@@ -27,6 +27,7 @@ internal object MiniAppMusic {
         current = null
         controller.context.stopService(Intent(controller.context, MiniAppMusicService::class.java))
     }
+    fun close(key: MiniAppTaskKey) { current?.takeIf { it.key == key }?.close() }
 }
 
 /** Only the official main frame gets a native listener. The opaque app has a DOM-only adapter. */
@@ -96,7 +97,12 @@ internal class MiniAppMusicController(private val view: WebView, val request: Mi
 
     fun close() {
         if (closed) return
-        closed = true; invalidate()
+        closed = true
+        // Teardown overrides a pending UI command. Pause the original player before
+        // removing its bridge, and reject all delayed state reports from this point.
+        if (supported && valid() && state.canControl && MiniAppLocation.parse(view.url.orEmpty())?.id == key.appId)
+            runCatching { view.evaluateJavascript("window.__kudoMiniMusicCommand?.('pause')", null) }
+        invalidate()
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) script?.remove()
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) WebViewCompat.removeWebMessageListener(view, "KudoMiniAppMusic")
     }

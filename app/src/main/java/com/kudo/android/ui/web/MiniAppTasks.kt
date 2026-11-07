@@ -76,6 +76,7 @@ internal object MiniAppTasks {
     }
 
     fun close(context: Context, entry: MiniAppFloatingEntry) {
+        MiniAppMusic.close(entry.request.key)
         resumed(entry.request.key)
         val activity = activities[entry.request.key]?.get()
         if (activity != null) activity.closeMiniApp()

@@ -126,7 +126,10 @@ class MiniAppActivity : ComponentActivity() {
         if (next.key == request?.key && next.url != request?.url) request = next
     }
 
-    internal fun closeMiniApp() { finishAndRemoveTask() }
+    internal fun closeMiniApp() {
+        request?.key?.let(MiniAppMusic::close)
+        finishAndRemoveTask()
+    }
 
     private fun pinShortcut() {
         val current = request ?: return

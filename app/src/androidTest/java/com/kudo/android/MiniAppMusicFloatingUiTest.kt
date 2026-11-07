@@ -29,6 +29,7 @@ import org.junit.Test
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class MiniAppMusicFloatingUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -64,10 +65,52 @@ class MiniAppMusicFloatingUiTest {
         assertTrue(latch.await(5, TimeUnit.SECONDS)); return value
     }
 
+    @Test fun musicHandleRequiresItsOwnMinimizedEntryAndRestoreKeepsPlaying() {
+        show()
+        compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+        val other = MiniAppTaskRequest.parse("https://linux.do/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281",101)!!
+        val otherAccount = MiniAppTaskRequest.parse(request.url,202)!!
+        compose.runOnIdle {
+            MiniAppTasks.minimize(MiniAppFloatingEntry(other, -101, null, null))
+            MiniAppTasks.minimize(MiniAppFloatingEntry(otherAccount, -102, null, null))
+        }
+        compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+        compose.runOnIdle { MiniAppTasks.minimize(MiniAppFloatingEntry(request, -100, null, null)) }
+        compose.onNodeWithTag("mini-app-music-handle").assertIsDisplayed()
+        compose.onNodeWithTag("mini-app-music-handle").performClick()
+        compose.runOnIdle { MiniAppTasks.resumed(request.key) }
+        compose.onNodeWithTag("mini-app-music-control").assertDoesNotExist()
+        compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+        compose.onNodeWithTag("mini-app-floating-handle").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(MiniAppMusic.current!!.state.playing); assertEquals(0, (web as FixtureView).pauses.get()) }
+    }
+
+    @Test fun closingMusicMiniAppStopsOriginalPlayerWhileOtherAppClosureDoesNot() {
+        show()
+        val other = MiniAppTaskRequest.parse("https://linux.do/apps/01a1966a-f4a0-7b43-ad9c-c46b7f0e0281",101)!!
+        val game = MiniAppFloatingEntry(other, -101, null, null)
+        compose.runOnIdle {
+            MiniAppTasks.minimize(MiniAppFloatingEntry(request, -100, null, null))
+            MiniAppTasks.minimize(game)
+            MiniAppTasks.close(compose.activity, game)
+            assertTrue(MiniAppMusic.current!!.state.playing)
+            assertEquals(0, (web as FixtureView).pauses.get())
+        }
+        compose.onNodeWithTag("mini-app-floating-handle").performClick()
+        compose.runOnIdle { MiniAppMusic.current!!.command("next") }
+        compose.onNodeWithContentDescription("关闭浮窗", useUnmergedTree = true).performClick()
+        compose.waitUntil(5000) { (web as FixtureView).pauses.get() > 0 }
+        compose.runOnIdle { assertNull(MiniAppMusic.current); assertTrue(MiniAppTasks.floating.isEmpty()) }
+        compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+        compose.onNodeWithTag("mini-app-floating-handle").assertDoesNotExist()
+    }
+
     @Test fun opaqueRuntimeReportsAndUsesOriginalButtonsWhileRejectingForgedSources() {
         show()
         val original = web
         compose.runOnIdle { assertTrue(MiniAppMusic.current!!.state.playing) }
+        compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
+        compose.runOnIdle { MiniAppTasks.minimize(MiniAppFloatingEntry(request, -100, null, null)) }
         js("window.postMessage({type:'kudo-mini-music-v1',action:'state',title:'forged',playing:false,canControl:true},'*')")
         js("true")
         compose.runOnIdle { assertEquals("测试歌曲", MiniAppMusic.current!!.state.title) }
@@ -111,6 +154,7 @@ class MiniAppMusicFloatingUiTest {
         compose.onNodeWithTag("mini-app-music-handle").assertDoesNotExist()
         compose.onNodeWithTag("mini-app-floating-handle").assertIsDisplayed()
         compose.runOnIdle { assertFalse(MiniAppMusic.current!!.state.playing); assertEquals(1, MiniAppTasks.floating.size) }
+        assertTrue("Closing the music bar must pause the original player", (web as FixtureView).pauses.get() > 0)
         compose.runOnIdle { runtime = false }
         compose.waitUntil { MiniAppMusic.current == null }
     }
@@ -250,14 +294,19 @@ class MiniAppMusicFloatingUiTest {
     }
 
     private class FixtureView(context: Context) : WebView(context) {
+        val pauses = AtomicInteger()
         override fun setWebViewClient(client: WebViewClient) {
             super.setWebViewClient(object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                     val path = request.url.path.orEmpty()
+                    if (path == "/fixture/pause") {
+                        pauses.incrementAndGet()
+                        return WebResourceResponse("image/svg+xml", "UTF-8", "<svg xmlns='http://www.w3.org/2000/svg'/>".byteInputStream())
+                    }
                     val body = when {
                         path == "/mini-app-api/frame-host" -> """<iframe sandbox="allow-scripts" src="https://linux.do/mini-app-api/production/$MUSIC_APP_ID/runtime"></iframe>"""
                         path.endsWith("/runtime") -> """<div id="track-title">测试歌曲</div><div id="track-artist">测试歌手</div>
-                          <button id="toggle" class="is-playing" onclick="this.classList.toggle('is-playing')">播放</button>
+                          <button id="toggle" class="is-playing" onclick="this.classList.toggle('is-playing');if(!this.classList.contains('is-playing'))new Image().src='https://linux.do/fixture/pause?n='+Date.now()">播放</button>
                           <button id="previous" onclick="document.getElementById('track-title').textContent='测试歌曲'">上一首</button>
                           <button id="next" onclick="document.getElementById('track-title').textContent='下一首测试歌曲'">下一首</button>"""
                         else -> """<main><div class="mini-app-page"><div class="mini-app-loader"><iframe class="mini-app-frame-host" src="https://linux.do/mini-app-api/frame-host"></iframe></div></div></main>"""
