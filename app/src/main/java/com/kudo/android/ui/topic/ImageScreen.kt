@@ -142,7 +142,7 @@ internal fun ImageScreen(gallery: ImageGalleryState, session: GallerySession, op
             key = { "${it}:${images[it].originalUrl}" }) { page ->
             GalleryImagePage(images[page], page, transforms[page], interactive,
                 active = page == pager.currentPage, close = ::close, information = {
-                    if (!exporting) actionTarget = ImageActionTarget(images[pager.currentPage], images.toList(), session.source)
+                    if (!exporting) actionTarget = ImageActionTarget(images[pager.currentPage], images.toList(), session.sourceAt(pager.currentPage))
                 },
                 placeholder = gallery.openingSnapshot?.painter?.takeIf { sameGalleryImage(images[page], session.openingImage) },
                 onPainter = { painters[page] = it }, onPainterDisposed = { painters.remove(page) })

@@ -18,6 +18,8 @@ Status: implemented
 
 每次组合固定图片列表及对应变换状态，Pager的页数、键、页面回调和信息菜单使用同一份数据。Android可以在重组前测量页面，回调不能读取新会话的页数却访问旧的变换列表。旧Pager的页码通知只在相册身份未变时生效；关闭发生在重组前时使用新相册已经匹配好的当前索引，避免旧单图页码0覆盖第5张预览的位置。
 
+固定图片组可选传入与图片逐项对齐的原帖来源列表，按当前页索引读取来源；明确的空来源不回退到另一张图的来源。图片与逐项来源在打开时复制成快照，逐项来源随会话保存恢复；旧状态没有此字段时继续使用整组来源。逐项来源仅用于调用方已提供完整图片组的会话，不与按帖子延迟补齐混用。重复 URL 保留各自来源与索引，图片信息菜单读取所操作的当前页来源。
+
 ## Existing note audit
 
 - [正文图片](../../implemented/bug-fix/2026-10-09-article-image-layout.md)：部分重叠，提供原图、比例与元信息；本篇负责相册与交互。
@@ -34,6 +36,8 @@ Status: implemented
 - 为图片引入新的完整浏览库：缩放与分块解码有成熟方案；这次主要边界在来源定位和全屏手势协调，先复用现有 Compose / Coil。若超大长图的清晰度或内存成为已验证问题，再考虑分块解码。
 
 ## Verification
+
+逐图来源扩展通过 ImageLibrarySourceTest 与 ImageGalleryStateTest 共 11 项 JVM 用例，见 artifacts/library-gallery-sources-unit.txt。覆盖重复 URL 的不同原帖、明确空来源、逐页保存恢复、旧格式兼容及打开后外部列表变化不影响会话快照。
 
 ImageGalleryStateTest 的6项与正文解析14项通过，日志 artifacts/gallery-state-tests.txt。覆盖第3次图片出现位置、重复URL、原图/缩略图匹配、失败重试、晚到结果、重复关闭与纯数据状态保存。补齐相册重置缩放先由 gallery-album-zoom-repro.txt 复现；保留变换状态后通过。
 

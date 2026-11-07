@@ -55,6 +55,7 @@ internal fun sameGalleryImage(first: ArticleBlock.Image, second: ArticleBlock.Im
 internal class GallerySession(
     val origin: String, images: List<ArticleBlock.Image>, index: Int,
     val topicId: Int? = null, val restored: Boolean = false, val source: ImageSource? = null,
+    val sources: List<ImageSource?>? = null,
 ) {
     val openingImage = images[index]
     var images by mutableStateOf(images)
@@ -74,6 +75,7 @@ internal class GallerySession(
     var retry by mutableIntStateOf(0)
         private set
     val current get() = images[index]
+    fun sourceAt(index: Int): ImageSource? = if (sources == null) source else sources.getOrNull(index)
 
     fun select(index: Int) { if (!closing && index in images.indices) this.index = index }
     fun retryAlbum() { if (!loading && !closing) retry++ }
@@ -133,11 +135,13 @@ internal class ImageGalleryState {
         internal set
 
     fun open(images: List<ArticleBlock.Image>, index: Int, origin: String,
-             anchor: GalleryThumbnailAnchor? = null, topicId: Int? = null, source: ImageSource? = null) {
+             anchor: GalleryThumbnailAnchor? = null, topicId: Int? = null, source: ImageSource? = null,
+             sources: List<ImageSource?>? = null) {
         if (session != null || images.isEmpty() || index !in images.indices) return
+        require(sources == null || (topicId == null && sources.size == images.size))
         openingAnchor = anchor
         openingSnapshot = anchor?.snapshot()
-        session = GallerySession(origin, images, index, topicId, source = source ?: topicId?.let { ImageSource(it) })
+        session = GallerySession(origin, images.toList(), index, topicId, source = source ?: topicId?.let { ImageSource(it) }, sources = sources?.toList())
     }
 
     suspend fun loadAlbum(target: GallerySession, load: suspend (Int) -> List<ArticleBlock.Image>) {
@@ -179,7 +183,10 @@ internal class ImageGalleryState {
             save = { state -> state.session?.let { active ->
                 listOf(active.origin, active.index, active.topicId ?: 0,
                     ArrayList(active.images.map { ArrayList(it.saveImage()) }), active.albumLoaded,
-                    active.source?.topicId ?: 0, active.source?.postNumber ?: 0, active.source?.title.orEmpty())
+                    active.source?.topicId ?: 0, active.source?.postNumber ?: 0, active.source?.title.orEmpty(),
+                    ArrayList(active.sources.orEmpty().map { source ->
+                        arrayListOf<Any>(source?.topicId ?: 0, source?.postNumber ?: 0, source?.title.orEmpty())
+                    }))
             }.orEmpty() },
             restore = { saved -> ImageGalleryState().apply {
                 if (saved.isNotEmpty()) session = GallerySession(saved[0] as String,
@@ -187,6 +194,10 @@ internal class ImageGalleryState {
                     (saved[2] as Int).takeIf { it > 0 }, restored = true,
                     source = (saved.getOrNull(5) as? Int)?.takeIf { it > 0 }?.let {
                         ImageSource(it, (saved.getOrNull(6) as? Int)?.takeIf { number -> number > 0 } ?: 1, saved.getOrNull(7) as? String ?: "")
+                    }, sources = (saved.getOrNull(8) as? List<List<Any>>)?.takeIf { it.isNotEmpty() }?.map { values ->
+                        (values.getOrNull(0) as? Int)?.takeIf { it > 0 }?.let {
+                            ImageSource(it, values[1] as Int, values[2] as String)
+                        }
                     }).also { it.albumLoaded = saved[4] as Boolean }
             } },
         )
