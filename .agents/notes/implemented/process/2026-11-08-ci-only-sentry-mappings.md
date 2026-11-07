@@ -30,6 +30,8 @@ CI 只配置、不上传的探针先复现验证任务误查 Task 而非 Project
 
 工作流与凭据前置检查的两项用例先失败于尚未接线（artifacts/sentry-workflow-repro.txt），接线后 10 项 ReleaseWorkflowTest 全部通过（artifacts/sentry-workflow-final.txt）。真实执行工作流 Bash，成功场景只调用夹具 Gradle；对 Token、组织和项目分别测试缺失、空串、纯空白，均在调用前停止且不打印 Token。
 
+线上最新正式 Release 与已安装正式版均核对为 0.3.7 / 3008。本地显式以该版本执行 verifySentryBuild、assembleRelease、lintRelease，全部通过，没有应用插件或注册上传任务（artifacts/sentry-ci-local-release-build.txt）。打包源提交为 9b27e5a，正式 APK 与 SHA256、本地 mapping、签名/Manifest/ZIP 对齐证据保存在 artifacts/local-release-0.3.7-sentry-ci-9b27e5a/。核对既有 Release 证书、不可调试、仅 arm64-v8a、ZIP 完整性及全部原生库 16KB 对齐；APK 中 auto-init=false，无 Sentry Provider、mapping UUID 和 Sentry 原生库。本地 mapping 仅保存，未上传；未安装或发布该正式包。
+
 ## Alternatives considered
 
 - 所有构建应用插件再关闭 autoUpload 可以共用 UUID 生成逻辑，但本地仍注册上传任务，未来修改或手动调用容易越过边界；只在 CI 显式应用整个插件。
