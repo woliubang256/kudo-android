@@ -61,7 +61,7 @@ class MiniAppActivity : ComponentActivity() {
                             externalLinkMode = display.externalLinkMode, preferences = app.miniApps,
                             accountId = current.key.accountId, accountReady = true,
                             login = { MiniAppTasks.main(this, sourceTask, login = true) }, infoChanged = ::updateInfo,
-                            minimize = ::minimize, pinShortcut = ::pinShortcut)
+                            minimize = ::minimize, pinShortcut = ::pinShortcut, musicRequest = current)
                     }
                 } else Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {

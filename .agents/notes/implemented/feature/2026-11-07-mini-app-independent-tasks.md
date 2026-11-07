@@ -14,6 +14,8 @@ Status: implemented
 
 稳定任务身份、独立 Activity 与清单、原生入口分流分别落地。浮窗、桌面和音乐控制在后续小功能中扩展此任务入口。
 
+任务查询使用从 API 21 起可用的 RecentTaskInfo.id，避免 API 29 的 TaskInfo.taskId 在最低支持的 Android 26–28 上崩溃；Lint 的 NewApi 检查覆盖该兼容边界。
+
 ## Existing note audit
 
 已检索活跃笔记中的任务、浮窗、桌面、音乐和 WebView 生命周期。现有[网页容器](../../implemented/feature/2026-11-04-mini-app-square.md)与[沉浸运行页](../../implemented/feature/2026-11-04-mini-app-immersive-runtime.md)部分重叠：只替代小程序在主路由内运行的承载方式，保留官网运行时、原生进度、普通网页连续导航和权限交接。[操作弹窗](../../implemented/feature/2026-11-07-mini-app-native-operation-dialogs.md)保持原网页业务回调。[账号会话](../../implemented/feature/2026-10-07-account-and-composer.md)继续管理实际登录。不归档仍有独立决定的笔记；无同主题 proposed/rejected。

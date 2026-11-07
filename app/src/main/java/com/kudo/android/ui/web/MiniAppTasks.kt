@@ -80,7 +80,7 @@ internal object MiniAppTasks {
         val activity = activities[entry.request.key]?.get()
         if (activity != null) activity.closeMiniApp()
         else runCatching { context.getSystemService(ActivityManager::class.java).appTasks
-            .firstOrNull { it.taskInfo.taskId == entry.taskId }?.finishAndRemoveTask() }
+            .firstOrNull { it.taskInfo.id == entry.taskId }?.finishAndRemoveTask() }
     }
 
     fun main(context: Context, sourceTask: Int = -1, login: Boolean = false) {
@@ -94,7 +94,7 @@ internal object MiniAppTasks {
 
     fun consumeLogin() { loginRequested = false }
     private fun foreground(context: Context, taskId: Int): Boolean = runCatching {
-        context.getSystemService(ActivityManager::class.java).appTasks.firstOrNull { it.taskInfo.taskId == taskId }
+        context.getSystemService(ActivityManager::class.java).appTasks.firstOrNull { it.taskInfo.id == taskId }
             ?.let { it.moveToFront(); true } ?: false
     }.getOrDefault(false)
 }

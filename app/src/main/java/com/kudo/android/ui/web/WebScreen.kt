@@ -47,6 +47,7 @@ import kotlinx.coroutines.launch
 private class WebPageState(val saved: Bundle? = null) {
     var view: WebView? = null
     var bridge: MiniAppWebBridge? = null
+    var music: MiniAppMusicController? = null
     fun save() = Bundle().also { bundle ->
         if (view?.saveState(bundle) == null) saved?.let(bundle::putAll)
     }
@@ -60,7 +61,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     externalLinkMode: ExternalLinkMode = ExternalLinkMode.IN_APP, preferences: MiniAppPreferences? = null,
     accountId: Int? = null, accountReady: Boolean = true, login: () -> Unit = {},
     infoChanged: (MiniAppInfo) -> Unit = {}, minimize: ((WebView) -> Unit)? = null,
-    pinShortcut: (() -> Unit)? = null) {
+    pinShortcut: (() -> Unit)? = null, musicRequest: MiniAppTaskRequest? = null) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
     var title by rememberSaveable(url) { mutableStateOf("网页") }
@@ -156,10 +157,13 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             when (event) {
                 Lifecycle.Event.ON_RESUME -> { page.view?.visibility = View.VISIBLE; page.view?.onResume() }
                 Lifecycle.Event.ON_PAUSE -> {
+                    val keepMusic = page.music?.state?.canControl == true
                     if (currentMiniApp != null) {
-                        miniUi.dismiss(); fullscreen.exit(); page.view?.pauseMiniAppMedia(); page.view?.visibility = View.INVISIBLE
+                        miniUi.dismiss(); fullscreen.exit()
+                        if (!keepMusic) { page.view?.pauseMiniAppMedia(); page.view?.visibility = View.INVISIBLE }
                     }
-                    page.view?.onPause(); CookieManager.getInstance().flush()
+                    if (!keepMusic) page.view?.onPause()
+                    CookieManager.getInstance().flush()
                 }
                 else -> Unit
             }
@@ -225,6 +229,10 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 }
                             })
                         }
+                        page.music = musicRequest?.takeIf { it.key.supportsMusic() }?.let { request ->
+                            MiniAppMusicController(this, request) { currentAccountReady && currentAccountId == owner &&
+                                MiniAppTasks.knownAccount().let { !it.first || it.second == owner } }
+                        }
                         webViewClient = object : WebViewClient() {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                                 val value = request.url.toString()
@@ -245,7 +253,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                                 return true
                             }
                             override fun onPageStarted(view: WebView, value: String, favicon: Bitmap?) {
-                                fullscreen.exit(); miniUi.reset(); page.bridge?.invalidate()
+                                fullscreen.exit(); miniUi.reset(); page.bridge?.invalidate(); page.music?.invalidate()
                                 scrollingUp = false
                                 navigationGeneration++
                                 currentUrl = value; runtimePresentation = null; launchState = null; progress = 0; awaitingContent = true; error = null; message = null
@@ -279,6 +287,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                             }
                             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                                 fullscreen.exit(); miniUi.reset(); page.bridge?.close(); page.bridge = null
+                                page.music?.close(); page.music = null
                                 if (page.view === view) page.view = null
                                 progress = 100
                                 awaitingContent = false
@@ -310,7 +319,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
                     view.setBackgroundColor(surfaceColor)
                     view.importantForAccessibility = if (miniUi.showing || awaitingContent || launchCover) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                 }, onRelease = { view ->
-                    if (page.view === view) { page.bridge?.close(); page.bridge = null; page.view = null }
+                    if (page.view === view) { page.bridge?.close(); page.bridge = null; page.music?.close(); page.music = null; page.view = null }
                     fullscreen.exit()
                     view.setOnScrollChangeListener(null)
                     view.stopLoading(); view.removeAllViews(); view.destroy()

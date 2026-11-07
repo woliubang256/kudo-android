@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -48,7 +49,8 @@ internal fun MiniAppFloatingHost(owner: Int?, enabled: Boolean, ordinary: Boolea
     var fraction by rememberSaveable(owner) { mutableFloatStateOf(.46f) }
     LaunchedEffect(entries.isEmpty()) { if (entries.isEmpty()) preview.targetState = false }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().then(if (ordinary) Modifier else Modifier.layerBackdrop(backdrop))) { content() }
+        val needsSource = !ordinary && (entries.isNotEmpty() || MiniAppMusic.current?.let { enabled && it.key.accountId == owner && !it.hidden } == true)
+        Box(Modifier.fillMaxSize().then(if (needsSource) Modifier.layerBackdrop(backdrop) else Modifier)) { content() }
         if (entries.isNotEmpty()) {
             val density = LocalDensity.current
             val safe = WindowInsets.safeDrawing.asPaddingValues()
@@ -57,12 +59,14 @@ internal fun MiniAppFloatingHost(owner: Int?, enabled: Boolean, ordinary: Boolea
             Box(Modifier.align(Alignment.TopEnd).offset { IntOffset(0, with(density) { top.toPx() }.roundToInt() + (range * fraction).roundToInt()) }
                 .padding(end = safe.calculateRightPadding(LayoutDirection.Ltr)).size(48.dp)
                 .draggable(rememberDraggableState { delta -> if (range > 0) fraction = (fraction + delta / range).coerceIn(0f, 1f) }, Orientation.Vertical)
-                .clickable(onClickLabel = "小程序浮窗") { preview.targetState = true }.testTag("mini-app-floating-handle"), contentAlignment = Alignment.CenterEnd) {
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                    onClickLabel = "小程序浮窗") { preview.targetState = true }.testTag("mini-app-floating-handle"), contentAlignment = Alignment.CenterEnd) {
                 Box(Modifier.width(32.dp).height(48.dp).floatingSurface(source, glass, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.MoreVert, "小程序浮窗", Modifier.size(22.dp))
                 }
             }
         }
+        MiniAppMusicFloatingControl(owner, enabled, source, glass)
         CommunitySheet(preview, "小程序浮窗", { preview.targetState = false }, backdrop = source, glass = glass,
             scrollContent = false, contentPadding = PaddingValues(bottom = 16.dp)) {
             LazyRow(Modifier.fillMaxWidth().testTag("mini-app-floating-previews"), contentPadding = PaddingValues(horizontal = 16.dp),
