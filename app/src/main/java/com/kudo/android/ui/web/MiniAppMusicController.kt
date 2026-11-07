@@ -51,13 +51,21 @@ internal class MiniAppMusicController(private val view: WebView, val request: Mi
             WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addWebMessageListener(view, "KudoMiniAppMusic", setOf("https://linux.do")) { _, message, origin, main, _ ->
                 if (closed || !valid() || !main || origin != Uri.parse("https://linux.do")) return@addWebMessageListener
-                val data = message.data?.takeIf { it.length <= 4096 }?.let { runCatching { JSONObject(it) }.getOrNull() }
+                val data = message.data?.takeIf { it.length <= 110000 }?.let { runCatching { JSONObject(it) }.getOrNull() }
                     ?: return@addWebMessageListener
                 if (data.optString("type") != "kudo-mini-music-v1" || data.optString("appId") != key.appId ||
                     data.optString("url") != view.url || MiniAppLocation.parse(view.url.orEmpty())?.id != key.appId ||
                     data.opt("playing") !is Boolean || data.opt("canControl") !is Boolean) return@addWebMessageListener
-                val next = MiniAppMusicState(data.optString("title").take(200), data.optString("artist").take(200),
-                    data.getBoolean("playing"), data.getBoolean("canControl"), data.optBoolean("canSkip"))
+                val duration = data.optLong("durationMs").takeIf { it in 1..86_400_000 } ?: 0
+                val artworkKey = data.optString("artworkKey").take(1000)
+                val artwork = if (data.has("artwork")) data.optString("artwork").takeIf {
+                    it.length <= 100000 && (it.isEmpty() || it.startsWith("data:image/jpeg;base64,"))
+                }.orEmpty() else state.artwork.takeIf { state.artworkKey == artworkKey }.orEmpty()
+                val next = MiniAppMusicState(title = data.optString("title").take(200), artist = data.optString("artist").take(200),
+                    playing = data.getBoolean("playing"), canControl = data.getBoolean("canControl"), canSkip = data.optBoolean("canSkip"),
+                    canPrevious = data.optBoolean("canPrevious"), album = data.optString("album").take(200), durationMs = duration,
+                    positionMs = data.optLong("positionMs", -1).takeIf { duration > 0 && it in 0..duration } ?: -1,
+                    canSeek = duration > 0 && data.optBoolean("canSeek"), artworkKey = artworkKey, artwork = artwork)
                 if (!state.playing && next.playing) hidden = false
                 if (closing && !next.playing) { hidden = true; closing = false }
                 state = next; busy = false; error = null; generation++
@@ -70,13 +78,15 @@ internal class MiniAppMusicController(private val view: WebView, val request: Mi
         }
     }
 
-    fun command(action: String) {
+    fun command(action: String, positionMs: Long? = null) {
         if (closed || !supported || !valid() || !state.canControl || busy ||
-            action !in setOf("play", "pause", "previous", "next") ||
+            action !in setOf("play", "pause", "previous", "next", "seek") ||
+            (action == "previous" && !state.canPrevious) || (action == "next" && !state.canSkip) ||
+            (action == "seek" && (!state.canSeek || positionMs == null || positionMs !in 0..state.durationMs)) ||
             MiniAppLocation.parse(view.url.orEmpty())?.id != key.appId) return
         busy = true; error = null
         val token = ++generation
-        view.evaluateJavascript("window.__kudoMiniMusicCommand?.(${JSONObject.quote(action)})", null)
+        view.evaluateJavascript("window.__kudoMiniMusicCommand?.(${JSONObject.quote(action)},${positionMs ?: "null"})", null)
         view.postDelayed({ if (!closed && generation == token) { busy = false; closing = false; error = "播放器暂无响应" } }, 4000)
     }
 

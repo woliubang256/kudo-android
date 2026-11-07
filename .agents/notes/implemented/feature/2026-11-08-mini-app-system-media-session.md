@@ -6,7 +6,7 @@ Status: implemented
 
 用户对比 QQ 音乐小程序与本应用，发现本应用播放时没有出现在系统媒体卡片，期望也能被支持媒体控制的灵动岛识别。
 
-现有 MiniAppMusicService 只有 CATEGORY_TRANSPORT 的普通前台通知和暂停操作，没有 Android MediaSession、PlaybackState、MediaMetadata 或 MediaStyle。网页桥只报告歌名、歌手、播放状态与部分控制能力，不包含封面、播放进度和时长。暂停会停止整个服务，因而不能直接保留供系统继续播放的媒体会话。
+改动前 MiniAppMusicService 只有 CATEGORY_TRANSPORT 的普通前台通知和暂停操作，没有 Android MediaSession、PlaybackState、MediaMetadata 或 MediaStyle。网页桥只报告歌名、歌手、播放状态与部分控制能力，不包含封面、播放进度和时长。暂停停止整个服务，因而不能直接保留供系统继续播放的媒体会话。
 
 ## Decision
 
@@ -18,17 +18,22 @@ Status: implemented
 
 会话与通知共用同一 token，通知操作使用每次会话独有的随机标识，系统回调绑定控制器实例；旧控制器、旧通知按钮与旧会话不能操作后续播放器。通知点击恢复原小程序任务。暂停时保留已启动的会话和通知，并退出前台播放状态；首次加载但未播放不创建卡片。
 
+白名单网页适配器读取实际 track-title、track-artist、track-album、elapsed、duration、seek 与前后切歌按钮的状态，不访问播放器私有对象。拖动进度按原进度条的范围换算数值并触发原 change 事件。时间缺失或不可解析时不提供进度，时长上限为 24 小时；网页显示按秒取整，因此系统进度可能存在约一秒误差。前后切歌能力分别上报与校验。
+
+原应用的封面是 opaque sandbox 内创建的 blob，网页桥只对现有图片绘制最长边 320px 的 JPEG 缩略图，编码上限 100000 字符；不加载新音源、不暴露原生接口给子框架。封面按歌曲与当前图片地址的标识绑定，只在图片变化时传输；普通进度更新不重传。换歌或图片消失先清理旧封面，读取失败保留无封面状态。官方主框架继续校验当前地址、账号、应用 ID、消息来源与字段类型，总消息限制为 110000 字符。
+
 实现按系统会话与控制、网页元数据与封面、真机回归分开提交，每个实现小单元最多修改三个源码或测试文件。
 
 ## Related decisions
 
-检索非归档笔记中的 MediaSession、音乐和系统媒体控制：现有[音乐白名单与网页控制](../../implemented/feature/2026-11-07-mini-app-music-floating-control.md)与[小程序浮窗任务](../../implemented/feature/2026-11-07-mini-app-floating-windows.md)部分关联，保持既有职责，不取代它们。Sentry 提案无关。本提案补充系统可识别的会话边界，不把通知权限、系统媒体展示策略与音乐白名单混为同一个能力。
+检索非归档笔记中的 MediaSession、音乐和系统媒体控制：现有[音乐白名单与网页控制](../../implemented/feature/2026-11-07-mini-app-music-floating-control.md)与[小程序浮窗任务](../../implemented/feature/2026-11-07-mini-app-floating-windows.md)部分关联，保持既有职责，不取代它们。Sentry 提案无关。本决定补充系统可识别的会话边界，不把通知权限、系统媒体展示策略与音乐白名单混为同一个能力。
 
 ## Alternatives considered
 
 - 每个音乐小程序分别实现系统通知最容易贴合其页面，但重复会话生命周期并增加后续维护成本；标准系统媒体服务共用，差异只留在白名单网页适配器。
 - 使用原生播放器和完整媒体播放框架能统一音频焦点、媒体源及播放进度，但会替换网页播放器的执行逻辑，可能破坏鉴权、歌单与播放策略；本次仅桥接既有播放器，使用平台 MediaSession，不引入独立音源。
 - 只改善现有普通通知改动最少，但不能补齐系统识别和系统媒体控制契约，不能满足用户提出的播放卡片需求。
+- 原生按封面地址请求图片可以复用常规图片加载库，但线上应用实际使用 opaque runtime 内的 blob 地址，无法在原生侧解析；由现有图片导出限尺寸缩略图，不增加外部图片请求或原生对网页网络能力的旁路。
 
 ## Testing
 
