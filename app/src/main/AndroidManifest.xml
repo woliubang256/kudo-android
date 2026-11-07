@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -28,6 +28,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Kudo"
         android:usesCleartextTraffic="true">
+        <!-- Consent must precede all SDK initialization, including performance providers. -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+        <provider android:name="io.sentry.android.core.SentryInitProvider" tools:node="remove" />
+        <provider android:name="io.sentry.android.core.SentryPerformanceProvider" tools:node="remove" />
         <service android:name=".media.DownloadService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service android:name=".media.MiniAppMusicService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <provider

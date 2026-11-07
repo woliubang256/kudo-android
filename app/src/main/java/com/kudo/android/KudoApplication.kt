@@ -11,11 +11,17 @@ import com.kudo.android.data.AppContainer
 import com.kudo.android.media.communityAnimations
 
 class KudoApplication : Application(), SingletonImageLoader.Factory {
+    lateinit var reporting: com.kudo.android.reporting.ReportingController
+        private set
     lateinit var container: AppContainer
         private set
 
     override fun onCreate() {
         super.onCreate()
+        // The restart helper never creates collectors, network clients or a WebView container.
+        if (getProcessName().endsWith(":restart")) return
+        reporting = com.kudo.android.reporting.ErrorReporting.controller(this)
+        reporting.start()
         // WebSettings in AppContainer must initialize on the application's main thread.
         container = AppContainer(this)
     }
