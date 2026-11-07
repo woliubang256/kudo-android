@@ -57,12 +57,13 @@ class MiniAppWebUiTest {
     private var panelInk = android.graphics.Color.WHITE
     @After fun cleanupPreferences() { base.deleteSharedPreferences(preferenceName) }
 
-    private fun show(start: String = "https://linux.do/apps/$first?room=one#play", external: (String) -> Unit = {}) {
+    private fun show(start: String = "https://linux.do/apps/$first?room=one#play", external: (String) -> Unit = {},
+        minimize: ((WebView) -> Unit)? = null) {
         compose.setContent { KudoTheme(display) {
             val color = MaterialTheme.colorScheme.onSurface
             SideEffect { panelInk = color.toArgb() }
             if (visible) key(accountId) { WebScreen(start, { visible = false }, external, { FixtureView(it).also { view -> web = view } },
-                preferences = preferences, accountId = accountId, accountReady = accountReady) }
+                preferences = preferences, accountId = accountId, accountReady = accountReady, minimize = minimize) }
             else Text("原生来源")
         } }
         awaitPage()
@@ -148,6 +149,57 @@ class MiniAppWebUiTest {
         assertEquals("true", js("document.documentElement.hasAttribute('data-kudo-mini-app')"))
         assertEquals("true", js("getComputedStyle(document.querySelector('.d-header')).display === 'none'"))
         assertEquals("true", js("(()=>{const r=document.querySelector('.mini-app-loader').getBoundingClientRect();return r.x===0&&r.y===0&&Math.abs(r.height-innerHeight)<1&&Math.abs(r.width-innerWidth)<1})()"))
+    }
+
+    @Test fun minimizeWaitsForMenuExitAndWindowFocusBeforeReturningToSource() {
+        val attempts = AtomicInteger()
+        val minimized = AtomicInteger()
+        show(minimize = { view ->
+            attempts.incrementAndGet()
+            // The task's snapshot callback rejects a window that still belongs to the Dialog.
+            if (view.hasWindowFocus()) { minimized.incrementAndGet(); visible = false }
+        })
+        var completed = 0
+        for (theme in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) for (glass in GlassMode.entries) {
+            compose.runOnIdle { display = display.copy(theme = theme, glass = glass); visible = true }
+            awaitPage()
+            compose.onNodeWithContentDescription("小程序更多").performClick()
+            compose.onNodeWithTag("mini-app-menu-grid").assertIsDisplayed()
+            compose.runOnIdle { assertFalse("The menu owns window focus", web.hasWindowFocus()) }
+            compose.mainClock.autoAdvance = false
+            try {
+                compose.onNodeWithText("浮窗", substring = false).performClick()
+                android.os.SystemClock.sleep(400)
+                assertEquals("Minimize must wait for the actual menu exit, not a fixed delay", completed, attempts.get())
+                compose.mainClock.advanceTimeBy(500)
+            } finally { compose.mainClock.autoAdvance = true }
+            completed++
+            compose.waitUntil(5000) { minimized.get() == completed }
+            compose.onNodeWithText("原生来源").assertIsDisplayed()
+            compose.onNodeWithTag("mini-app-material-panel").assertDoesNotExist()
+            assertEquals(completed, attempts.get())
+        }
+    }
+
+    @Test fun leavingTheActivityCancelsPendingMinimizeWithoutClosingTheGameOnResume() {
+        val attempts = AtomicInteger()
+        show(minimize = { attempts.incrementAndGet() })
+        val original = web
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithTag("mini-app-menu-grid").assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithText("浮窗", substring = false).performClick()
+            compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+            compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+            compose.mainClock.advanceTimeBy(1000)
+        } finally { compose.mainClock.autoAdvance = true }
+        compose.waitUntil { compose.onAllNodesWithTag("mini-app-material-panel").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle { assertEquals(0, attempts.get()); assertSame(original, web); assertFalse(web.destroyed) }
+        compose.onNodeWithContentDescription("小程序更多").performClick()
+        compose.onNodeWithText("浮窗", substring = false).performClick()
+        compose.waitUntil(5000) { attempts.get() == 1 }
+        compose.onNodeWithTag("mini-app-material-panel").assertDoesNotExist()
     }
 
     @Test fun reenterReloadsTheCurrentAppAndKeepsTheNativeSourceAndLaunchParameters() {

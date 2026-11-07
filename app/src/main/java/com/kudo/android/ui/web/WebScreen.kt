@@ -40,9 +40,13 @@ import com.kudo.android.data.MiniAppPreferences
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.theme.LogoYellow
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 private class WebPageState(val saved: Bundle? = null) {
     var view: WebView? = null
@@ -94,6 +98,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     val currentMiniApp by rememberUpdatedState(miniApp)
     val miniUi = remember(url) { MiniAppUiState() }
     val actionScope = rememberCoroutineScope()
+    var pendingMinimize by remember(url) { mutableStateOf<Job?>(null) }
     val actions = remember(currentUrl, accountId, accountReady) {
         miniApp?.id?.let { id -> MiniAppActionsController(actionScope, id, accountId != null && accountReady,
             request = { operation, payload -> checkNotNull(page.bridge).action(operation, payload) },
@@ -129,7 +134,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     }
     BackHandler { navigateBack() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(currentUrl) { miniUi.reset(); page.bridge?.invalidate() }
+    LaunchedEffect(currentUrl) { pendingMinimize?.cancel(); miniUi.reset(); page.bridge?.invalidate() }
     LaunchedEffect(accountReady) { if (!accountReady) miniUi.dismiss() }
     LaunchedEffect(currentUrl, awaitingContent, error, miniUi.revision) {
         val id = miniApp?.id
@@ -157,6 +162,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             when (event) {
                 Lifecycle.Event.ON_RESUME -> { page.view?.visibility = View.VISIBLE; page.view?.onResume() }
                 Lifecycle.Event.ON_PAUSE -> {
+                    pendingMinimize?.cancel()
                     val keepMusic = page.music?.state?.canControl == true
                     if (currentMiniApp != null) {
                         miniUi.dismiss(); fullscreen.exit()
@@ -169,7 +175,7 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             }
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); miniUi.reset(); fullscreen.exit() }
+        onDispose { pendingMinimize?.cancel(); lifecycle.removeObserver(observer); miniUi.reset(); fullscreen.exit() }
     }
     Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().then(if (miniUi.showing) Modifier.clearAndSetSemantics {} else Modifier)) {
@@ -371,11 +377,29 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
             request.appId?.let { if (accountReady) preferences?.rememberClipboard(accountId, it, request.write) }
         }
     }, actions = actions, login = login, minimize = minimize?.let { callback -> {
-        actionScope.launch {
-            delay(220)
-            page.view?.takeIf { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }?.let(callback)
+        if (pendingMinimize?.isActive != true) pendingMinimize = actionScope.launch {
+            snapshotFlow { miniUi.showing }.first { !it }
+            val view = page.view ?: return@launch
+            view.awaitMiniAppWindowFocus()
+            if (page.view === view && view.isAttachedToWindow && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) callback(view)
         }
     } }, pinShortcut = pinShortcut)
+    }
+}
+
+private suspend fun View.awaitMiniAppWindowFocus() {
+    if (hasWindowFocus()) return
+    val observer = viewTreeObserver
+    var listener: android.view.ViewTreeObserver.OnWindowFocusChangeListener? = null
+    try {
+        suspendCancellableCoroutine { continuation ->
+            listener = android.view.ViewTreeObserver.OnWindowFocusChangeListener { focused ->
+                if (focused && continuation.isActive) continuation.resume(Unit)
+            }.also(observer::addOnWindowFocusChangeListener)
+            if (hasWindowFocus() && continuation.isActive) continuation.resume(Unit)
+        }
+    } finally {
+        if (observer.isAlive) listener?.let(observer::removeOnWindowFocusChangeListener)
     }
 }
 

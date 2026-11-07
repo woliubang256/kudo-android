@@ -14,6 +14,8 @@ MiniAppPanelWindow 复用小程序浮窗的 PixelCopy 背景帧，需采样的�
 
 Dialog 使用全宽、边到边视口，禁用系统额外 dim 和窗口动画，遮罩与进出动画仍由 CommunitySheet 管理。直到原面板退出动画结束才移除窗口；材质与子面板变化复用窗口和表单状态。返回、遮罩、拖动关闭与请求忙碌状态继续受原关闭条件控制，输入法通过面板既有 imePadding 避让。
 
+浮窗操作等待 MiniAppUiState.showing 实际变为 false，再等待原 WebView 窗口恢复焦点后调用独立任务的快照与收起流程。旧的固定 220ms 延时无法覆盖 Dialog 销毁与系统焦点移交，导致 MiniAppActivity 的 hasWindowFocus 保护直接丢弃操作；不能通过关闭材质来回避。等待中的任务只保留一份，网页变化、离开页面或 Activity 暂停时取消，避免返回前台后执行过期收起操作。
+
 深色高级材质的面板遮罩使用 0.74 透明度，保证覆盖白色网页时正文对比度至少 4.5:1。CommunitySheet 增加可选 surfaceAlpha，只由本场景覆写，默认调用保留原有透明度。保留真实背景模糊与液态折射，不能用纯色背景代替采样。
 
 ## Existing note audit
@@ -25,8 +27,11 @@ Dialog 使用全宽、边到边视口，禁用系统额外 dim 和窗口动画�
 - 直接移除固定材质参数改动最少，但没有可靠的背景源，或者会重新走包含 WebView 的 Compose 采样路径；采用已有窗口隔离方案。
 - 只降低面板背景透明度没有窗口调整成本，但无法提供真实模糊和折射，不能满足跟随材质的要求。
 - 把主窗口整体 PixelCopy 后仍在主窗口持续绘制面板可保留当前窗口结构，但后续采样会包含面板与遮罩自身；将覆盖内容与被复制窗口隔离。
+- 延长固定延时改动最少，也能缓解部分机型，但系统焦点移交没有固定时长；等待真实退出状态和窗口焦点。直接移除 Activity 的焦点保护也能绕过丢弃，但会让后台快照和过期收起失去现有保护，保留保护并修正调用时机。
 
 ## Testing
+
+浮窗返回回归先补离线网页真机用例，模拟独立任务收起时的窗口焦点保护；旧版菜单退出后未能返回来源，见 artifacts/mini-app-minimize-focus-repro-device.txt。修复后两项新增用例通过，见 artifacts/mini-app-minimize-focus-fixed-device.txt：控制面板动画时钟，覆盖浅深色与三种材质，要求实际退出和焦点恢复后只调用一次收起；等待中切后台再回来不能执行旧操作，再次手动收起仍可用。另有八项相关用例通过，见 artifacts/mini-app-minimize-focus-regression-device.txt，覆盖来源关闭、真实材质、重新进入、后台权限取消、音乐恢复与关闭、多浮窗横向预览。Debug / AndroidTest 构建和 lintDebug 通过，见 artifacts/mini-app-minimize-focus-fixed-build.txt。保留独立任务快照的焦点保护，没有关闭材质或更改音乐关闭语义。
 
 RMX2202 / Android 13 的新增真机测试先在高级材质下等待真实蓝色采样失败，证明原菜单固定普通材质（artifacts/mini-app-menu-material-repro-device.txt）。接入窗口采样后，浅深色六种材质组合的菜单、关于与同一 WebView 保留用例通过；进一步测试先复现深色覆盖白网页时文字对比度仅 3.095:1（artifacts/mini-app-menu-material-contrast-repro-device.txt），增强局部遮罩后通过 4.5:1 断言。
 
