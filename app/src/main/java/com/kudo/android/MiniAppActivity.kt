@@ -3,6 +3,12 @@ package com.kudo.android
 import android.app.ActivityManager
 import android.content.Intent
 import android.os.Bundle
+import android.graphics.Bitmap
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -32,6 +38,8 @@ class MiniAppActivity : ComponentActivity() {
     private var failure by mutableStateOf<String?>(null)
     private var validation: Job? = null
     private var sourceTask = -1
+    private var info: MiniAppInfo? = null
+    private var minimizing = false
     private val app get() = (application as KudoApplication).container
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,24 +53,48 @@ class MiniAppActivity : ComponentActivity() {
         setContent {
             val display by app.settings.display.collectAsStateWithLifecycle()
             KudoTheme(display) {
+                MiniAppFloatingHost(request?.key?.accountId, ready, ordinary = true) {
                 if (ready) request?.let { current ->
                     key(current.url) {
                         WebScreen(current.url, ::closeMiniApp, ::openBrowser,
                             openApp = { ExternalAppLinkLauncher(this).open(it, display.externalLinkMode) },
                             externalLinkMode = display.externalLinkMode, preferences = app.miniApps,
                             accountId = current.key.accountId, accountReady = true,
-                            login = { MiniAppTasks.main(this, sourceTask, login = true) }, infoChanged = ::updateInfo)
+                            login = { MiniAppTasks.main(this, sourceTask, login = true) }, infoChanged = ::updateInfo,
+                            minimize = ::minimize)
                     }
                 } else Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
                     if (failure == null) CommunityLoadingIndicator()
                     else { Text(failure!!); CommunityButton("重试", ::validateAccount) }
                 }
+                }
             }
         }
     }
 
-    override fun onResume() { super.onResume(); validateAccount() }
+    override fun onResume() { super.onResume(); request?.key?.let(MiniAppTasks::resumed); validateAccount() }
+
+    private fun minimize(view: WebView) {
+        val current = request ?: return
+        if (minimizing || !view.isAttachedToWindow) return
+        minimizing = true
+        val position = IntArray(2).also(view::getLocationInWindow)
+        val rect = Rect(position[0], position[1], position[0] + view.width, position[1] + view.height)
+        fun complete(preview: Bitmap?) {
+            minimizing = false
+            if (isFinishing || isDestroyed || request != current || !hasWindowFocus()) return
+            MiniAppTasks.minimize(MiniAppFloatingEntry(current, taskId, info, preview))
+            moveTaskToBack(true)
+            MiniAppTasks.main(this, sourceTask)
+        }
+        if (rect.width() <= 0 || rect.height() <= 0) { complete(null); return }
+        val width = minOf(320, rect.width())
+        val bitmap = Bitmap.createBitmap(width, (rect.height().toFloat() / rect.width() * width).toInt().coerceIn(1, 1600), Bitmap.Config.ARGB_8888)
+        runCatching { PixelCopy.request(window, rect, bitmap, { result ->
+            complete(bitmap.takeIf { result == PixelCopy.SUCCESS })
+        }, Handler(Looper.getMainLooper())) }.onFailure { complete(null) }
+    }
 
     private fun validateAccount() {
         val current = request ?: return
@@ -98,6 +130,7 @@ class MiniAppActivity : ComponentActivity() {
 
     private fun updateInfo(info: MiniAppInfo) {
         if (info.id != request?.key?.appId) return
+        this.info = info
         setTaskDescription(ActivityManager.TaskDescription(info.name))
         lifecycleScope.launch {
             val icon = info.iconUrl?.let { url -> runCatching {

@@ -42,6 +42,7 @@ import com.kudo.android.ui.theme.LogoYellow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private class WebPageState(val saved: Bundle? = null) {
     var view: WebView? = null
@@ -58,7 +59,8 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
     webViewFactory: (Context) -> WebView = { WebView(it) }, openApp: (String) -> Boolean = { false },
     externalLinkMode: ExternalLinkMode = ExternalLinkMode.IN_APP, preferences: MiniAppPreferences? = null,
     accountId: Int? = null, accountReady: Boolean = true, login: () -> Unit = {},
-    infoChanged: (MiniAppInfo) -> Unit = {}) {
+    infoChanged: (MiniAppInfo) -> Unit = {}, minimize: ((WebView) -> Unit)? = null,
+    pinShortcut: (() -> Unit)? = null) {
     val page = rememberSaveable(url, saver = Saver<WebPageState, Bundle>(save = { it.save() }, restore = { WebPageState(it) })) { WebPageState() }
     var currentUrl by rememberSaveable(url) { mutableStateOf(url) }
     var title by rememberSaveable(url) { mutableStateOf("网页") }
@@ -359,7 +361,12 @@ internal fun WebScreen(url: String, back: () -> Unit, openBrowser: (String) -> U
         request.allow(context) {
             request.appId?.let { if (accountReady) preferences?.rememberClipboard(accountId, it, request.write) }
         }
-    }, actions = actions, login = login)
+    }, actions = actions, login = login, minimize = minimize?.let { callback -> {
+        actionScope.launch {
+            delay(220)
+            page.view?.takeIf { lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }?.let(callback)
+        }
+    } }, pinShortcut = pinShortcut)
     }
 }
 

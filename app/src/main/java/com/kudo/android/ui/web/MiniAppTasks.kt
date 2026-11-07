@@ -16,6 +16,7 @@ internal object MiniAppTasks {
     const val ACCOUNT = "mini_app_account"
     const val SOURCE_TASK = "mini_app_source_task"
     private val activities = mutableMapOf<MiniAppTaskKey, WeakReference<MiniAppActivity>>()
+    val floating = mutableStateListOf<MiniAppFloatingEntry>()
     private var accountKnown = false
     var accountId: Int? = null
         private set
@@ -26,6 +27,7 @@ internal object MiniAppTasks {
         if (accountKnown && accountId != id) activities.values.mapNotNull { it.get() }.toList().forEach { it.closeMiniApp() }
         accountKnown = true
         accountId = id
+        floating.removeAll { it.request.key.accountId != id }
     }
 
     fun knownAccount(): Pair<Boolean, Int?> = accountKnown to accountId
@@ -58,6 +60,27 @@ internal object MiniAppTasks {
     fun attach(key: MiniAppTaskKey, activity: MiniAppActivity) { activities[key] = WeakReference(activity) }
     fun detach(key: MiniAppTaskKey, activity: MiniAppActivity) {
         if (activities[key]?.get() === activity) activities.remove(key)
+        if (activity.isFinishing) resumed(key)
+    }
+
+    fun minimize(entry: MiniAppFloatingEntry) {
+        resumed(entry.request.key)
+        floating.add(0, entry)
+    }
+
+    fun resumed(key: MiniAppTaskKey) { floating.removeAll { it.request.key == key } }
+
+    fun restore(context: Context, entry: MiniAppFloatingEntry) {
+        if (!accountKnown || accountId != entry.request.key.accountId) return
+        if (!foreground(context, entry.taskId)) open(context, entry.request.url, entry.request.key.accountId)
+    }
+
+    fun close(context: Context, entry: MiniAppFloatingEntry) {
+        resumed(entry.request.key)
+        val activity = activities[entry.request.key]?.get()
+        if (activity != null) activity.closeMiniApp()
+        else runCatching { context.getSystemService(ActivityManager::class.java).appTasks
+            .firstOrNull { it.taskInfo.taskId == entry.taskId }?.finishAndRemoveTask() }
     }
 
     fun main(context: Context, sourceTask: Int = -1, login: Boolean = false) {

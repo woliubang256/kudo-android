@@ -45,6 +45,7 @@ import com.kudo.android.ui.theme.KudoTheme
 import com.kudo.android.ui.topic.*
 import com.kudo.android.ui.web.WebScreen
 import com.kudo.android.ui.web.MiniAppTasks
+import com.kudo.android.ui.web.MiniAppFloatingHost
 import kotlinx.coroutines.launch
 
 @Composable
@@ -176,6 +177,8 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         com.kudo.android.notifications.NotificationPermission(account.user?.id)
         IncomingNotification(nav, incomingNotification, account.sessionReady, account.user?.id, linkSequence,
             { selected = 3 }, account::readNotificationTarget, { app.notifications.consume(it); consumeNotification() })
+        val floatingRoute by nav.currentBackStackEntryAsState()
+        MiniAppFloatingHost(account.user?.id, sessionStable, ordinary = floatingRoute?.destination?.route?.startsWith("web") == true) {
         com.kudo.android.ui.library.ImageLibraryEnvironment(app.imageLibrary, account.user?.id, sessionStable) {
         TopicPresentationEnvironment(app.repository, account.user?.id) {
         AvatarEnvironment(app.repository, account.user?.id) {
@@ -564,6 +567,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
             }
             }
             }
+        }
         }
         }
         }

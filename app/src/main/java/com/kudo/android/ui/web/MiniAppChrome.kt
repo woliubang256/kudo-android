@@ -114,7 +114,8 @@ private fun MiniAppCapsuleButton(icon: ImageVector, tint: Color, description: St
 internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, refresh: () -> Unit,
     copyLink: () -> Unit, browser: () -> Unit, titleBarEnabled: Boolean = true, toggleTitleBar: () -> Unit = {},
     preferencesReady: Boolean = true, rememberClipboard: (MiniAppClipboardRequest) -> Unit = {},
-    actions: MiniAppActionsController? = null, login: () -> Unit = {}) {
+    actions: MiniAppActionsController? = null, login: () -> Unit = {}, minimize: (() -> Unit)? = null,
+    pinShortcut: (() -> Unit)? = null) {
     val context = LocalContext.current
     CommunitySheet(state.visibility, when (state.panel) {
         MiniAppPanel.MENU -> "小程序更多"
@@ -149,6 +150,11 @@ internal fun MiniAppPanels(state: MiniAppUiState, location: MiniAppLocation?, re
                             state.open(panel); actions?.open(panel)
                         }
                     }
+                }
+                if (location?.id != null && (minimize != null || pinShortcut != null)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    minimize?.let { click -> MiniAppMenuButton(Icons.Rounded.PictureInPictureAlt, "浮窗", Modifier.weight(1f)) { state.dismiss(); click() } }
+                    pinShortcut?.let { click -> MiniAppMenuButton(Icons.Rounded.AddToHomeScreen, "添加到桌面", Modifier.weight(1f)) { state.dismiss(); click() } }
+                    repeat(4 - listOfNotNull(minimize, pinShortcut).size) { Spacer(Modifier.weight(1f)) }
                 }
             }
             MiniAppPanel.ABOUT -> {
