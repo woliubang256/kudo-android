@@ -81,10 +81,12 @@ internal fun ObserveTopicUpdates(topic: TopicViewModel) {
 @Composable
 fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long = 0L, consumeLink: () -> Unit = {},
     incomingNotification: NotificationTarget? = null, consumeNotification: () -> Unit = {},
-    incomingDownloads: Boolean = false, consumeDownloads: () -> Unit = {}) {
+    incomingDownloads: Boolean = false, consumeDownloads: () -> Unit = {},
+    reporting: com.kudo.android.reporting.ReportingController? = null) {
     val display by app.settings.display.collectAsStateWithLifecycle()
     var darkStatusIcons by remember { mutableStateOf<Boolean?>(null) }
     KudoTheme(display, darkStatusIcons) {
+        ReportingConsentPrompt(reporting)
         EditorToolBackdropHost {
         VerificationHost(app.client, app.userAgent) {
         ArticleFootnoteHost {

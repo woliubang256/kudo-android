@@ -53,6 +53,7 @@ class MiniAppActivity : ComponentActivity() {
         setContent {
             val display by app.settings.display.collectAsStateWithLifecycle()
             KudoTheme(display) {
+                com.kudo.android.ui.account.ReportingConsentPrompt((application as KudoApplication).reporting)
                 MiniAppFloatingHost(request?.key?.accountId, ready, pageKey = request?.url) {
                 if (ready) request?.let { current ->
                     key(current.url) {

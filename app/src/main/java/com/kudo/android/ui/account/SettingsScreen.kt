@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kudo.android.data.*
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.components.liquid.LiquidModal
@@ -39,7 +40,8 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @Composable
 fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit, user: Member?, logout: () -> Unit, back: () -> Unit, openLink: (String) -> Unit, manageIgnored: () -> Unit = {},
-    networkSummary: String = "已关闭", manageNetwork: () -> Unit = {}) {
+    networkSummary: String = "已关闭", manageNetwork: () -> Unit = {},
+    reporting: com.kudo.android.reporting.ReportingController? = null, restart: () -> Boolean = { false }) {
     val context = LocalContext.current
     val verification = LocalWebVerification.current
     var notificationsEnabled by remember { mutableStateOf(false) }
@@ -49,6 +51,8 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
     var dialog by rememberSaveable { mutableStateOf("theme") }
     val visibility = remember { MutableTransitionState(false) }
     val backdrop = rememberLayerBackdrop()
+    val reportingConsent = reporting?.consent?.collectAsStateWithLifecycle()
+    var requestedReporting by rememberSaveable { mutableStateOf(false) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val showing = visibility.currentState || visibility.targetState
     fun show(target: String) { dialog = target; visibility.targetState = true }
@@ -138,6 +142,18 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
                     }
                 }
                 item { Text("外部链接不包含 linux.do 及其子域名。系统打开会使用浏览器或关联应用。", Modifier.padding(horizontal = 9.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+                if (reporting != null) {
+                    item { SectionLabel("隐私") }
+                    item {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(19.dp)).background(MaterialTheme.colorScheme.surface)
+                            .heightIn(min = 52.dp).padding(horizontal = 18.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Sentry 错误上报", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            CommunitySwitch(reportingConsent?.value == com.kudo.android.reporting.ReportingConsent.ALLOWED,
+                                { requestedReporting = it; show("reporting") }, enabled = !showing,
+                                modifier = Modifier.testTag("sentry-reporting-switch"))
+                        }
+                    }
+                }
                 if (user != null) item {
                     Box(Modifier.fillMaxWidth().clip(CircleShape).background(MaterialTheme.colorScheme.surface)
                         .clickable(enabled = !showing) { show("logout") }.heightIn(min = 48.dp)
@@ -152,7 +168,8 @@ fun SettingsScreen(settings: DisplaySettings, update: (DisplaySettings) -> Unit,
             "external-links" -> "外部链接打开方式"
             "logout" -> "退出登录？"; else -> "酷DO"
         }
-        LiquidModal(visibility, title, actionSheet, backdrop, settings.glass, ::dismiss,
+        if (dialog == "reporting" && reporting != null) ReportingRestartDialog(visibility, requestedReporting, reporting, backdrop, restart, ::dismiss)
+        else LiquidModal(visibility, title, actionSheet, backdrop, settings.glass, ::dismiss,
             sheetBackground = MaterialTheme.colorScheme.background,
             actions = {
                 if (!actionSheet && dialog == "logout") {

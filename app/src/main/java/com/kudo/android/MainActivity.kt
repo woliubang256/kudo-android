@@ -27,7 +27,8 @@ class MainActivity : ComponentActivity() {
         if (incomingNotification != null) incomingUrl = null
         setContent { KudoApp(app, incomingUrl, linkSequence, consumeLink = { incomingUrl = null },
             incomingNotification = incomingNotification, consumeNotification = { incomingNotification = null },
-            incomingDownloads = incomingDownloads, consumeDownloads = { incomingDownloads = false }) }
+            incomingDownloads = incomingDownloads, consumeDownloads = { incomingDownloads = false },
+            reporting = (application as KudoApplication).reporting) }
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
