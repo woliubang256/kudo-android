@@ -61,6 +61,24 @@ python scripts/generate_signing.py
 
 Debug 与 Release 保持相同包名、使用不同签名，不能互相覆盖安装。新生成的 Debug 证书也与此前机器默认签名不同；需要保留手机数据时，请继续使用原签名构建，不要直接卸载旧应用。
 
+## Sentry 符号映射
+
+本地 Debug 和 Release 均不应用 Sentry Gradle 插件，不生成 Sentry mapping UUID、不注册上传任务；即使本机配置了 Sentry 凭据也不会上传。R8 仍会生成本地 `app/build/outputs/mapping/release/mapping.txt`，可自行留存。
+
+只有 GitHub Actions 的 Tag 签名 Release 步骤显式传入 `-PsentryCiUpload=true`，上传该次构建的 R8 mapping，并将对应 UUID 写入 APK。普通 `main` 缓存构建和 JVM/Lint 检查不启用。插件仅处理 mapping，关闭自动 SDK 安装、性能插桩、运行时优化、源码及原生符号上传和插件遥测；App 的错误上报仍由用户授权后手动初始化。
+
+在仓库 **Settings → Secrets and variables → Actions** 配置：
+
+| 类型 | 名称 | 内容 |
+| --- | --- | --- |
+| Repository secret | `SENTRY_AUTH_TOKEN` | 有 mapping 上传权限的 Sentry Auth Token |
+| Repository variable | `SENTRY_ORG` | Sentry 组织 slug |
+| Repository variable | `SENTRY_PROJECT` | Sentry 项目 slug |
+
+DSN 只接收错误，不能代替上传 Token。缺少以上配置会停止 Tag 正式构建，日志只显示缺少的变量名称。本地不要传入 `sentryCiUpload`；在 GitHub Actions 外误传 `true` 会直接报错。
+
+可运行 `:app:verifySentryBuild` 检查当前构建模式及实际上传任务，不执行上传。正常本地输出应为 `local mode, no plugin or upload tasks`。同版本本地包与 CI 包不共用 mapping UUID，应保留各自产物对应的 mapping；本地包不会自动关联 CI 的映射。
+
 ## Tag 自动发布
 
 [release.yml](../.github/workflows/release.yml) 在推送 `vX.Y.Z` 时运行：脚本测试、笔记检查、Rust 测试、JVM 测试和 Lint 通过后恢复正式签名，构建 Release，核对证书、包名、版本及不可调试标记，生成 SHA256 文件，再发布 GitHub Release。构建作业只有仓库读取权限；独立发布作业使用 `GITHUB_TOKEN` 写入 Release，无需额外的长期发布令牌。
