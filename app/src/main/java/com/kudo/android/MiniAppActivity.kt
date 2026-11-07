@@ -61,7 +61,7 @@ class MiniAppActivity : ComponentActivity() {
                             externalLinkMode = display.externalLinkMode, preferences = app.miniApps,
                             accountId = current.key.accountId, accountReady = true,
                             login = { MiniAppTasks.main(this, sourceTask, login = true) }, infoChanged = ::updateInfo,
-                            minimize = ::minimize)
+                            minimize = ::minimize, pinShortcut = ::pinShortcut)
                     }
                 } else Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
@@ -127,6 +127,14 @@ class MiniAppActivity : ComponentActivity() {
     }
 
     internal fun closeMiniApp() { finishAndRemoveTask() }
+
+    private fun pinShortcut() {
+        val current = request ?: return
+        lifecycleScope.launch {
+            val accepted = runCatching { MiniAppShortcuts.pin(this@MiniAppActivity, current, info) }.getOrDefault(false)
+            if (!accepted && !isFinishing) android.widget.Toast.makeText(this@MiniAppActivity, "当前桌面无法添加快捷方式", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private fun updateInfo(info: MiniAppInfo) {
         if (info.id != request?.key?.appId) return
