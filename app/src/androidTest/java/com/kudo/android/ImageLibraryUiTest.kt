@@ -260,7 +260,8 @@ class ImageLibraryUiTest {
         compose.onNodeWithText("默认收藏").assertIsSelected()
         compose.onNodeWithText("表情").performClick()
         compose.onNodeWithTag("library-image-first").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("gallery-page-0").assertIsDisplayed()
+        compose.onNodeWithTag("gallery-page-1").assertIsDisplayed()
+        compose.onNodeWithText("2 / 2").assertIsDisplayed()
         val moved = runBlocking { ImageLibraryStore(fixture).load(101) }
         assertEquals(first.copy(folderId = "emoji"), moved.images.first { it.id == first.id })
         assertEquals(second, moved.images.first { it.id == second.id })

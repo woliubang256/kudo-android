@@ -18,7 +18,6 @@ import com.kudo.android.ui.account.AccountPageTopBar
 import com.kudo.android.ui.components.*
 import com.kudo.android.ui.editor.EditorToolSheet
 import com.kudo.android.ui.editor.EditorToolBackdropHost
-import com.kudo.android.ui.topic.LocalImageGallery
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -32,7 +31,6 @@ internal fun ImageLibraryScreen(back: () -> Unit, source: (ImageSource) -> Unit)
 @Composable
 private fun ImageLibraryContent(back: () -> Unit, source: (ImageSource) -> Unit) {
     val state = LocalImageLibrary.current
-    val gallery = LocalImageGallery.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var manage by remember(state) { mutableStateOf(false) }
@@ -42,9 +40,7 @@ private fun ImageLibraryContent(back: () -> Unit, source: (ImageSource) -> Unit)
     if (library != null && state.error == null) {
         var folderId by rememberSaveable(state.accountId) { mutableStateOf(library.folders.firstOrNull()?.id) }
         LaunchedEffect(library, folderId) { if (folderId != null && library.folders.none { it.id == folderId }) folderId = null }
-        ImageLibraryBrowser(library, folderId, { folderId = it }, { image ->
-            gallery?.open(listOf(image.articleImage()), 0, "library-${image.id}", source = image.source)
-        }, Modifier.fillMaxSize().testTag("image-library-screen"), source = source, remove = { removing = it },
+        ImageLibraryBrowser(library, folderId, { folderId = it }, modifier = Modifier.fillMaxSize().testTag("image-library-screen"), source = source, remove = { removing = it },
             changeFolder = { changingFolder = it }, header = {
             Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -12,19 +12,26 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -43,19 +50,20 @@ import com.kudo.android.ui.components.screenMaterial
 import com.kudo.android.ui.feed.FeedTabBar
 import com.kudo.android.ui.theme.Ink
 import com.kudo.android.ui.theme.LogoYellow
-import com.kudo.android.ui.topic.ArticleBlock
+import com.kudo.android.ui.topic.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlin.math.roundToInt
+import java.util.UUID
 
 internal fun SavedImage.articleImage() = ArticleBlock.Image(thumbnailUrl, alt, ratio, originalUrl, filename)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selectFolder: (String?) -> Unit,
-    open: (SavedImage) -> Unit, modifier: Modifier = Modifier, selection: Set<String>? = null,
+    open: ((SavedImage) -> Unit)? = null, modifier: Modifier = Modifier, selection: Set<String>? = null,
     source: ((ImageSource) -> Unit)? = null, remove: ((SavedImage) -> Unit)? = null,
     changeFolder: ((SavedImage) -> Unit)? = null,
     header: (@Composable () -> Unit)? = null) {
@@ -111,25 +119,75 @@ internal fun ImageLibraryBrowser(library: ImageLibrary, folderId: String?, selec
 }
 
 @Composable
-private fun ImageLibraryGrid(images: List<SavedImage>, open: (SavedImage) -> Unit, selection: Set<String>?,
+private fun ImageLibraryGrid(images: List<SavedImage>, open: ((SavedImage) -> Unit)?, selection: Set<String>?,
     source: ((ImageSource) -> Unit)?, remove: ((SavedImage) -> Unit)?, changeFolder: ((SavedImage) -> Unit)?, padding: PaddingValues) {
+        val gallery = LocalImageGallery.current
+        val grid = rememberLazyGridState()
+        val origin = rememberSaveable { "library-${UUID.randomUUID()}" }
+        var openedIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
+        val anchors = remember { mutableMapOf<String, GalleryThumbnailAnchor>() }
+        var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+        val density = LocalDensity.current
+        RegisterGalleryOrigin(origin) { image, index ->
+            val id = openedIds.getOrNull(index)
+            val target = images.indexOfFirst { it.id == id && sameGalleryImage(it.articleImage(), image) }
+            if (target < 0) null else {
+                val bounds = anchors[id]?.snapshot()?.bounds
+                val layout = coordinates?.takeIf { it.isAttached }
+                val top = layout?.positionInWindow()?.y?.plus(with(density) { padding.calculateTopPadding().toPx() })
+                val bottom = layout?.let { it.positionInWindow().y + it.size.height - with(density) { padding.calculateBottomPadding().toPx() } }
+                if (bounds == null || top == null || bottom == null || bounds.top < top || bounds.bottom > bottom) grid.scrollToItem(target)
+                withFrameNanos { }
+                while (anchors[id]?.snapshot() == null) withFrameNanos { }
+                anchors[id]?.also {
+                    it.requester.bringIntoView()
+                    withFrameNanos { }
+                }
+            }
+        }
         if (images.isEmpty()) Box(Modifier.fillMaxSize().scrollable(rememberScrollableState { 0f }, Orientation.Vertical)
             .padding(padding), contentAlignment = Alignment.Center) {
             Text("暂无收藏图片", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else LazyVerticalGrid(GridCells.Adaptive(if (selection == null) 148.dp else 112.dp), Modifier.fillMaxSize().testTag("library-images"),
+        } else LazyVerticalGrid(GridCells.Adaptive(if (selection == null) 148.dp else 112.dp), Modifier.fillMaxSize()
+            .onGloballyPositioned { coordinates = it }.testTag("library-images"), state = grid,
             contentPadding = padding, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(images, key = { it.id }) { image ->
                 val checked = selection?.contains(image.id) == true
+                val anchor = if (selection == null) remember(image.id, image.thumbnailUrl) { GalleryThumbnailAnchor() } else null
+                if (anchor != null) {
+                    val radius = with(density) { 10.dp.toPx() }
+                    SideEffect { anchor.contentScale = ContentScale.Crop; anchor.cornerRadius = radius }
+                    DisposableEffect(anchor) {
+                        anchors[image.id] = anchor
+                        onDispose {
+                            if (anchors[image.id] === anchor) anchors.remove(image.id)
+                            anchor.coordinates = null; anchor.painter = null
+                        }
+                    }
+                }
+                fun clicked() {
+                    if (open != null) open(image)
+                    else {
+                        openedIds = images.map { it.id }
+                        gallery?.open(images.map { it.articleImage() }, images.indexOfFirst { it.id == image.id }, origin,
+                            anchor = anchor, sources = images.map { it.source })
+                    }
+                }
                 Column(Modifier.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface).testTag("library-item-${image.id}")) {
                     var failed by remember(image.thumbnailUrl) { mutableStateOf(false) }
                     Box(Modifier.fillMaxWidth().aspectRatio(1.15f).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .4f))
+                        .then(if (anchor != null) Modifier.bringIntoViewRequester(anchor.requester)
+                            .onGloballyPositioned { anchor.coordinates = it }
+                            .graphicsLayer { alpha = if (gallery?.hiddenAnchor === anchor) 0f else 1f } else Modifier)
+                        .clip(RoundedCornerShape(10.dp))
                         .then(if (selection == null && changeFolder != null) Modifier.combinedClickable(role = Role.Button,
-                            onLongClickLabel = "修改分类", onLongClick = { changeFolder(image) }, onClick = { open(image) })
-                            else Modifier.clickable(role = if (selection != null) Role.Checkbox else Role.Button) { open(image) })
+                            onLongClickLabel = "修改分类", onLongClick = { changeFolder(image) }, onClick = ::clicked)
+                            else Modifier.clickable(role = if (selection != null) Role.Checkbox else Role.Button, onClick = ::clicked))
                         .semantics { if (selection != null) selected = checked }.testTag("library-image-${image.id}")) {
                         AsyncImage(image.thumbnailUrl, image.alt.ifBlank { "收藏图片" }, Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            onError = { failed = true }, onSuccess = { failed = false })
+                            onLoading = { anchor?.painter = null }, onError = { failed = true; anchor?.painter = null },
+                            onSuccess = { failed = false; anchor?.painter = it.painter })
                         if (failed) Text("加载失败，点击查看原图", Modifier.align(Alignment.Center).padding(10.dp), style = MaterialTheme.typography.bodySmall)
                         if (selection != null) Icon(if (checked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                             if (checked) "已选择" else "未选择", Modifier.align(Alignment.TopEnd).padding(8.dp)
