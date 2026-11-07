@@ -30,7 +30,7 @@ Status: implemented
 
 MiniAppTaskRequestTest 的 3 项单元测试通过，覆盖同应用不同参数的稳定身份、不同账号/应用隔离、非法入口拒绝及参数保留（artifacts/mini-app-task-request-unit.txt）。Debug 与 AndroidTest 源码编译通过（artifacts/mini-app-independent-compile.txt），显式使用已安装的 0.3.5-dev / 3006。DeepLinkUiTest 增加任务交接后保留原生来源与完整参数的验证。
 
-两个小程序与论坛的真实任务、重复入口复用、关闭回来源、卡片标题/图标以及深链的设备用例随浮窗集成后集中执行；当前编译通过不记为真机验收。
+DeepLinkUiTest 的 10 项真机用例通过。浮窗集成的实际音乐应用与论坛分别使用任务 3898/3897，收起保留原运行上下文；用户确认从预览和已固定桌面图标恢复正常。两个小程序并行、切账号与强制进程回收未专项实测，不把身份单测记作这些设备行为已验收。
 
 ## Consequences
 
