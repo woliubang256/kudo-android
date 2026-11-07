@@ -53,7 +53,7 @@ class MiniAppActivity : ComponentActivity() {
         setContent {
             val display by app.settings.display.collectAsStateWithLifecycle()
             KudoTheme(display) {
-                MiniAppFloatingHost(request?.key?.accountId, ready, ordinary = true) {
+                MiniAppFloatingHost(request?.key?.accountId, ready, pageKey = request?.url) {
                 if (ready) request?.let { current ->
                     key(current.url) {
                         WebScreen(current.url, ::closeMiniApp, ::openBrowser,

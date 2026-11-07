@@ -178,15 +178,7 @@ fun KudoApp(app: AppContainer, incomingUrl: String? = null, linkSequence: Long =
         IncomingNotification(nav, incomingNotification, account.sessionReady, account.user?.id, linkSequence,
             { selected = 3 }, account::readNotificationTarget, { app.notifications.consume(it); consumeNotification() })
         val floatingRoute by nav.currentBackStackEntryAsState()
-        val floatingPath = floatingRoute?.destination?.route.orEmpty()
-        val floatingWeb = floatingPath.startsWith("web") || floatingPath == "login" ||
-            (floatingPath.startsWith("topic/") && display.showSignatures)
-        var floatingNative by remember { mutableStateOf(false) }
-        LaunchedEffect(floatingPath, floatingWeb) {
-            floatingNative = false
-            if (!floatingWeb) { kotlinx.coroutines.delay(320); floatingNative = true }
-        }
-        MiniAppFloatingHost(account.user?.id, sessionStable, ordinary = floatingWeb || !floatingNative) {
+        MiniAppFloatingHost(account.user?.id, sessionStable, pageKey = floatingRoute?.id) {
         com.kudo.android.ui.library.ImageLibraryEnvironment(app.imageLibrary, account.user?.id, sessionStable) {
         TopicPresentationEnvironment(app.repository, account.user?.id) {
         AvatarEnvironment(app.repository, account.user?.id) {

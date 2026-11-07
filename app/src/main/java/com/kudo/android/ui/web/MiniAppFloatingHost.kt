@@ -33,7 +33,7 @@ import com.kudo.android.data.GlassMode
 import com.kudo.android.ui.theme.LocalDisplaySettings
 
 @Composable
-internal fun MiniAppFloatingHost(owner: Int?, enabled: Boolean, ordinary: Boolean = false,
+internal fun MiniAppFloatingHost(owner: Int?, enabled: Boolean,
     pageKey: Any? = null, content: @Composable () -> Unit) {
     val context = LocalContext.current
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
@@ -46,6 +46,7 @@ internal fun MiniAppFloatingHost(owner: Int?, enabled: Boolean, ordinary: Boolea
     var fraction by rememberSaveable(owner) { mutableFloatStateOf(.46f) }
     LaunchedEffect(pageKey, foreground) { panel = null }
     LaunchedEffect(entries.isEmpty()) { if (entries.isEmpty() && panel == MiniAppFloatingPanel.PREVIEWS) panel = null }
+    LaunchedEffect(music) { if (music == null && panel == MiniAppFloatingPanel.MUSIC) panel = null }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         content()
         val density = LocalDensity.current
@@ -80,12 +81,14 @@ internal fun MiniAppFloatingHost(owner: Int?, enabled: Boolean, ordinary: Boolea
                     Box(Modifier.width(18.dp).height(48.dp).floatingSurface(backdrop, glass,
                         RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp)).testTag("mini-app-floating-handle-surface"),
                         contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.MoreVert, "小程序浮窗", Modifier.size(16.dp))
+                        Icon(Icons.Rounded.MoreVert, "小程序浮窗", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
         }
-        if (foreground) MiniAppMusicFloatingControl(owner, enabled, null, GlassMode.TRANSLUCENT)
+        music?.let { MiniAppMusicFloatingControl(it, panel == MiniAppFloatingPanel.MUSIC,
+            { panel = MiniAppFloatingPanel.MUSIC }, { panel = null }, backdrop, glass, safe, handleSize,
+            availableWidth, with(density) { 8.dp.roundToPx() }) }
     }
 }
 
