@@ -4,6 +4,65 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("io.sentry.android.gradle") apply false
+}
+
+// Declaring the plugin does not apply it. A local build never registers upload tasks.
+val sentryCiUpload = providers.gradleProperty("sentryCiUpload").map(String::toBooleanStrict).orElse(false).get()
+if (sentryCiUpload) {
+    if (providers.environmentVariable("GITHUB_ACTIONS").orNull != "true") {
+        throw GradleException("sentryCiUpload is only supported in GitHub Actions; local builds never upload mappings.")
+    }
+    for (name in listOf("SENTRY_AUTH_TOKEN", "SENTRY_ORG", "SENTRY_PROJECT")) {
+        if (providers.environmentVariable(name).orNull.isNullOrBlank()) {
+            throw GradleException("$name is required for CI mapping upload.")
+        }
+    }
+    apply(plugin = "io.sentry.android.gradle")
+    extensions.configure<io.sentry.android.gradle.extensions.SentryPluginExtension> {
+        authToken.set(providers.environmentVariable("SENTRY_AUTH_TOKEN"))
+        org.set(providers.environmentVariable("SENTRY_ORG"))
+        projectName.set(providers.environmentVariable("SENTRY_PROJECT"))
+        ignoredBuildTypes.set(setOf("debug"))
+        includeProguardMapping.set(true)
+        autoUploadProguardMapping.set(true)
+        autoInstallation.enabled.set(false)
+        tracingInstrumentation.enabled.set(false)
+        includeSourceContext.set(false)
+        autoUploadSourceContext.set(false)
+        uploadNativeSymbols.set(false)
+        autoUploadNativeSymbols.set(false)
+        includeNativeSources.set(false)
+        includeDependenciesReport.set(false)
+        telemetry.set(false)
+        sizeAnalysis.enabled.set(false)
+        distribution.enabled.set(false)
+        snapshots.enabled.set(false)
+    }
+}
+
+tasks.register("verifySentryBuild") {
+    group = "verification"
+    description = "Checks the CI-only mapping upload boundary without executing uploads."
+    doLast {
+        check(plugins.hasPlugin("io.sentry.android.gradle") == sentryCiUpload)
+        val uploads = tasks.names.filter { it.startsWith("uploadSentry") }
+        if (!sentryCiUpload) {
+            check(uploads.isEmpty()) { "Local builds must not register Sentry upload tasks." }
+            logger.lifecycle("Sentry verification: local mode, no plugin or upload tasks.")
+        } else {
+            val options = project.extensions.getByType<io.sentry.android.gradle.extensions.SentryPluginExtension>()
+            check(uploads == listOf("uploadSentryProguardMappingsRelease")) { "Only Release mappings may be uploaded: $uploads" }
+            check(options.includeProguardMapping.get() && options.autoUploadProguardMapping.get())
+            check(!options.autoInstallation.enabled.get() && !options.tracingInstrumentation.enabled.get())
+            check(!options.includeSourceContext.get() && !options.autoUploadSourceContext.get())
+            check(!options.uploadNativeSymbols.get() && !options.autoUploadNativeSymbols.get())
+            check(!options.includeNativeSources.get() && !options.includeDependenciesReport.get())
+            check(!options.telemetry.get() && !options.sizeAnalysis.enabled.get())
+            check(!options.distribution.enabled.get() && !options.snapshots.enabled.get())
+            logger.lifecycle("Sentry verification: CI mapping only; runtime SDK and tracing unchanged.")
+        }
+    }
 }
 
 val signingProperties = Properties().apply {
