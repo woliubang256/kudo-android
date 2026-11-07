@@ -114,5 +114,5 @@ internal fun Modifier.floatingSurface(backdrop: Backdrop?, glass: GlassMode, sha
             backdrop, shape = { shape }, effects = {
                 blur(18.dp.toPx())
                 if (glass == GlassMode.LIQUID && Build.VERSION.SDK_INT >= 33) lens(10.dp.toPx(), 18.dp.toPx(), depthEffect = true)
-            }, onDrawSurface = { drawRect(color.copy(alpha = if (light) .58f else .48f)) }))
+            }, onDrawSurface = { drawRect(color.copy(alpha = if (light) .58f else .74f)) }))
 }

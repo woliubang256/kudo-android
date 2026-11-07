@@ -14,7 +14,9 @@ Status: implemented
 
 左侧保留紧凑音乐入口，点击后向右展开单行控制条：音符、歌名、播放/暂停、关闭。关闭调用既有 hideAndPause，暂停并隐藏音乐入口，不能移除小程序浮窗。用户点击外部或系统返回时只收起展开内容，不暂停音乐。两种展开状态互斥，账号或页面变化时收起。
 
-入口、音乐横条及预览的原生覆盖内容绑定当前材质设置，复用不包含浮层自身的真实采样源；检查普通半透明、背景模糊和液态玻璃。遵守此前 WebView 不进入 Compose 采样层的兼容边界，不能为浮层重新引入网页渲染进程闪退。网页场景的安全采样能力需要单独验证。
+入口、音乐横条及预览的原生覆盖内容绑定当前材质设置，复用不包含浮层自身的真实采样源，覆盖普通半透明、背景模糊和液态玻璃。遵守此前 WebView 不进入 Compose 采样层的兼容边界，不改变网页顶部的普通布局。
+
+高级材质的暗色遮罩使用 0.74 透明度，保证深色主题覆盖浅色网页时歌名可读；背景采样仍透过剩余部分显示。截图对比度断言以正文 4.5:1 为下限，背景色变化断言同时防止用纯色遮罩冒充实际采样。
 
 覆盖内容使用有界的原生 Popup 窗口，折叠时不阻挡页面其他区域，展开时由系统处理外部点击和返回。采样通过 PixelCopy 读取 Activity 主窗口；Popup 独立于被复制的窗口，因此按钮、预览与音乐条都不会出现在自己的采样中。将有尺寸限制的背景帧按屏幕坐标映射给 Backdrop 的模糊和折射，不建立包含 WebView 的 Compose GraphicsLayer。主窗口绘制时标记背景变化，限制复制频率；Activity 暂停或材质为普通半透明时停止采样。
 
@@ -27,10 +29,19 @@ Status: implemented
 - 底部 Action Sheet 复用成熟拖拽、焦点和安全区域逻辑，但与用户明确提供的就地展开参考不符；本功能使用锚定浮层。
 - 将多个预览纵向堆叠能适应窄屏，但用户指定横向排列；使用横向滚动并限制预览宽度。
 - 仅调整透明度最省成本，但不能体现背景模糊或液态玻璃；使用实际背景采样并单独验证网页兼容性。
+- 根据采样色自动切换前景色能保留更多透明度，但同一横条可能覆盖深浅相间的网页内容，按帧变色也会干扰阅读；保持当前主题并增强暗色遮罩。
 
 ## Testing
 
-旧版真机的两项复现均在禁止 Action Sheet 的断言失败，记录在 artifacts/mini-app-anchor-repro-device.txt。新实现通过 Kotlin 编译；三种材质、浅深色、音乐反馈和多个预览的集中真机回归尚待执行，不把编译当作交互或材质验收。
+旧版真机的两项复现均在禁止 Action Sheet 的断言失败，记录在 artifacts/mini-app-anchor-repro-device.txt。
+
+RMX2202 / Android 13 真机的 MiniAppMusicFloatingUiTest、MiniAppAudioPermissionUiTest、WebViewMaterialLayoutUiTest 共 14 项通过（artifacts/mini-app-anchor-fixed-device.txt）。新增用例覆盖两张预览水平排列、四项溢出滚动、独立关闭、页面和账号切换收起、纵向拖动、外部触摸与返回收起；音乐用例覆盖原播放器暂停、继续、切歌及关闭音乐保留小程序。现有网页授权和普通布局用例确认本次浮层变更未改对应逻辑。
+
+增强后的四项浮层回归再次通过，记录在 artifacts/mini-app-anchor-contrast-fixed-device.txt：六种主题/材质的高级模式实际显示底色变化，反复采样同一背景不累积浮层自身遮罩，快照在卡片左右与中间均铺满，音乐和预览互斥展开。暗色音乐条覆盖白网页的文字对比度先复现为 2.51:1（artifacts/mini-app-anchor-contrast-repro-device.txt），增强遮罩后达到 4.5:1 断言下限。已查看六种材质和主题截图，原生中文、关闭按钮与横条可读。测试截图使用离线小程序，不等同于再次打开线上音乐应用；此前实际播放器与桌面恢复的验收保留在对应旧笔记。
+
+Popup 的 OEM 入场动画不受 Compose idle 控制，初版像素断言过早截图导致两项失败。回归等待可见颜色及系统窗口稳定，不能把这种时序失败当作采样源错误；诊断确认 Activity 的 PixelCopy 帧不含 Popup，临时代码已移除。
+
+MiniAppFloatingPositionTest、MiniAppMusicStateTest、MiniAppTaskRequestTest 共 7 项 JVM 测试通过，覆盖左右物理边缘、RTL、窄窗口、键盘占用与拖动边界。Debug/AndroidTest 构建与 lintDebug 通过。覆盖安装始终显式使用 3006 / 0.3.5-dev，签名指纹一致，firstInstallTime 保持 2026-10-23 14:55:34；未卸载或清理开发版数据。回归前后 crash buffer 哈希一致，没有新增崩溃。
 
 ## Consequences
 
