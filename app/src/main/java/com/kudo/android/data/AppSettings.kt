@@ -49,7 +49,8 @@ class AppSettings(context: Context) {
     fun clearAccountData() {
         prefs.edit().apply { prefs.all.keys.filter { it.startsWith("draft_") || it.startsWith("post_edit_") }.forEach(::remove) }.apply()
     }
-    fun recentEmojis(): List<String> = prefs.getString("editor_recent_emojis", "").orEmpty().split(',').filter(String::isNotBlank)
+    fun recentEmojis(): List<String> = prefs.getString("editor_recent_emojis", "").orEmpty().split(',')
+        .filter(String::isNotBlank).distinct().take(32)
     fun rememberEmoji(name: String) {
         if (name.isBlank()) return
         val values = (listOf(name) + recentEmojis().filterNot { it == name }).take(32)

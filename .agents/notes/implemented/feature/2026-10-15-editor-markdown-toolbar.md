@@ -97,6 +97,8 @@ Emoji image requests now carry a stable memory and disk cache key derived from t
 
 目录解析以分组内名称作为身份，保留首次出现的有效条目、分组和条目顺序；同名但分组不同的条目、同 URL 的不同短代码均保留。缓存与预览继续复用同一目录，不引入额外网络请求。重复数据必须先通过隔离夹具复现，再验证修复。
 
+最近使用读取时过滤空白、按首次出现去重并限制为32项，选择表情时沿用现有逗号分隔格式写回清理后的列表；不清空用户偏好或草稿，也不引入迁移版本。旧重复记录在真机夹具上先复现 `Key "custom:wave" was already used`，历史顺序及上限断言先失败，见 `artifacts/emoji-red-historicalRecentDuplicatesCannotCreateDuplicateGridKeys.txt` 和 `artifacts/emoji-red-recentNamesKeepTheirOrderLimitAndRepairOnSelection.txt`。`AppSettingsEmojiHistoryTest` 使用独立偏好文件验证读写修复，不触碰用户的真实最近记录；修复后在 RMX2202 / Android 13 上通过，覆盖顺序、32项上限、落盘清理、空白忽略及重复选择前移（`artifacts/emoji-history-green-device.txt`）。
+
 `AvatarModelTest.emojiDirectoryRemovesRepeatedNamesWithinEachGroupAndKeepsTheFirstUrl` 在旧解析器上先失败，新增回归同时验证跨组同名和同图别名不被合并。目录修复后 `AvatarModelTest` 与 `AvatarMetadataCacheTest` 共19项通过（`artifacts/emoji-directory-green.txt`）。真机离线重复目录夹具在旧面板上触发 `Key "custom:same" was already used`，堆栈同样落在 `SubcomposeLayout.kt:1591`；证据为 `artifacts/emoji-identity-repro-build.txt` 和 `artifacts/emoji-red-duplicateDirectoryEntriesAreSafeInGroupsAndSearch.txt`。
 
 按数组下标生成 key 能保证一时唯一且改动最少，但搜索和顺序改变后会把条目状态绑定到别的表情；因此不采用。按 URL 去重可直接合并重复图片，但会吞掉共享图片的合法别名，也不能表达服务器按短代码插入的规则；因此只按目录身份去重。
