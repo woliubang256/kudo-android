@@ -66,4 +66,19 @@ class AvatarModelTest {
         assertEquals(setOf("symbols", "b站"), groups.map { it.name }.toSet())
         assertEquals("b站", groups.first { it.name == "b站" }.items.single().group)
     }
+
+    @Test fun emojiDirectoryRemovesRepeatedNamesWithinEachGroupAndKeepsTheFirstUrl() {
+        val json = JSONObject("""{"custom":[{"name":"wave","url":"/first.png"},{"name":"wave","url":"/later.png"},{"name":"wave_alias","url":"/first.png"}]}""")
+        val items = DiscourseParser.emojiGroups(json).single().items
+        assertEquals(listOf("wave", "wave_alias"), items.map { it.name })
+        assertEquals(listOf("/first.png", "/first.png"), items.map { it.url })
+    }
+
+    @Test fun emojiDirectoryKeepsSameNamesInDifferentGroupsAndDistinctAliases() {
+        val json = JSONObject("""{"standard":[{"name":"wave","url":"/standard.png"},{"name":"hello","url":"/standard.png"}],"custom":[{"name":"wave","url":"/custom.png"}]}""")
+        val groups = DiscourseParser.emojiGroups(json).associateBy { it.name }
+        assertEquals(listOf("wave", "hello"), groups.getValue("standard").items.map { it.name })
+        assertEquals("/custom.png", groups.getValue("custom").items.single().url)
+        assertEquals("custom", groups.getValue("custom").items.single().group)
+    }
 }

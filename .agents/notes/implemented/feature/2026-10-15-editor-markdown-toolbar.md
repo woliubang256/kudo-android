@@ -90,3 +90,13 @@ Group names are no longer rendered as a heading inside the emoji picker, so the 
 ## Emoji image cache identity
 
 Emoji image requests now carry a stable memory and disk cache key derived from the server URL and requested pixel size. Cache read/write and network policies remain enabled, so the first request still loads normally while revisiting the picker can reuse the cached image. The URL, including the server version query, remains part of the key so a server-side emoji version change invalidates the old entry. Other avatar, post, and gallery image requests keep their existing cache behavior.
+
+## Emoji directory identity
+
+[Issue #5](https://github.com/woliubang256/kudo-android/issues/5) 的 Sentry 堆栈指向 Compose 1.10.5 的 LazyGrid 重复 key 检查，用户最新反馈入口应为表情面板；没有原始重复数据，不能从堆栈断言具体重复的表情。对照依赖字节码确认 SubcomposeLayout.kt:1591 对应 `Key was already used`，不是材质错误。
+
+目录解析以分组内名称作为身份，保留首次出现的有效条目、分组和条目顺序；同名但分组不同的条目、同 URL 的不同短代码均保留。缓存与预览继续复用同一目录，不引入额外网络请求。重复数据必须先通过隔离夹具复现，再验证修复。
+
+`AvatarModelTest.emojiDirectoryRemovesRepeatedNamesWithinEachGroupAndKeepsTheFirstUrl` 在旧解析器上先失败，新增回归同时验证跨组同名和同图别名不被合并。目录修复后 `AvatarModelTest` 与 `AvatarMetadataCacheTest` 共19项通过（`artifacts/emoji-directory-green.txt`）。真机离线重复目录夹具在旧面板上触发 `Key "custom:same" was already used`，堆栈同样落在 `SubcomposeLayout.kt:1591`；证据为 `artifacts/emoji-identity-repro-build.txt` 和 `artifacts/emoji-red-duplicateDirectoryEntriesAreSafeInGroupsAndSearch.txt`。
+
+按数组下标生成 key 能保证一时唯一且改动最少，但搜索和顺序改变后会把条目状态绑定到别的表情；因此不采用。按 URL 去重可直接合并重复图片，但会吞掉共享图片的合法别名，也不能表达服务器按短代码插入的规则；因此只按目录身份去重。

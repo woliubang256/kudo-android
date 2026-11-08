@@ -147,7 +147,7 @@ object DiscourseParser {
             val name = emoji.stringField("name")
             val url = emoji.stringField("url")
             if (name.isEmpty() || url.isEmpty()) null else SiteEmoji(name, url, group)
-        }.orEmpty()
+        }.orEmpty().distinctBy { it.name }
         items.takeIf { it.isNotEmpty() }?.let { SiteEmojiGroup(group, it) }
     }.toList()
 
