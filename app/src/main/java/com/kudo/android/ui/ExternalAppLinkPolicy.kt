@@ -34,7 +34,7 @@ internal object ExternalAppLinkPolicy {
     fun contentUrl(value: String): String? = LinuxDoLink.webUrl(value) ?: quarkScheme(value)
 
     /** Match domain labels, never linux.do.evil.test or notlinux.do. */
-    fun isSiteUrl(value: String): Boolean = LinuxDoLink.webUrl(value)?.toHttpUrlOrNull()?.host?.let {
+    fun isSiteUrl(value: String): Boolean = LinuxDoLink.webUrl(value)?.toHttpUrlOrNull()?.host?.removeSuffix(".")?.let {
         it == "linux.do" || it.endsWith(".linux.do")
     } == true
 

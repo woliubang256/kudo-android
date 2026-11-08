@@ -47,6 +47,21 @@ class ExternalAppLinkPolicyTest {
         }
     }
 
+    @Test fun absoluteDnsSiteNamesKeepTheSameDomainBoundary() {
+        listOf(
+            "https://linux.do./guidelines?source=post#rules" to "https://linux.do./guidelines?source=post#rules",
+            "http://connect.linux.do./help" to "http://connect.linux.do./help",
+            "https://A.B.LINUX.DO.:8443/help" to "https://a.b.linux.do.:8443/help",
+        ).forEach { (value, normalized) ->
+            assertTrue(value, ExternalAppLinkPolicy.isSiteUrl(value))
+            assertEquals(normalized, ExternalAppLinkPolicy.fallbackUrl(value))
+        }
+        listOf("https://linux.do.evil.test./", "https://notlinux.do./", "https://linux.do../",
+            "https://linux.do@evil.test/", "https://evil.test/?target=https://linux.do./").forEach {
+            assertFalse(it, ExternalAppLinkPolicy.isSiteUrl(it))
+        }
+    }
+
     @Test fun onlyMainFrameUserClicksCanLeaveTheWebView() {
         assertTrue(ExternalAppLinkPolicy.canOpenFromWeb(true, true, false))
         assertFalse(ExternalAppLinkPolicy.canOpenFromWeb(false, true, false))

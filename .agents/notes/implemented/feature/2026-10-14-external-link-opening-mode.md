@@ -18,6 +18,8 @@ KudoApp 原生正文统一入口先检查既有文件下载，再传入当前偏
 
 WebView 只在主文档、用户手势且非重定向的外部点击、当前模式为 SYSTEM 时调用系统启动器；linux.do 及子域名、IN_APP 点击、脚本与重定向维护网页历史。模式通过 rememberUpdatedState 更新，切换设置不重载网页。受支持的 scheme 在 IN_APP 或系统启动失败时使用 HTTP(S) 分享回退。Manifest 保留显式浏览器功能所需 HTTP(S) 查询，并为准确夸克分享目标声明包可见性。
 
+用户再次明确 linux.do 及所有子域名优先应用内打开、不受外部链接偏好影响。常规域名已有此边界；DNS 绝对域名的单个尾点也应按同一域名分类，只在判断时规范化 host，保留实际 URL、查询、端口和片段。继续精确按域名标签匹配，不接受 linux.do.evil.test、notlinux.do 或凭据伪装；原生帖子、用户、connect 和小程序等已有入口仍优先原生，剩余站内网页进入 WebView。显式“在浏览器打开”是独立用户操作，不属于偏好自动分流。
+
 ## Existing note audit
 
 [第三方 App 分流](../../implemented/feature/2026-10-14-external-app-links.md)部分取代：不再自动筛选候选或指定夸克包名，但协议范围与已记录的验证限制仍有效。[网页浏览](../../implemented/feature/2026-10-10-in-app-web-links.md)部分取代外站默认方式，保留站内连续历史、会话和显式浏览器入口。[站内深链](../../implemented/feature/2026-10-09-linuxdo-links.md)保留原生解析与系统入口，仅新增外部域名边界，不给任意子域名扩展原生帖子解析。[下载管理](../../implemented/feature/2026-10-14-native-download-manager.md)保留下载优先。没有其他同主题 proposed/rejected；无完全取代或需要归档的笔记。
@@ -39,6 +41,8 @@ RMX2202 / Android 13 本轮共 34 项不同真机用例验证通过：启动器 
 构建显式 versionCode=2005、versionName=0.2.3，与已安装版本相同。安装前回读包核对签名 SHA256 一致（95f95aff266413e4c3fb431bf7ae96552d0e5e601b986e4a53d2a116b6623e4f）；应用 adb install -r、测试包 -r -t，再 am instrument，保留用户数据。设置保存测试使用隔离 SharedPreferences，不修改真实偏好。`artifacts/external-link-mode-settings.png` 已实际查看，确认贴边选项面板与黄色选中态。产物 `artifacts/kudo-external-link-mode.apk`。
 
 系统启动器通过捕获生产 Intent 验证，不实际唤起第三方 App；此前外部夸克启动受自动审批拒绝的限制仍见旧笔记，没有改用测试绕过，也没有将 Intent 验证记为夸克分享页面端到端验收。提交前笔记门禁与 diff 检查通过。
+
+2026-11-08 补齐 DNS 绝对域名边界前，新增 JVM 用例在旧实现因 `https://linux.do./guidelines?source=post#rules` 被分类为外站而失败（`artifacts/site-domain-repro.xml`）。修复后策略 6 项、Linux.do 解析 11 项及关联 SVG 2 项共 19 项 JVM 测试通过；Debug / AndroidTest 构建及 Lint 成功，0 errors、83 warnings、1 hint（`artifacts/signature-site-fixed-build.txt`）。本地 Sentry 检查确认没有应用上传插件或注册上传任务。
 
 ## Consequences
 
