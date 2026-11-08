@@ -77,6 +77,9 @@ private fun groupIcon(group: SiteEmojiGroup): SiteEmoji? {
         ?: group.items.firstOrNull()
 }
 
+// Length-prefix the group so separator characters cannot make different pairs collide.
+private fun SiteEmoji.pickerKey(): String = "${group.length}:$group$name"
+
 @Composable
 internal fun EditorEmojis(insert: (String) -> Unit) {
     val metadata = LocalAvatarMetadata.current
@@ -129,14 +132,15 @@ internal fun EditorEmojis(insert: (String) -> Unit) {
     }
     if (groups == null) Text("正在读取站点表情…", style = MaterialTheme.typography.bodySmall)
     else HorizontalPager(pager, Modifier.fillMaxWidth().heightIn(max = 320.dp).testTag("editor-emoji-pager"),
-        key = { if (it == 0) "recent" else available[it - 1].name }) { index ->
+        key = { if (it == 0) "recent" else "group:${available[it - 1].name}" }) { index ->
         val searching = searchResult != null && index == pager.settledPage
-        val entries = if (searching) searchResult.orEmpty() else if (index == 0) currentRecent else available[index - 1].items
+        val pageEntries = if (searching) searchResult.orEmpty() else if (index == 0) currentRecent else available[index - 1].items
+        val entries = remember(pageEntries) { pageEntries.distinctBy { it.pickerKey() } }
         if (entries.isEmpty()) Box(Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
             Text(if (!searching && index == 0) "暂无表情" else "没有匹配的表情", style = MaterialTheme.typography.bodySmall)
         } else LazyVerticalGrid(GridCells.Adaptive(52.dp), Modifier.fillMaxWidth().heightIn(max = 320.dp)
             .testTag(if (index == pager.settledPage) "editor-emojis" else "editor-emojis-$index")) {
-            items(entries, key = { "${it.group}:${it.name}" }) { item ->
+            items(entries, key = { it.pickerKey() }) { item ->
                 Box(Modifier.size(52.dp).semantics { contentDescription = ":${item.name}:" }
                     .clickable(role = Role.Button) { choose(item) }, contentAlignment = Alignment.Center) {
                     if (item.url.isBlank()) Text(item.name, style = MaterialTheme.typography.headlineSmall)

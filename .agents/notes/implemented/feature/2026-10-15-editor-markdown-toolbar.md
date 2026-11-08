@@ -99,6 +99,14 @@ Emoji image requests now carry a stable memory and disk cache key derived from t
 
 最近使用读取时过滤空白、按首次出现去重并限制为32项，选择表情时沿用现有逗号分隔格式写回清理后的列表；不清空用户偏好或草稿，也不引入迁移版本。旧重复记录在真机夹具上先复现 `Key "custom:wave" was already used`，历史顺序及上限断言先失败，见 `artifacts/emoji-red-historicalRecentDuplicatesCannotCreateDuplicateGridKeys.txt` 和 `artifacts/emoji-red-recentNamesKeepTheirOrderLimitAndRepairOnSelection.txt`。`AppSettingsEmojiHistoryTest` 使用独立偏好文件验证读写修复，不触碰用户的真实最近记录；修复后在 RMX2202 / Android 13 上通过，覆盖顺序、32项上限、落盘清理、空白忽略及重复选择前移（`artifacts/emoji-history-green-device.txt`）。
 
+面板在渲染边界按分组和名称再次去重，兼容直接来自缓存的重复目录。网格 key 使用分组长度前缀编码，避免简单冒号拼接把不同的分组、名称组合映射到同一 key；Pager 的站点分组增加独立命名空间，避免服务端名为 `recent` 的分组与内置最近页冲突。旧实现的两种冲突均已在真机隔离测试中复现，证据为 `artifacts/emoji-red-groupAndNameSeparatorsDoNotCollideInSearchKeys.txt` 与 `artifacts/emoji-red-serverGroupNamedRecentCannotCollideWithTheRecentPage.txt`。不吞掉 Compose 异常，也不修改材质、请求、图片缓存或 Sentry 隐私策略。
+
+2026-11-08 修复后 RMX2202 / Android 13 的 `EditorEmojiIdentityUiTest` 5项与 `AppSettingsEmojiHistoryTest` 1项全部通过，覆盖原始重复目录、重复历史记录、跨组同名和别名、反复搜索及左右切组、分隔符与内置最近页冲突、插入回显及目录只加载一次（`artifacts/emoji-identity-green-device-final.txt`）。首轮夹具把空输入框的占位提示一并当作输入值，改为直接断言 `EditableText` 后完整通过，不调整产品行为以迎合断言。
+
+`EditorToolbarUiTest` 10项、`PrivateMessageToolbarUiTest.linksListsAndEmojiWorkWithTheDarkLargeTextKeyboardLayout` 及 `EditorToolMaterialUiTest` 的真实背景采样和表情面板统一表面2项共13项真机回归通过，包含发帖、紧凑回复、私信、浅深色和三种材质（`artifacts/emoji-editor-regression-device.txt`）。目录及缓存19项单测、Debug/AndroidTest构建和 `lintDebug` 通过（`artifacts/emoji-identity-green-build.txt`）。覆盖前核对开发签名及版本 `0.3.5-dev / 3006`，仅使用 `adb install -r`、`-r -t` 与手动 instrumentation，未卸载或清空开发版数据。
+
+去重会在目录解析和页面数据变化时分配额外列表；同组同名但 URL 不同的条目使用首个有效条目。若以后站点为同组同名提供不同语义，需要同时重审目录身份与按名称保存的最近记录。当前验证的是隔离数据触发的同类异常；没有原始事件数据，也未在报告所述小米15上重现，不能据此断言这已覆盖所有偶发闪退。
+
 `AvatarModelTest.emojiDirectoryRemovesRepeatedNamesWithinEachGroupAndKeepsTheFirstUrl` 在旧解析器上先失败，新增回归同时验证跨组同名和同图别名不被合并。目录修复后 `AvatarModelTest` 与 `AvatarMetadataCacheTest` 共19项通过（`artifacts/emoji-directory-green.txt`）。真机离线重复目录夹具在旧面板上触发 `Key "custom:same" was already used`，堆栈同样落在 `SubcomposeLayout.kt:1591`；证据为 `artifacts/emoji-identity-repro-build.txt` 和 `artifacts/emoji-red-duplicateDirectoryEntriesAreSafeInGroupsAndSearch.txt`。
 
 按数组下标生成 key 能保证一时唯一且改动最少，但搜索和顺序改变后会把条目状态绑定到别的表情；因此不采用。按 URL 去重可直接合并重复图片，但会吞掉共享图片的合法别名，也不能表达服务器按短代码插入的规则；因此只按目录身份去重。
