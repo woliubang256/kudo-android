@@ -34,6 +34,10 @@ CI 只配置、不上传的探针先复现验证任务误查 Task 而非 Project
 
 用户确认组织 slug 为 xuedang、项目 slug 为 kudo-android，并完成上传 Token 配置。通过 GitHub API 仅检查 SENTRY_AUTH_TOKEN 的 Secret 元数据，确认存在；发现 Repository Variables 尚缺时补入 SENTRY_ORG=xuedang、SENTRY_PROJECT=kudo-android，逐项回读一致。未读取或更改 Token 值，也未触发发布或真实 mapping 上传。
 
+首次真实上传在 v0.3.8 / 3009 的 [GitHub Actions 42452855086](https://github.com/woliubang256/kudo-android/actions/runs/42452855086) 完成。发布工具、笔记、Rust、全量 JVM 与 Lint 均通过，签名 Release 的 verifySentryBuild 确认仅启用 mapping；uploadSentryProguardMappingsRelease 报告上传 1 份 Proguard mapping，UUID 为 605851da-a6b5-3c62-9d02-b5650b91b37f。构建和发布作业均成功，正式 Release 已公开。上传摘要保存在 artifacts/release-0.3.8-mapping-upload.txt，没有发送运行时测试事件。
+
+下载已公开的实际 APK 和 SHA256 后复核：正式包名、版本、不可调试、仅 arm64-v8a、既有 Release 证书、ZIP 完整性及 16KB 对齐均正确；文件摘要 25c7242126ff7a28bc81350c6414fe8c4cd753c5aa8ae22c1be3d086edd330c2 与附件及 GitHub asset digest 一致。APK 中 auto-init=false、无 Sentry 初始化/性能 Provider 或 Sentry 原生库，assets/sentry-debug-meta.properties 的 UUID 与上传日志一致，公开正文与整理日志一致。证据位于 artifacts/published-v0.3.8/verification.json，未安装该正式包或改变真机授权。
+
 ## Alternatives considered
 
 - 所有构建应用插件再关闭 autoUpload 可以共用 UUID 生成逻辑，但本地仍注册上传任务，未来修改或手动调用容易越过边界；只在 CI 显式应用整个插件。
@@ -42,4 +46,4 @@ CI 只配置、不上传的探针先复现验证任务误查 Task 而非 Project
 
 ## Consequences
 
-仓库上传配置已齐全，但 Secret 存在不等同于 Token 有效或具有上传权限，仍需下次 Tag 正式构建核对真实上传结果，当前不能宣称符号表已被远端接收。相同版本号的本地包与 CI 包具有不同构建来源，本地包不使用 CI mapping。只有 CI 自己生成的 UUID 才能关联其 mapping。插件会增加首次 Gradle 依赖解析，但本地不执行其逻辑。
+v0.3.8 已验证真实 mapping 上传及 APK UUID 关联；后续 Token 失效或权限变化仍会停止 Tag 正式构建，不能仅凭 Secret 存在判断成功。相同版本号的本地包与 CI 包具有不同构建来源，本地包不使用 CI mapping。只有 CI 自己生成的 UUID 才能关联其 mapping。插件会增加首次 Gradle 依赖解析，但本地不执行其逻辑。
