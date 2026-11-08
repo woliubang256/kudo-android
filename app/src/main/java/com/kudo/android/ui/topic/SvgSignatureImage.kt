@@ -62,38 +62,59 @@ internal fun SvgSignatureImage(url: String, modifier: Modifier = Modifier,
         key(url, active) {
             var loaded by remember { mutableStateOf(false) }
             var failed by remember { mutableStateOf(false) }
+            var released by remember { mutableStateOf(false) }
             var webView by remember { mutableStateOf<WebView?>(null) }
+            fun release(view: WebView, rendererGone: Boolean = false) {
+                if (released) return
+                released = true
+                if (webView === view) webView = null
+                if (rendererGone) {
+                    // A dead renderer cannot be reused; detach before destroying its view.
+                    (view.parent as? ViewGroup)?.removeView(view)
+                } else {
+                    view.stopLoading(); view.onPause(); view.removeAllViews()
+                }
+                view.destroy()
+            }
+            fun fail() {
+                if (failed || released) return
+                failed = true; loaded = false
+                failure()
+            }
             DisposableEffect(webView, loaded) {
                 val view = webView
+                val observer = view?.viewTreeObserver
                 var previousRatio = 0f
                 val listener = android.view.ViewTreeObserver.OnPreDrawListener {
-                    @Suppress("DEPRECATION")
-                    val height = (view?.contentHeight ?: 0) * (view?.scale ?: 1f)
-                    val ratio = if (height > 0) (view?.width ?: 0) / height else 0f
-                    if (ratio.isFinite() && ratio > 0 && kotlin.math.abs(ratio - previousRatio) > .0001f) {
-                        previousRatio = ratio
-                        view?.post { dimensions(ratio) }
+                    if (view != null && webView === view && !released) {
+                        @Suppress("DEPRECATION")
+                        val height = view.contentHeight * view.scale
+                        val ratio = if (height > 0) view.width / height else 0f
+                        if (ratio.isFinite() && ratio > 0 && kotlin.math.abs(ratio - previousRatio) > .0001f) {
+                            previousRatio = ratio
+                            view.post { if (webView === view && !released && !failed) dimensions(ratio) }
+                        }
                     }
                     true
                 }
-                if (loaded) view?.viewTreeObserver?.addOnPreDrawListener(listener)
+                if (loaded && !released) observer?.addOnPreDrawListener(listener)
                 onDispose {
-                    view?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener)
+                    observer?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener)
                 }
             }
             DisposableEffect(lifecycle, webView) {
                 val view = webView
                 val observer = LifecycleEventObserver { _, event ->
-                    when (event) {
-                        Lifecycle.Event.ON_PAUSE -> { view?.onPause(); view?.visibility = View.INVISIBLE }
-                        Lifecycle.Event.ON_RESUME -> { view?.onResume(); view?.visibility = View.VISIBLE }
+                    if (view != null && webView === view && !released) when (event) {
+                        Lifecycle.Event.ON_PAUSE -> { view.onPause(); view.visibility = View.INVISIBLE }
+                        Lifecycle.Event.ON_RESUME -> { view.onResume(); view.visibility = View.VISIBLE }
                         else -> Unit
                     }
                 }
                 lifecycle.addObserver(observer)
                 onDispose { lifecycle.removeObserver(observer) }
             }
-            if (active) AndroidView(factory = { context ->
+            if (active && !failed) AndroidView(factory = { context ->
                 webViewFactory(context).apply {
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     setBackgroundColor(Color.TRANSPARENT)
@@ -117,29 +138,38 @@ internal fun SvgSignatureImage(url: String, modifier: Modifier = Modifier,
                             if (!request.isForMainFrame && request.method == "GET" && request.url.toString() == url) return null
                             return WebResourceResponse("text/plain", "UTF-8", "".byteInputStream())
                         }
-                        override fun onPageFinished(view: WebView, value: String) { if (!failed) loaded = true }
+                        override fun onPageFinished(view: WebView, value: String) {
+                            if (!failed && !released && webView === view) loaded = true
+                        }
+                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                            if (!released) {
+                                val notify = !failed
+                                failed = true; loaded = false
+                                release(view, rendererGone = true)
+                                if (notify) failure()
+                            }
+                            return true
+                        }
                         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                            if (request.isForMainFrame || request.url.toString() == url) { failed = true; loaded = false; failure() }
+                            if (request.isForMainFrame || request.url.toString() == url) fail()
                         }
                         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
                             if (response.statusCode >= 400 && (request.isForMainFrame || request.url.toString() == url)) {
-                                failed = true; loaded = false; failure()
+                                fail()
                             }
                         }
                         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: android.net.http.SslError) {
                             handler.cancel()
-                            if (error.url == url) { failed = true; loaded = false; failure() }
+                            if (error.url == url) fail()
                         }
                     }
                     webView = this
                     // Own-host images retain their site cookies; external images remain third-party and receive no site cookies.
                     loadDataWithBaseURL("https://linux.do/", signatureImageDocument(url), "text/html", "UTF-8", null)
                 }
-            }, onRelease = {
-                webView = null
-                it.stopLoading(); it.onPause(); it.removeAllViews(); it.destroy()
-            }, modifier = Modifier.fillMaxSize().alpha(if (loaded) 1f else 0f).testTag("svg-signature-content"))
-            if (!loaded) Text("签名图片", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }, onRelease = { release(it) },
+                modifier = Modifier.fillMaxSize().alpha(if (loaded) 1f else 0f).testTag("svg-signature-content"))
+            if (!loaded && !failed) Text("签名图片", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
