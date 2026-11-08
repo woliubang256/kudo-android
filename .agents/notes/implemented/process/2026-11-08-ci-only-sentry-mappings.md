@@ -32,6 +32,8 @@ CI 只配置、不上传的探针先复现验证任务误查 Task 而非 Project
 
 线上最新正式 Release 与已安装正式版均核对为 0.3.7 / 3008。本地显式以该版本执行 verifySentryBuild、assembleRelease、lintRelease，全部通过，没有应用插件或注册上传任务（artifacts/sentry-ci-local-release-build.txt）。打包源提交为 9b27e5a，正式 APK 与 SHA256、本地 mapping、签名/Manifest/ZIP 对齐证据保存在 artifacts/local-release-0.3.7-sentry-ci-9b27e5a/。核对既有 Release 证书、不可调试、仅 arm64-v8a、ZIP 完整性及全部原生库 16KB 对齐；APK 中 auto-init=false，无 Sentry Provider、mapping UUID 和 Sentry 原生库。本地 mapping 仅保存，未上传；未安装或发布该正式包。
 
+用户确认组织 slug 为 xuedang、项目 slug 为 kudo-android，并完成上传 Token 配置。通过 GitHub API 仅检查 SENTRY_AUTH_TOKEN 的 Secret 元数据，确认存在；发现 Repository Variables 尚缺时补入 SENTRY_ORG=xuedang、SENTRY_PROJECT=kudo-android，逐项回读一致。未读取或更改 Token 值，也未触发发布或真实 mapping 上传。
+
 ## Alternatives considered
 
 - 所有构建应用插件再关闭 autoUpload 可以共用 UUID 生成逻辑，但本地仍注册上传任务，未来修改或手动调用容易越过边界；只在 CI 显式应用整个插件。
@@ -40,4 +42,4 @@ CI 只配置、不上传的探针先复现验证任务误查 Task 而非 Project
 
 ## Consequences
 
-真实上传需要用户配置 Sentry 组织、项目与上传 Token；当前仅提供 DSN，不能宣称已完成远端上传。相同版本号的本地包与 CI 包具有不同构建来源，本地包不使用 CI mapping。只有 CI 自己生成的 UUID 才能关联其 mapping。插件会增加首次 Gradle 依赖解析，但本地不执行其逻辑。
+仓库上传配置已齐全，但 Secret 存在不等同于 Token 有效或具有上传权限，仍需下次 Tag 正式构建核对真实上传结果，当前不能宣称符号表已被远端接收。相同版本号的本地包与 CI 包具有不同构建来源，本地包不使用 CI mapping。只有 CI 自己生成的 UUID 才能关联其 mapping。插件会增加首次 Gradle 依赖解析，但本地不执行其逻辑。

@@ -54,4 +54,4 @@ ReportingRestartActivity 在非导出的 :restart 辅助进程中前台启动，
 
 首次授权前的启动错误无法上报，这是明确同意的必要边界。立即重启会中断原进程中的小程序和音乐；选择下次启动时当前状态不变，包括关闭后当前进程仍继续按原决定上报。SDK 增加 APK 与运行时开销；Core 不引入 Sentry NDK / Replay 原生库，也不支持原生 C/C++ 信号崩溃。授权前的历史 ANR 不读取，避免追溯收集。
 
-正式包启用 R8 混淆，DSN 只提供事件接收能力；完整还原混淆堆栈需要对应构建的 mapping 与 Sentry 项目符号处理。[仅 CI 上传映射](../process/2026-11-08-ci-only-sentry-mappings.md)补充 Tag 正式构建的官方插件与凭据边界，本地 Debug / Release 不应用插件或上传。真实远端上传仍需配置组织、项目及上传 Token。只验证本地接收，正式项目接收与服务端 IP 保留策略没有代替用户改动；隐私说明如实说明接收服务可见来源 IP。关于页、THIRD_PARTY_NOTICES.md 与随包 Sentry / Epitaph MIT 许可同步。
+正式包启用 R8 混淆，DSN 只提供事件接收能力；完整还原混淆堆栈需要对应构建的 mapping 与 Sentry 项目符号处理。[仅 CI 上传映射](../process/2026-11-08-ci-only-sentry-mappings.md)补充 Tag 正式构建的官方插件与凭据边界，本地 Debug / Release 不应用插件或上传。仓库已配置组织、项目及上传 Token；真实远端上传仍需 Tag 正式构建验证。只验证本地接收，正式项目接收与服务端 IP 保留策略没有代替用户改动；隐私说明如实说明接收服务可见来源 IP。关于页、THIRD_PARTY_NOTICES.md 与随包 Sentry / Epitaph MIT 许可同步。
