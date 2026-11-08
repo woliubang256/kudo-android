@@ -44,6 +44,8 @@ RMX2202 / Android 13 本轮共 34 项不同真机用例验证通过：启动器 
 
 2026-11-08 补齐 DNS 绝对域名边界前，新增 JVM 用例在旧实现因 `https://linux.do./guidelines?source=post#rules` 被分类为外站而失败（`artifacts/site-domain-repro.xml`）。修复后策略 6 项、Linux.do 解析 11 项及关联 SVG 2 项共 19 项 JVM 测试通过；Debug / AndroidTest 构建及 Lint 成功，0 errors、83 warnings、1 hint（`artifacts/signature-site-fixed-build.txt`）。本地 Sentry 检查确认没有应用上传插件或注册上传任务。
 
+同轮 RMX2202 / Android 13 的启动器 8 项与 WebView 16 项全部通过（`artifacts/signature-site-fixed-device.txt`）；新增的启动器、网页站内域名用例在旧实现先因尾点域名误唤端而失败（`artifacts/signature-site-repro-device.txt`）。覆盖两种偏好下的根域名、多级子域名、大小写、端口、单尾点，以及模式切换不重载；既有外站分流、网页历史、Cookie、显式浏览器入口回归保持通过。启动器继续捕获 Intent，WebView 使用离线夹具和生产导航回调，没有打开真实外站或绕开此前的自动审批限制。
+
 ## Consequences
 
 用户有可保存的选择入口，原生及 WebView 主动点击均遵循偏好。系统模式普通外站可能直接进入默认浏览器；准确的 HTTPS 夸克分享会优先交给 `com.quark.browser`，厂商面板与关联设置仍可能影响其他链接。应用内网页与系统浏览器登录态独立。系统没有处理程序或拒绝启动时使用应用内网页回退。显式“在浏览器打开”继续强制浏览器，不随新偏好变化。

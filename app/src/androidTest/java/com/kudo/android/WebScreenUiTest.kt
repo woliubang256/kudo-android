@@ -320,6 +320,37 @@ class WebScreenUiTest {
         compose.runOnIdle { assertTrue(opened.isEmpty()) }
     }
 
+    @Test fun siteDomainsStayInTheWebViewForBothExternalOpeningModes() {
+        var mode by mutableStateOf(ExternalLinkMode.SYSTEM)
+        val opened = mutableListOf<String>()
+        compose.setContent { KudoTheme(DisplaySettings()) {
+            WebScreen(start, {}, {}, ::create, { opened += it; true }, externalLinkMode = mode)
+        } }
+        awaitPage("指南")
+        fun request(value: String) = object : WebResourceRequest {
+            override fun getUrl() = android.net.Uri.parse(value)
+            override fun isForMainFrame() = true
+            override fun hasGesture() = true
+            override fun isRedirect() = false
+            override fun getMethod() = "GET"
+            override fun getRequestHeaders() = emptyMap<String, String>()
+        }
+        for (selected in ExternalLinkMode.entries) {
+            compose.runOnIdle { mode = selected }
+            compose.runOnUiThread {
+                val view = current()
+                val client = view.webViewClient
+                listOf("https://linux.do/guidelines", "https://cdk.linux.do/", "https://a.b.linux.do/help",
+                    "https://linux.do./guidelines?q=1#rules", "https://CONNECT.LINUX.DO./", "https://a.b.linux.do.:8443/help").forEach {
+                    assertFalse("$selected: $it", client.shouldOverrideUrlLoading(view, request(it)))
+                }
+                assertTrue(opened.isEmpty())
+                assertEquals(start, view.url)
+                assertEquals(1, views.size)
+            }
+        }
+    }
+
     @Test fun cookieStoreIsSharedWithAppAndIsolatedFromOtherOrigins() {
         compose.runOnUiThread { AndroidSessionCookies().set(start, "app_fixture=from_app; Path=/; Secure; SameSite=Lax") }
         show()

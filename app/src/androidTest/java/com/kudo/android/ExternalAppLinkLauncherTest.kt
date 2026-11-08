@@ -63,6 +63,16 @@ class ExternalAppLinkLauncherTest {
         assertEquals(2, started.size)
     }
 
+    @Test fun siteLinksIgnoreOpeningModeIncludingAbsoluteDnsNames() {
+        val launcher = ExternalAppLinkLauncher(context, launch = { fail("Site links must stay inside Kudo") })
+        for (mode in ExternalLinkMode.entries) {
+            listOf("https://linux.do/guidelines", "https://cdk.linux.do/", "https://a.b.linux.do:8443/page",
+                "https://linux.do./guidelines?q=1#part", "https://connect.linux.do./", "https://A.B.LINUX.DO./").forEach {
+                assertFalse("$mode: $it", launcher.open(it, mode))
+            }
+        }
+    }
+
     @Test fun launchFailuresReturnControlToTheWebFallback() {
         listOf(ActivityNotFoundException(), SecurityException()).forEach { failure ->
             assertFalse(ExternalAppLinkLauncher(context, launch = { throw failure }).open(share, ExternalLinkMode.SYSTEM))
