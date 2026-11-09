@@ -84,4 +84,16 @@ class DohSettingsTest {
             assertTrue(value.customServers.isEmpty())
         }
     }
+
+    @Test fun onlyAKnownBadWinnerLeavesStorageWhileASlowRaceKeepsIt() {
+        val stored = """{"ip":"104.16.0.1"}"""
+        val ready = """{"phase":"ready","winner":{"ip":"104.18.0.2"}}"""
+        assertEquals("""{"ip":"104.18.0.2"}""", persistedEdgeWinner(ready, stored))
+        assertEquals(stored, persistedEdgeWinner("""{"phase":"fallback","winner":null,"forget":false}""", stored))
+        assertNull(persistedEdgeWinner("""{"phase":"fallback","winner":null,"forget":true}""", stored))
+        // States written by older native builds carried no flag and meant "forget".
+        assertNull(persistedEdgeWinner("""{"phase":"fallback","winner":null}""", stored))
+        for (raw in listOf("""{"phase":"racing","winner":null}""", "not json", """{"phase":"ready","winner":null}"""))
+            assertEquals(stored, persistedEdgeWinner(raw, stored))
+    }
 }

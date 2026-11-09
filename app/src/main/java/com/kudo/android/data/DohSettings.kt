@@ -81,19 +81,26 @@ internal fun decodeDohConfiguration(raw: String?): DohConfiguration = runCatchin
         atlas = json.opt("atlas") as? Boolean ?: false).select(json.optString("selectedId"))
 }.getOrDefault(DohConfiguration())
 
+/** A failed race keeps a winner that was only slow; native marks a known-bad winner with `forget`. */
+internal fun persistedEdgeWinner(raw: String, stored: String?): String? {
+    val json = runCatching { JSONObject(raw) }.getOrNull() ?: return stored
+    return when (json.optString("phase")) {
+        "ready" -> json.optJSONObject("winner")?.toString()?.takeIf { it.length <= 6500 } ?: stored
+        "fallback" -> if (json.opt("forget") == false) stored else null
+        else -> stored
+    }
+}
+
 class DohSettings(context: Context) {
     private val prefs = context.getSharedPreferences("kudo_network", Context.MODE_PRIVATE)
     private val state = MutableStateFlow(decodeDohConfiguration(prefs.getString("doh", null)))
     val configuration = state.asStateFlow()
     internal fun cachedWinner(): String? = prefs.getString("edge_winner", null)?.takeIf { it.length <= 6500 }
     internal fun saveSelection(raw: String) {
-        val json = runCatching { JSONObject(raw) }.getOrNull() ?: return
-        when (json.optString("phase")) {
-            "ready" -> json.optJSONObject("winner")?.toString()?.takeIf { it.length <= 6500 }?.let {
-                if (prefs.getString("edge_winner", null) != it) prefs.edit().putString("edge_winner", it).apply()
-            }
-            "fallback" -> prefs.edit().remove("edge_winner").apply()
-        }
+        val stored = prefs.getString("edge_winner", null)
+        val next = persistedEdgeWinner(raw, stored)
+        if (next == stored) return
+        if (next == null) prefs.edit().remove("edge_winner").apply() else prefs.edit().putString("edge_winner", next).apply()
     }
     fun update(value: DohConfiguration) {
         val normalized = decodeDohConfiguration(encodeDohConfiguration(value))

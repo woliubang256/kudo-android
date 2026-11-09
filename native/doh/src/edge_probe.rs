@@ -35,8 +35,15 @@ pub struct Reply {
     pub ech: Vec<u8>,
 }
 
-pub async fn get(ip: IpAddr, host: &str, path: &str, key: &[u8], limit: usize) -> Result<Reply> {
-    tokio::time::timeout(Duration::from_secs(3), async {
+pub async fn get(
+    ip: IpAddr,
+    host: &str,
+    path: &str,
+    key: &[u8],
+    limit: usize,
+    budget: Duration,
+) -> Result<Reply> {
+    tokio::time::timeout(budget, async {
         let mut key = key.to_vec();
         for attempt in 0..2 {
             let mut config = dns::tls_config(Some(key.clone()))?;
@@ -136,9 +143,9 @@ pub fn trace_matches(status: u16, body: &[u8]) -> bool {
         })
 }
 
-pub async fn probe(ip: IpAddr, key: &[u8]) -> Result<(u64, Vec<u8>)> {
+pub async fn probe(ip: IpAddr, key: &[u8], budget: Duration) -> Result<(u64, Vec<u8>)> {
     let start = Instant::now();
-    let reply = get(ip, "linux.do", "/cdn-cgi/trace", key, 8192).await?;
+    let reply = get(ip, "linux.do", "/cdn-cgi/trace", key, 8192, budget).await?;
     if !trace_matches(reply.status, &reply.body) {
         return Err("probe_wrong_site");
     }

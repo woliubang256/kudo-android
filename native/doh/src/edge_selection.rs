@@ -7,7 +7,9 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
+    future::Future,
     net::IpAddr,
+    pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -20,6 +22,13 @@ use tokio::{
 };
 
 const KEY_AGE: u64 = 48 * 3600;
+/// One probe covers TCP + ECH TLS + the trace request.
+const PROBE_BUDGET: Duration = Duration::from_secs(3);
+/// A slow but working path (cold radio, ~1 s RTT) needs about 3.3 s; only timeouts get this.
+const RELAXED_BUDGET: Duration = Duration::from_secs(8);
+const RACE_WINDOW: Duration = Duration::from_secs(4);
+const RECHECK_LIMIT: usize = 4;
+const TIMEOUT: &str = "probe_timeout";
 const COOLDOWN: Duration = Duration::from_secs(60);
 const MAX_CANDIDATES: usize = 32;
 const VENDORS: &[&str] = &[
@@ -57,9 +66,34 @@ impl Winner {
     }
 }
 
+type ProbeResult = crate::dns::Result<(u64, Vec<u8>)>;
+type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
+type ProbeFn = Arc<dyn Fn(IpAddr, Vec<u8>, Duration) -> BoxFuture<ProbeResult> + Send + Sync>;
+type GatherFn = Arc<dyn Fn() -> BoxFuture<(Vec<IpAddr>, Vec<Vec<u8>>)> + Send + Sync>;
+
+/// Network side of a selection; replaced only by offline tests.
+pub(crate) struct Network {
+    probe: ProbeFn,
+    gather: GatherFn,
+}
+impl Network {
+    fn live() -> Self {
+        Self {
+            probe: Arc::new(|ip, key, budget| {
+                Box::pin(async move { edge_probe::probe(ip, &key, budget).await })
+            }),
+            gather: Arc::new(|| Box::pin(gather())),
+        }
+    }
+}
+
 #[derive(Default)]
 struct State {
     winner: Option<Winner>,
+    /// A saved winner that only timed out. Not a route, but verified first next time.
+    retained: Option<Winner>,
+    /// The saved winner is known bad and must leave persistent storage.
+    forget: bool,
     verified: bool,
     cache_revalidated: bool,
     cache_error: Option<&'static str>,
@@ -91,6 +125,8 @@ impl State {
         self.failures.push_back(at);
         if self.failures.len() >= 3 {
             self.winner = None;
+            self.retained = None;
+            self.forget = true;
             self.verified = false;
             self.phase = "fallback";
             self.failures.clear();
@@ -100,6 +136,7 @@ impl State {
 
 pub struct Selector {
     atlas: bool,
+    network: Network,
     state: Mutex<State>,
     flight: tokio::sync::Mutex<()>,
     closed: AtomicBool,
@@ -107,8 +144,12 @@ pub struct Selector {
 }
 impl Selector {
     pub fn new(atlas: bool, cached: Option<Winner>) -> Self {
+        Self::with_network(atlas, cached, Network::live())
+    }
+    pub(crate) fn with_network(atlas: bool, cached: Option<Winner>, network: Network) -> Self {
         Self {
             atlas,
+            network,
             state: Mutex::new(State {
                 winner: cached.filter(|winner| winner.key().is_some()),
                 phase: "idle",
@@ -125,7 +166,7 @@ impl Selector {
     }
     pub fn status(&self) -> serde_json::Value {
         let state = self.state.lock().unwrap();
-        serde_json::json!({"phase": state.phase, "winner": state.winner, "cache_revalidated": state.cache_revalidated, "cache_error": state.cache_error})
+        serde_json::json!({"phase": state.phase, "winner": state.winner, "forget": state.forget, "cache_revalidated": state.cache_revalidated, "cache_error": state.cache_error})
     }
     pub fn failed(&self, ip: IpAddr) {
         self.state.lock().unwrap().failure(ip, Instant::now());
@@ -181,16 +222,21 @@ impl Selector {
                 return None;
             }
             state.phase = "verifying";
-            state.winner.clone()
+            state.forget = false;
+            state.winner.clone().or_else(|| state.retained.clone())
         };
-        if let Some(saved) = saved {
+        let mut saved_only_timed_out = false;
+        if let Some(saved) = &saved {
             if let Some(key) = saved.key() {
-                match edge_probe::probe(saved.ip, &key).await {
+                match self.revalidate(saved.ip, key).await {
                     Ok((latency, key)) => {
                         self.state.lock().unwrap().cache_revalidated = true;
                         return self.install(saved.ip, latency, key);
                     }
-                    Err(reason) => self.state.lock().unwrap().cache_error = Some(reason),
+                    Err(reason) => {
+                        saved_only_timed_out = reason == TIMEOUT;
+                        self.state.lock().unwrap().cache_error = Some(reason);
+                    }
                 }
             }
         }
@@ -200,7 +246,7 @@ impl Selector {
             state.verified = false;
             state.phase = "racing";
         }
-        let (mut ips, mut keys) = gather().await;
+        let (mut ips, mut keys) = (self.network.gather)().await;
         if self.atlas && !ips.is_empty() && !keys.is_empty() {
             // Atlas is optional and authenticated as its own hostname. No cookies or redirects.
             if let Ok(reply) = edge_probe::get(
@@ -209,6 +255,7 @@ impl Selector {
                 "/v1/routes",
                 &keys[0],
                 256 * 1024,
+                PROBE_BUDGET,
             )
             .await
             {
@@ -234,11 +281,34 @@ impl Selector {
         }
         ips.truncate(MAX_CANDIDATES);
         keys.truncate(3);
-        if let Some((ip, latency, key)) = race(ips, keys).await {
+        let probe = self.network.probe.clone();
+        let outcome = race(ips, keys.clone(), probe.clone(), PROBE_BUDGET, RACE_WINDOW).await;
+        if let Some((ip, latency, key)) = outcome.best {
             return self.install(ip, latency, key);
         }
-        self.state.lock().unwrap().phase = "fallback";
+        // Only candidates that merely ran out of time are worth a slower second look.
+        let mut slow = outcome.timed_out;
+        slow.truncate(RECHECK_LIMIT);
+        if !slow.is_empty() {
+            let window = RELAXED_BUDGET + Duration::from_secs(1);
+            if let Some((ip, latency, key)) =
+                race(slow, keys, probe, RELAXED_BUDGET, window).await.best
+            {
+                return self.install(ip, latency, key);
+            }
+        }
+        let mut state = self.state.lock().unwrap();
+        state.phase = "fallback";
+        // A failed race says nothing about a winner that was only slow; keep it for next time.
+        state.forget = saved.is_some() && !saved_only_timed_out;
+        state.retained = if saved_only_timed_out { saved } else { None };
         None
+    }
+    async fn revalidate(&self, ip: IpAddr, key: Vec<u8>) -> ProbeResult {
+        match (self.network.probe)(ip, key.clone(), PROBE_BUDGET).await {
+            Err(TIMEOUT) => (self.network.probe)(ip, key, RELAXED_BUDGET).await,
+            other => other,
+        }
     }
     fn install(&self, ip: IpAddr, latency: u64, key: Vec<u8>) -> Option<Answer> {
         if self.closed.load(Ordering::SeqCst) {
@@ -253,6 +323,8 @@ impl Selector {
         let answer = winner.answer();
         let mut state = self.state.lock().unwrap();
         state.winner = Some(winner);
+        state.retained = None;
+        state.forget = false;
         state.verified = true;
         state.phase = "ready";
         state.failures.clear();
@@ -329,9 +401,23 @@ where
     (ips, keys)
 }
 
-async fn race(ips: Vec<IpAddr>, keys: Vec<Vec<u8>>) -> Option<(IpAddr, u64, Vec<u8>)> {
+#[derive(Default)]
+struct RaceOutcome {
+    best: Option<(IpAddr, u64, Vec<u8>)>,
+    /// Candidates whose probe ran out of time, in completion order.
+    timed_out: Vec<IpAddr>,
+}
+
+async fn race(
+    ips: Vec<IpAddr>,
+    keys: Vec<Vec<u8>>,
+    probe: ProbeFn,
+    budget: Duration,
+    window: Duration,
+) -> RaceOutcome {
+    let mut outcome = RaceOutcome::default();
     if keys.is_empty() {
-        return None;
+        return outcome;
     }
     let mut tasks = JoinSet::new();
     let semaphore = Arc::new(Semaphore::new(8));
@@ -339,38 +425,49 @@ async fn race(ips: Vec<IpAddr>, keys: Vec<Vec<u8>>) -> Option<(IpAddr, u64, Vec<
     for ip in ips {
         let semaphore = semaphore.clone();
         let keys = keys.clone();
+        let probe = probe.clone();
         tasks.spawn(async move {
-            let _permit = semaphore.acquire().await.ok()?;
+            let Ok(_permit) = semaphore.acquire().await else {
+                return (ip, Err("race_closed"));
+            };
+            let mut last = Err("probe_no_key");
             for key in keys.iter() {
-                if let Ok((latency, key)) = edge_probe::probe(ip, key).await {
-                    return Some((ip, latency, key));
+                last = probe(ip, key.clone(), budget).await;
+                // A timeout is the path, not the key: another key would only wait again.
+                if matches!(last, Ok(_) | Err(TIMEOUT)) {
+                    break;
                 }
             }
-            None
+            (ip, last)
         });
     }
-    let mut deadline = tokio::time::Instant::now() + Duration::from_secs(4);
-    let mut best: Option<(IpAddr, u64, Vec<u8>)> = None;
+    let mut deadline = tokio::time::Instant::now() + window;
     let mut passes = 0;
     while let Ok(Some(result)) = tokio::time::timeout_at(deadline, tasks.join_next()).await {
-        if let Ok(Some(candidate)) = result {
-            if best.is_none() {
-                deadline = deadline.min(tokio::time::Instant::now() + Duration::from_millis(400));
+        match result {
+            Ok((ip, Ok((latency, key)))) => {
+                if outcome.best.is_none() {
+                    deadline =
+                        deadline.min(tokio::time::Instant::now() + Duration::from_millis(400));
+                }
+                if outcome
+                    .best
+                    .as_ref()
+                    .is_none_or(|(_, best, _)| latency < *best)
+                {
+                    outcome.best = Some((ip, latency, key));
+                }
+                passes += 1;
+                if passes >= 4 {
+                    break;
+                }
             }
-            if best
-                .as_ref()
-                .is_none_or(|(_, latency, _)| candidate.1 < *latency)
-            {
-                best = Some(candidate);
-            }
-            passes += 1;
-            if passes >= 4 {
-                break;
-            }
+            Ok((ip, Err(TIMEOUT))) => outcome.timed_out.push(ip),
+            _ => {}
         }
     }
     tasks.abort_all();
-    best
+    outcome
 }
 
 fn atlas_candidates(body: &[u8]) -> (Vec<IpAddr>, Option<Vec<u8>>) {
@@ -515,6 +612,106 @@ mod tests {
             .is_none());
         assert!(selector.state.lock().unwrap().races.is_empty());
         drop(guard);
+    }
+    const KEY: &str = "AEX+DQBBvgAgACAnc+9IO/WWQSMj7W2mLvaFlY3UbvRlOsLeK+qbQ6pgVwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=";
+    type Calls = Arc<Mutex<Vec<(IpAddr, Duration)>>>;
+    /// Answers instantly: `rule` decides from the address and the budget the caller offered.
+    fn fake(
+        gathered: Vec<IpAddr>,
+        rule: impl Fn(IpAddr, Duration) -> ProbeResult + Send + Sync + 'static,
+    ) -> (Network, Calls, Arc<Mutex<usize>>) {
+        let calls: Calls = Arc::default();
+        let gathers = Arc::new(Mutex::new(0));
+        let (log, count, rule) = (calls.clone(), gathers.clone(), Arc::new(rule));
+        let network = Network {
+            probe: Arc::new(move |ip, key, budget| {
+                log.lock().unwrap().push((ip, budget));
+                let result = rule(ip, budget).map(|(latency, _)| (latency, key));
+                Box::pin(async move { result })
+            }),
+            gather: Arc::new(move || {
+                *count.lock().unwrap() += 1;
+                let ips = gathered.clone();
+                Box::pin(async move { (ips, vec![STANDARD.decode(KEY).unwrap()]) })
+            }),
+        };
+        (network, calls, gathers)
+    }
+    fn saved(ip: IpAddr) -> Winner {
+        Winner { ip, ech: KEY.into(), latency_ms: 80, checked_at: now() }
+    }
+    fn ip(text: &str) -> IpAddr {
+        text.parse().unwrap()
+    }
+    #[tokio::test]
+    async fn a_slow_saved_winner_gets_one_relaxed_check_before_any_race() {
+        let a = ip("104.16.0.1");
+        let (network, calls, gathers) = fake(vec![], move |ip, budget| {
+            if ip == a && budget == RELAXED_BUDGET { Ok((3300, vec![])) } else { Err(TIMEOUT) }
+        });
+        let selector = Selector::with_network(false, Some(saved(a)), network);
+        assert_eq!(selector.answer().await.unwrap().ips, [a]);
+        assert_eq!(*calls.lock().unwrap(), [(a, PROBE_BUDGET), (a, RELAXED_BUDGET)]);
+        assert_eq!(*gathers.lock().unwrap(), 0);
+        let status = selector.status();
+        assert_eq!(status["phase"], "ready");
+        assert_eq!(status["cache_revalidated"], true);
+    }
+    #[tokio::test]
+    async fn definite_failures_are_not_given_a_relaxed_second_chance() {
+        let a = ip("104.16.0.1");
+        let (network, calls, _) = fake(vec![], |_, _| Err("probe_ech_rejected"));
+        let selector = Selector::with_network(false, Some(saved(a)), network);
+        assert!(selector.answer().await.is_none());
+        assert!(!calls.lock().unwrap().iter().any(|call| call.1 == RELAXED_BUDGET));
+        let status = selector.status();
+        assert_eq!(status["phase"], "fallback");
+        assert_eq!(status["forget"], true, "a winner that really failed must leave storage");
+        assert!(selector.state.lock().unwrap().retained.is_none());
+    }
+    #[tokio::test]
+    async fn a_race_that_only_timed_out_rechecks_probed_candidates_slowly() {
+        let (b, c) = (ip("104.16.0.2"), ip("104.16.0.3"));
+        let (network, calls, _) = fake(vec![b, c], move |ip, budget| {
+            if ip == c && budget == RELAXED_BUDGET { Ok((3100, vec![])) } else { Err(TIMEOUT) }
+        });
+        let selector = Selector::with_network(false, None, network);
+        assert_eq!(selector.answer().await.unwrap().ips, [c]);
+        let relaxed = calls.lock().unwrap().iter().filter(|call| call.1 == RELAXED_BUDGET).count();
+        assert!((1..=RECHECK_LIMIT).contains(&relaxed), "{relaxed} relaxed probes");
+    }
+    #[tokio::test]
+    async fn a_failed_race_keeps_a_merely_slow_winner_for_storage_and_the_next_selection() {
+        let a = ip("104.16.0.1");
+        let fast = Arc::new(AtomicBool::new(false));
+        let switch = fast.clone();
+        let (network, calls, _) = fake(vec![ip("104.16.0.2")], move |ip, _| {
+            if ip == a && switch.load(Ordering::SeqCst) { Ok((90, vec![])) } else { Err(TIMEOUT) }
+        });
+        let selector = Selector::with_network(false, Some(saved(a)), network);
+        assert!(selector.answer().await.is_none());
+        let status = selector.status();
+        assert_eq!(status["phase"], "fallback");
+        assert_eq!(status["forget"], false, "a slow network must not erase the stored winner");
+        assert_eq!(selector.state.lock().unwrap().retained.as_ref().map(|w| w.ip), Some(a));
+        // Next permitted selection (after the cooldown) verifies the kept winner first.
+        selector.state.lock().unwrap().races.clear();
+        calls.lock().unwrap().clear();
+        fast.store(true, Ordering::SeqCst);
+        assert_eq!(selector.answer().await.unwrap().ips, [a]);
+        assert_eq!(calls.lock().unwrap()[0], (a, PROBE_BUDGET));
+        assert!(selector.state.lock().unwrap().retained.is_none());
+    }
+    #[test]
+    fn traffic_failures_that_release_the_pin_also_forget_the_stored_winner() {
+        let a = ip("104.16.0.1");
+        let mut state = State { winner: Some(saved(a)), verified: true, ..State::default() };
+        let at = Instant::now();
+        for _ in 0..3 {
+            state.failure(a, at);
+        }
+        assert!(state.forget);
+        assert!(state.retained.is_none());
     }
     #[test]
     fn a_valid_saved_winner_must_be_reverified_and_success_clears_failure_streak() {
