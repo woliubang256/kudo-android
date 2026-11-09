@@ -19,7 +19,8 @@ class TopicPrivateMessageTest {
     private val cookies = object : SessionCookies { override fun get(url: String) = ""; override fun set(url: String, cookie: String) {} }
     private val viewer = Member(1, "me", "", "")
     private val post = Post(81, 8, Member(2, "reply_author", "", ""), "<p>正文</p>", "", 0, false, null, null, false)
-    private suspend fun await(predicate: () -> Boolean) = withContext(Dispatchers.IO) { withTimeout(5000) { while (!predicate()) delay(10) } }
+    // Real-time wait for MockWebServer/OkHttp threads; a busy CI runner can delay the first local request past 5 s.
+    private suspend fun await(predicate: () -> Boolean) = withContext(Dispatchers.IO) { withTimeout(30_000) { while (!predicate()) delay(10) } }
     private fun detail(title: String = "标题 & 中文？") = """{"id":5,"title":"$title","post_stream":{"posts":[{"id":10,"post_number":1,"username":"topic_author"}],"stream":[10]}}"""
 
     @Test fun replyMessageTargetsItsAuthorAndExactFloorWithoutSendingAnything() = runTest {
