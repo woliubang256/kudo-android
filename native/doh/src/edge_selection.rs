@@ -29,6 +29,8 @@ const RELAXED_BUDGET: Duration = Duration::from_secs(8);
 const RACE_WINDOW: Duration = Duration::from_secs(4);
 const RECHECK_LIMIT: usize = 4;
 const TIMEOUT: &str = "probe_timeout";
+/// With IPv6 preferred, an IPv4 pass waits this long for an IPv6 pass before the race settles.
+const PREFERRED_FAMILY_GRACE: Duration = Duration::from_millis(1500);
 const COOLDOWN: Duration = Duration::from_secs(60);
 const MAX_CANDIDATES: usize = 32;
 const VENDORS: &[&str] = &[
@@ -46,6 +48,9 @@ pub struct Winner {
     pub ech: String,
     pub latency_ms: u64,
     pub checked_at: u64,
+    /// Chosen by a race that preferred IPv6. Older IPv4 winners never competed with IPv6.
+    #[serde(default)]
+    pub v6_considered: bool,
 }
 impl Winner {
     fn key(&self) -> Option<Vec<u8>> {
@@ -75,6 +80,7 @@ type GatherFn = Arc<dyn Fn() -> BoxFuture<(Vec<IpAddr>, Vec<Vec<u8>>)> + Send + 
 pub(crate) struct Network {
     probe: ProbeFn,
     gather: GatherFn,
+    has_ipv6: Arc<dyn Fn() -> bool + Send + Sync>,
 }
 impl Network {
     fn live() -> Self {
@@ -83,8 +89,16 @@ impl Network {
                 Box::pin(async move { edge_probe::probe(ip, &key, budget).await })
             }),
             gather: Arc::new(|| Box::pin(gather())),
+            has_ipv6: Arc::new(has_ipv6_route),
         }
     }
+}
+
+/// A routing-table check only: UDP connect sends nothing. Link-local-only networks fail here.
+fn has_ipv6_route() -> bool {
+    std::net::UdpSocket::bind("[::]:0")
+        .and_then(|socket| socket.connect("[2606:4700:4700::1111]:443"))
+        .is_ok()
 }
 
 #[derive(Default)]
@@ -97,6 +111,7 @@ struct State {
     verified: bool,
     cache_revalidated: bool,
     cache_error: Option<&'static str>,
+    prefer_v6: bool,
     phase: &'static str,
     races: VecDeque<Instant>,
     failures: VecDeque<Instant>,
@@ -166,7 +181,7 @@ impl Selector {
     }
     pub fn status(&self) -> serde_json::Value {
         let state = self.state.lock().unwrap();
-        serde_json::json!({"phase": state.phase, "winner": state.winner, "forget": state.forget, "cache_revalidated": state.cache_revalidated, "cache_error": state.cache_error})
+        serde_json::json!({"phase": state.phase, "winner": state.winner, "forget": state.forget, "prefer_v6": state.prefer_v6, "cache_revalidated": state.cache_revalidated, "cache_error": state.cache_error})
     }
     pub fn failed(&self, ip: IpAddr) {
         self.state.lock().unwrap().failure(ip, Instant::now());
@@ -225,13 +240,20 @@ impl Selector {
             state.forget = false;
             state.winner.clone().or_else(|| state.retained.clone())
         };
+        let prefer_v6 = (self.network.has_ipv6)();
+        self.state.lock().unwrap().prefer_v6 = prefer_v6;
         let mut saved_only_timed_out = false;
         if let Some(saved) = &saved {
-            if let Some(key) = saved.key() {
+            // One race on an IPv6 network for winners that never competed with IPv6. The
+            // winner itself is not judged bad: it stays stored if that race fails.
+            let migrate = prefer_v6 && saved.ip.is_ipv4() && !saved.v6_considered;
+            saved_only_timed_out = migrate;
+            if let Some(key) = saved.key().filter(|_| !migrate) {
                 match self.revalidate(saved.ip, key).await {
                     Ok((latency, key)) => {
                         self.state.lock().unwrap().cache_revalidated = true;
-                        return self.install(saved.ip, latency, key);
+                        let considered = saved.v6_considered || saved.ip.is_ipv6();
+                        return self.install(saved.ip, latency, key, considered);
                     }
                     Err(reason) => {
                         saved_only_timed_out = reason == TIMEOUT;
@@ -274,17 +296,18 @@ impl Selector {
                 }
             }
         }
-        for ip in edge_pool::samples() {
+        for ip in edge_pool::samples(if prefer_v6 { 8 } else { 4 }) {
             if !ips.contains(&ip) {
                 ips.push(ip);
             }
         }
+        let mut ips = candidate_order(ips, prefer_v6);
         ips.truncate(MAX_CANDIDATES);
         keys.truncate(3);
         let probe = self.network.probe.clone();
-        let outcome = race(ips, keys.clone(), probe.clone(), PROBE_BUDGET, RACE_WINDOW).await;
+        let outcome = race(ips, keys.clone(), probe.clone(), PROBE_BUDGET, RACE_WINDOW, prefer_v6).await;
         if let Some((ip, latency, key)) = outcome.best {
-            return self.install(ip, latency, key);
+            return self.install(ip, latency, key, prefer_v6);
         }
         // Only candidates that merely ran out of time are worth a slower second look.
         let mut slow = outcome.timed_out;
@@ -292,9 +315,9 @@ impl Selector {
         if !slow.is_empty() {
             let window = RELAXED_BUDGET + Duration::from_secs(1);
             if let Some((ip, latency, key)) =
-                race(slow, keys, probe, RELAXED_BUDGET, window).await.best
+                race(slow, keys, probe, RELAXED_BUDGET, window, prefer_v6).await.best
             {
-                return self.install(ip, latency, key);
+                return self.install(ip, latency, key, prefer_v6);
             }
         }
         let mut state = self.state.lock().unwrap();
@@ -310,7 +333,7 @@ impl Selector {
             other => other,
         }
     }
-    fn install(&self, ip: IpAddr, latency: u64, key: Vec<u8>) -> Option<Answer> {
+    fn install(&self, ip: IpAddr, latency: u64, key: Vec<u8>, v6_considered: bool) -> Option<Answer> {
         if self.closed.load(Ordering::SeqCst) {
             return None;
         }
@@ -319,6 +342,7 @@ impl Selector {
             ech: STANDARD.encode(key),
             latency_ms: latency,
             checked_at: now(),
+            v6_considered,
         };
         let answer = winner.answer();
         let mut state = self.state.lock().unwrap();
@@ -408,12 +432,49 @@ struct RaceOutcome {
     timed_out: Vec<IpAddr>,
 }
 
+/// IPv6 first and alternating when preferred, so IPv6 candidates are probed in the first wave.
+fn candidate_order(ips: Vec<IpAddr>, prefer_v6: bool) -> Vec<IpAddr> {
+    if !prefer_v6 {
+        return ips;
+    }
+    let (v6, v4): (Vec<_>, Vec<_>) = ips.into_iter().partition(IpAddr::is_ipv6);
+    let (mut v6, mut v4) = (v6.into_iter(), v4.into_iter());
+    let mut ordered = Vec::new();
+    loop {
+        match (v6.next(), v4.next()) {
+            (None, None) => return ordered,
+            (a, b) => ordered.extend(a.into_iter().chain(b)),
+        }
+    }
+}
+
+/// Dual-stack IPv4 egress is often carrier NAT shared by many users and challenged more by
+/// Cloudflare, so IPv6 wins unless it is both twice as slow and 300 ms slower.
+fn choose(
+    v4: Option<(IpAddr, u64, Vec<u8>)>,
+    v6: Option<(IpAddr, u64, Vec<u8>)>,
+    prefer_v6: bool,
+) -> Option<(IpAddr, u64, Vec<u8>)> {
+    match (v4, v6) {
+        (Some(a), Some(b)) if prefer_v6 => {
+            if b.1 > a.1 * 2 && b.1 > a.1 + 300 {
+                Some(a)
+            } else {
+                Some(b)
+            }
+        }
+        (Some(a), Some(b)) => Some(if b.1 < a.1 { b } else { a }),
+        (a, b) => a.or(b),
+    }
+}
+
 async fn race(
     ips: Vec<IpAddr>,
     keys: Vec<Vec<u8>>,
     probe: ProbeFn,
     budget: Duration,
     window: Duration,
+    prefer_v6: bool,
 ) -> RaceOutcome {
     let mut outcome = RaceOutcome::default();
     if keys.is_empty() {
@@ -442,23 +503,27 @@ async fn race(
         });
     }
     let mut deadline = tokio::time::Instant::now() + window;
+    let (mut best_v4, mut best_v6) = (None::<(IpAddr, u64, Vec<u8>)>, None::<(IpAddr, u64, Vec<u8>)>);
     let mut passes = 0;
     while let Ok(Some(result)) = tokio::time::timeout_at(deadline, tasks.join_next()).await {
         match result {
             Ok((ip, Ok((latency, key)))) => {
-                if outcome.best.is_none() {
-                    deadline =
-                        deadline.min(tokio::time::Instant::now() + Duration::from_millis(400));
+                let preferred = !prefer_v6 || ip.is_ipv6();
+                let had_preferred = if prefer_v6 { best_v6.is_some() } else { best_v4.is_some() || best_v6.is_some() };
+                let slot = if ip.is_ipv6() { &mut best_v6 } else { &mut best_v4 };
+                if slot.as_ref().is_none_or(|(_, best, _)| latency < *best) {
+                    *slot = Some((ip, latency, key));
                 }
-                if outcome
-                    .best
-                    .as_ref()
-                    .is_none_or(|(_, best, _)| latency < *best)
-                {
-                    outcome.best = Some((ip, latency, key));
+                let grace = if preferred {
+                    Duration::from_millis(400)
+                } else {
+                    PREFERRED_FAMILY_GRACE
+                };
+                if preferred && !had_preferred || passes == 0 {
+                    deadline = deadline.min(tokio::time::Instant::now() + grace);
                 }
                 passes += 1;
-                if passes >= 4 {
+                if passes >= 4 && (!prefer_v6 || best_v6.is_some()) {
                     break;
                 }
             }
@@ -467,6 +532,7 @@ async fn race(
         }
     }
     tasks.abort_all();
+    outcome.best = choose(best_v4, best_v6, prefer_v6);
     outcome
 }
 
@@ -551,6 +617,7 @@ mod tests {
                 ech: String::new(),
                 latency_ms: 1,
                 checked_at: now(),
+                v6_considered: false,
             }),
             verified: true,
             ..State::default()
@@ -581,6 +648,7 @@ mod tests {
                     ech: "invalid".into(),
                     latency_ms: 1,
                     checked_at,
+                    v6_considered: false,
                 }),
             );
             assert!(selector.status()["winner"].is_null());
@@ -620,6 +688,13 @@ mod tests {
         gathered: Vec<IpAddr>,
         rule: impl Fn(IpAddr, Duration) -> ProbeResult + Send + Sync + 'static,
     ) -> (Network, Calls, Arc<Mutex<usize>>) {
+        fake_on(false, gathered, rule)
+    }
+    fn fake_on(
+        ipv6: bool,
+        gathered: Vec<IpAddr>,
+        rule: impl Fn(IpAddr, Duration) -> ProbeResult + Send + Sync + 'static,
+    ) -> (Network, Calls, Arc<Mutex<usize>>) {
         let calls: Calls = Arc::default();
         let gathers = Arc::new(Mutex::new(0));
         let (log, count, rule) = (calls.clone(), gathers.clone(), Arc::new(rule));
@@ -634,11 +709,12 @@ mod tests {
                 let ips = gathered.clone();
                 Box::pin(async move { (ips, vec![STANDARD.decode(KEY).unwrap()]) })
             }),
+            has_ipv6: Arc::new(move || ipv6),
         };
         (network, calls, gathers)
     }
     fn saved(ip: IpAddr) -> Winner {
-        Winner { ip, ech: KEY.into(), latency_ms: 80, checked_at: now() }
+        Winner { ip, ech: KEY.into(), latency_ms: 80, checked_at: now(), v6_considered: true }
     }
     fn ip(text: &str) -> IpAddr {
         text.parse().unwrap()
@@ -703,6 +779,83 @@ mod tests {
         assert!(selector.state.lock().unwrap().retained.is_none());
     }
     #[test]
+    fn ipv6_wins_unless_it_is_both_twice_as_slow_and_300ms_slower() {
+        let pass = |ip: &str, latency| Some((ip.parse::<IpAddr>().unwrap(), latency, vec![]));
+        let pick = |v4, v6, prefer| choose(v4, v6, prefer).map(|(ip, _, _)| ip.is_ipv6());
+        assert_eq!(pick(pass("104.16.0.1", 100), pass("2606:4700::6812:1", 199), true), Some(true));
+        assert_eq!(pick(pass("104.16.0.1", 100), pass("2606:4700::6812:1", 350), true), Some(true), "only 250 ms slower");
+        assert_eq!(pick(pass("104.16.0.1", 400), pass("2606:4700::6812:1", 801), true), Some(false));
+        assert_eq!(pick(pass("104.16.0.1", 100), pass("2606:4700::6812:1", 99), false), Some(true));
+        assert_eq!(pick(pass("104.16.0.1", 100), pass("2606:4700::6812:1", 101), false), Some(false));
+        assert_eq!(pick(pass("104.16.0.1", 100), None, true), Some(false));
+    }
+    #[test]
+    fn preferred_ipv6_candidates_alternate_into_the_first_probe_wave() {
+        let ips: Vec<IpAddr> = ["104.16.0.1", "104.16.0.2", "104.16.0.3", "2606:4700::6812:1", "2606:4700::6812:2"]
+            .iter()
+            .map(|ip| ip.parse().unwrap())
+            .collect();
+        let ordered = candidate_order(ips.clone(), true);
+        let families: Vec<bool> = ordered.iter().map(IpAddr::is_ipv6).collect();
+        assert_eq!(families, [true, false, true, false, false]);
+        assert_eq!(candidate_order(ips.clone(), false), ips);
+    }
+    #[tokio::test]
+    async fn a_dual_stack_race_settles_on_a_slightly_slower_ipv6_pass() {
+        let (v4, v6) = (ip("104.16.0.2"), ip("2606:4700:10::6814:10ea"));
+        let (network, _, _) = fake_on(true, vec![v4, v6], move |ip, _| match ip {
+            ip if ip == v4 => Ok((120, vec![])),
+            ip if ip == v6 => Ok((180, vec![])),
+            _ => Err("probe_connect_failed"),
+        });
+        let selector = Selector::with_network(false, None, network);
+        assert_eq!(selector.answer().await.unwrap().ips, [v6]);
+        let status = selector.status();
+        assert_eq!(status["prefer_v6"], true);
+        assert_eq!(status["winner"]["v6_considered"], true);
+    }
+    #[tokio::test]
+    async fn an_ipv4_winner_that_never_met_ipv6_races_once_on_a_dual_stack_network() {
+        let (a, v6) = (ip("104.16.0.1"), ip("2606:4700:10::6814:10ea"));
+        let (network, calls, gathers) = fake_on(true, vec![v6], move |ip, _| {
+            if ip == a || ip == v6 { Ok((100, vec![])) } else { Err("probe_connect_failed") }
+        });
+        let mut legacy = saved(a);
+        legacy.v6_considered = false;
+        let selector = Selector::with_network(false, Some(legacy), network);
+        assert_eq!(selector.answer().await.unwrap().ips, [v6]);
+        assert_eq!(*gathers.lock().unwrap(), 1);
+        assert!(!calls.lock().unwrap().iter().any(|call| call.0 == a));
+    }
+    #[tokio::test]
+    async fn a_failed_migration_race_keeps_the_legacy_ipv4_winner_stored() {
+        let a = ip("104.16.0.1");
+        let (network, _, _) = fake_on(true, vec![], |_, _| Err("probe_connect_failed"));
+        let mut legacy = saved(a);
+        legacy.v6_considered = false;
+        let selector = Selector::with_network(false, Some(legacy), network);
+        assert!(selector.answer().await.is_none());
+        assert_eq!(selector.status()["forget"], false);
+        assert_eq!(selector.state.lock().unwrap().retained.as_ref().map(|w| w.ip), Some(a));
+    }
+    #[tokio::test]
+    async fn an_ipv4_winner_already_compared_with_ipv6_is_simply_revalidated() {
+        let a = ip("104.16.0.1");
+        let (network, calls, gathers) = fake_on(true, vec![], move |ip, _| {
+            if ip == a { Ok((100, vec![])) } else { Err("probe_connect_failed") }
+        });
+        let selector = Selector::with_network(false, Some(saved(a)), network);
+        assert_eq!(selector.answer().await.unwrap().ips, [a]);
+        assert_eq!(*gathers.lock().unwrap(), 0);
+        assert_eq!(calls.lock().unwrap()[0].0, a);
+        assert_eq!(selector.status()["winner"]["v6_considered"], true);
+    }
+    #[test]
+    fn stored_winners_from_older_builds_default_to_not_compared_with_ipv6() {
+        let old: Winner = serde_json::from_str(&format!(r#"{{"ip":"104.16.0.1","ech":"{KEY}","latency_ms":80,"checked_at":1}}"#)).unwrap();
+        assert!(!old.v6_considered);
+    }
+    #[test]
     fn traffic_failures_that_release_the_pin_also_forget_the_stored_winner() {
         let a = ip("104.16.0.1");
         let mut state = State { winner: Some(saved(a)), verified: true, ..State::default() };
@@ -716,7 +869,7 @@ mod tests {
     #[test]
     fn a_valid_saved_winner_must_be_reverified_and_success_clears_failure_streak() {
         let ip = "104.16.0.1".parse().unwrap();
-        let saved = Winner { ip, ech: "AEX+DQBBvgAgACAnc+9IO/WWQSMj7W2mLvaFlY3UbvRlOsLeK+qbQ6pgVwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=".into(), latency_ms: 80, checked_at: now() };
+        let saved = Winner { ip, ech: "AEX+DQBBvgAgACAnc+9IO/WWQSMj7W2mLvaFlY3UbvRlOsLeK+qbQ6pgVwAEAAEAAQASY2xvdWRmbGFyZS1lY2guY29tAAA=".into(), latency_ms: 80, checked_at: now(), v6_considered: false };
         let selector = Selector::new(false, Some(saved));
         assert!(!selector.status()["winner"].is_null());
         assert!(selector.ready().is_none());

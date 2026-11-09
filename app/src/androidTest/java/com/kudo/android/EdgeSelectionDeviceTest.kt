@@ -48,6 +48,8 @@ class EdgeSelectionDeviceTest {
             val addresses = transport.dns.lookup("linux.do")
             val status = JSONObject(transport.selectionState())
             report.put("phase", status.optString("phase"))
+            report.put("preferV6", status.optBoolean("prefer_v6"))
+            report.put("winnerFamily", if (addresses.firstOrNull() is java.net.Inet6Address) "v6" else "v4")
             if (status.optString("phase") != "ready") {
                 val discovery = JSONObject()
                 for (endpoint in listOf("223.5.5.5", "1.12.12.12")) for (host in listOf("www.visa.com.hk", "cloudflare-ech.com", "crypto.cloudflare.com")) {

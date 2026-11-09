@@ -52,7 +52,15 @@ pub fn covered(host: &str) -> bool {
         .any(|base| host == *base || host.ends_with(&format!(".{base}")))
 }
 
-pub fn samples() -> Vec<IpAddr> {
+/// Cloudflare serves proxied sites on IPv6 addresses that embed a shared-pool IPv4 address,
+/// e.g. linux.do `2606:4700:10::6814:10ea` = 104.20.16.234. Random addresses elsewhere in the
+/// announced /32s are mostly unrouted, so IPv6 samples stay on these /48s (third hextet).
+const V6_POOLS: &[u16] = &[
+    0x0000, 0x0010, 0x0020, 0x3030, 0x3031, 0x3032, 0x3033, 0x3034, 0x3035, 0x3036, 0x3037,
+];
+
+/// Twelve random IPv4 samples plus `v6` IPv6 samples from the serving pools.
+pub fn samples(v6: usize) -> Vec<IpAddr> {
     let provider = rustls::crypto::aws_lc_rs::default_provider();
     let mut bytes = [0u8; 16];
     let mut result = Vec::new();
@@ -64,18 +72,24 @@ pub fn samples() -> Vec<IpAddr> {
         let offset = u32::from_be_bytes(bytes[..4].try_into().unwrap()) & !mask;
         result.push(Ipv4Addr::from(u32::from(base.parse::<Ipv4Addr>().unwrap()) | offset).into());
     }
-    for (base, prefix) in V6.iter().take(4) {
-        if provider.secure_random.fill(&mut bytes).is_err() {
+    let mut added = 0;
+    for _ in 0..v6 * 4 {
+        if added >= v6 || provider.secure_random.fill(&mut bytes).is_err() {
             break;
         }
-        let mask = u128::MAX << (128 - prefix);
-        result.push(
-            Ipv6Addr::from(
-                u128::from(base.parse::<Ipv6Addr>().unwrap())
-                    | (u128::from_be_bytes(bytes) & !mask),
-            )
-            .into(),
-        );
+        let pool = V6_POOLS[bytes[0] as usize % V6_POOLS.len()];
+        // 104.18–104.27 or 172.64–172.71: the shared proxy pools, not Cloudflare's own assets.
+        let high = if bytes[1] & 1 == 0 {
+            0x6812 + (bytes[2] % 10) as u16
+        } else {
+            0xac40 + (bytes[2] % 8) as u16
+        };
+        let low = u16::from_be_bytes([bytes[3], bytes[4]]).max(1);
+        let ip = IpAddr::V6(Ipv6Addr::new(0x2606, 0x4700, pool, 0, 0, 0, high, low));
+        if !result.contains(&ip) {
+            result.push(ip);
+            added += 1;
+        }
     }
     result
 }
@@ -105,7 +119,30 @@ mod tests {
         ] {
             assert!(!allowed(ip.parse().unwrap()), "{ip}");
         }
-        assert!(samples().iter().copied().all(allowed));
+        assert!(samples(4).iter().copied().all(allowed));
+    }
+    #[test]
+    fn ipv6_samples_stay_on_serving_pools_with_embedded_shared_ipv4() {
+        let ips = samples(8);
+        let v6: Vec<_> = ips
+            .iter()
+            .filter_map(|ip| match ip {
+                IpAddr::V6(v6) => Some(*v6),
+                IpAddr::V4(_) => None,
+            })
+            .collect();
+        assert_eq!(v6.len(), 8);
+        assert_eq!(ips.len(), 20);
+        for ip in v6 {
+            let s = ip.segments();
+            assert!(allowed(IpAddr::V6(ip)), "{ip}");
+            assert_eq!(s[..2], [0x2606, 0x4700], "{ip}");
+            assert!(V6_POOLS.contains(&s[2]), "{ip}");
+            assert_eq!(s[3..6], [0, 0, 0], "{ip}");
+            assert!((0x6812..=0x681b).contains(&s[6]) || (0xac40..=0xac47).contains(&s[6]), "{ip}");
+            assert_ne!(s[7], 0, "{ip}");
+        }
+        assert!(samples(0).iter().all(|ip| ip.is_ipv4()));
     }
     #[test]
     fn only_target_and_subdomains_share_the_winner() {
