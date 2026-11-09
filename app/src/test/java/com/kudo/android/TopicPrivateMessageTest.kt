@@ -112,9 +112,14 @@ class TopicPrivateMessageTest {
                     val before = server.requestCount
                     server.enqueue(MockResponse().setBody("""{"user":{"can_send_private_message_to_user":true}}""").setBodyDelay(200, TimeUnit.MILLISECONDS))
                     vm.open(5, true, post, isReply = true); vm.privateMessage()
-                    await { server.requestCount > before }
+                    try { await { server.requestCount > before } } catch (e: TimeoutCancellationException) {
+                        System.err.println("DIAG dismiss=$dismiss before=$before count=${server.requestCount} host=${server.hostName} state=loading:${vm.state.loading} error:${vm.state.error} topic:${vm.state.topicId}"); vm.state.error?.printStackTrace()
+                        Thread.getAllStackTraces().forEach { (t, st) -> System.err.println("DIAG-THREAD ${t.name} ${t.state}\n" + st.take(25).joinToString("\n") { "    at $it" }) }
+                        throw e
+                    }
                     if (dismiss) vm.dismiss() else vm.open(6, true, post.copy(id = 90, number = 9), isReply = true)
                     withContext(Dispatchers.IO) { delay(300) }
+                    System.err.println("DIAG after dismiss=$dismiss count=${server.requestCount} loading=${vm.state.loading} error=${vm.state.error}")
                     assertTrue(events.isEmpty())
                     assertEquals(if (dismiss) null else 6, vm.state.topicId)
                     assertFalse(vm.state.loading)
