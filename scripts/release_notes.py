@@ -70,7 +70,8 @@ def classify(subject: str) -> tuple[str, str]:
 
 def is_app_path(path: str) -> bool:
     normalized = path.replace("\\", "/")
-    return normalized.startswith("app/src/main/") and "/licenses/" not in normalized
+    # native/doh is compiled into the APK's jniLibs, so its sources and Cargo manifests ship at runtime.
+    return normalized.startswith(("app/src/main/", "native/doh/")) and "/licenses/" not in normalized
 
 
 def is_app_commit(commit: ReleaseCommit) -> bool:

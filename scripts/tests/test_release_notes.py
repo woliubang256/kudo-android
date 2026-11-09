@@ -310,6 +310,23 @@ class ReleaseNotesTest(unittest.TestCase):
         self.assertNotIn("构建旧版包", notes)
         self.assertNotIn("## 维护", notes)
 
+    def test_bundled_native_runtime_changes_are_kept(self):
+        for subject, paths in (
+            ("feat: 新增原生偏好", ("native/doh/src/edge_selection.rs",)),
+            ("fix: 修复原生依赖", ("native/doh/Cargo.toml", "native/doh/Cargo.lock")),
+            ("fix: 更新原生许可证", ("native/doh/licenses/rustls.txt",)),
+            ("test: 补原生测试", ("native/doh/src/edge_pool.rs",)),
+            ("feat: 新增别处原生", ("native/other/src/lib.rs",)),
+        ):
+            self.commit(subject, paths)
+        self.git("tag", "v1.0.0")
+        notes = generate_notes("v1.0.0", "owner/repo", self.root)
+        self.assertIn("- 新增原生偏好", notes)
+        self.assertIn("- 修复原生依赖", notes)
+        self.assertNotIn("更新原生许可证", notes)
+        self.assertNotIn("补原生测试", notes)
+        self.assertNotIn("新增别处原生", notes)
+
     def test_actual_workflow_writes_notes_for_new_and_retried_drafts_before_publication(self):
         bash = str(Path(r"C:\Program Files\Git\bin\bash.exe")) if os.name == "nt" else shutil.which("bash")
         if not bash or not Path(bash).is_file():
