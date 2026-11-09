@@ -42,9 +42,14 @@ pub fn allowed(ip: IpAddr) -> bool {
     }
 }
 
+/// Hosts that share the winner: the forum and its static/upload domain (same Cloudflare ECH key).
+const COVERED: &[&str] = &["linux.do", "ldstatic.com"];
+
 pub fn covered(host: &str) -> bool {
     let host = host.trim_end_matches('.').to_ascii_lowercase();
-    host == "linux.do" || host.ends_with(".linux.do")
+    COVERED
+        .iter()
+        .any(|base| host == *base || host.ends_with(&format!(".{base}")))
 }
 
 pub fn samples() -> Vec<IpAddr> {
@@ -106,8 +111,12 @@ mod tests {
     fn only_target_and_subdomains_share_the_winner() {
         assert!(covered("LINUX.DO."));
         assert!(covered("connect.linux.do"));
+        assert!(covered("ldstatic.com"));
+        assert!(covered("CDN.ldstatic.com."));
+        assert!(covered("linuxdo-uploads.s3.ldstatic.com"));
         assert!(!covered("linux.do.evil.test"));
-        assert!(!covered("ldstatic.com"));
+        assert!(!covered("ldstatic.com.evil.test"));
+        assert!(!covered("evilldstatic.com"));
         assert!(!covered("api.github.com"));
     }
 }

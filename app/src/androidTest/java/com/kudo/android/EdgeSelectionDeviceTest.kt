@@ -60,15 +60,16 @@ class EdgeSelectionDeviceTest {
             }
             assertEquals("ready", status.getString("phase"))
             assertEquals(1, addresses.size)
-            assertEquals(addresses, transport.dns.lookup("connect.linux.do"))
+            val pinned = listOf("linux.do", "connect.linux.do", "cdn.ldstatic.com", "ping.ldstatic.com")
+            for (host in pinned.drop(1)) assertEquals(host, addresses, transport.dns.lookup(host))
             report.put("sameNodeAndFamily", true)
-            for (host in listOf("linux.do", "connect.linux.do")) {
+            for (host in pinned) {
                 http.newCall(Request.Builder().url("https://$host/cdn-cgi/trace").build()).execute().use {
                     assertEquals(200, it.code)
                     assertTrue(it.body!!.string().lineSequence().any { line -> line == "h=$host" })
                 }
             }
-            report.put("bothEchAccepted", accepted.containsAll(listOf("linux.do", "connect.linux.do")))
+            report.put("bothEchAccepted", accepted.containsAll(pinned))
             assertTrue(report.getBoolean("bothEchAccepted"))
             http.newCall(Request.Builder().url("https://linux.do/latest.json").build()).execute().use {
                 report.put("listHttpStatus", it.code)
