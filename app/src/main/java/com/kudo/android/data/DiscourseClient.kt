@@ -54,11 +54,15 @@ class DiscourseClient(
         .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build(),
     route: (OkHttpClient) -> Call.Factory = { it },
     val cooldown: com.kudo.android.network.RequestCooldown = com.kudo.android.network.RequestCooldown(),
+    private val authRecoveryClock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
     private val calls = route(http)
     private class CachedCsrf(val value: String, val session: SessionCookieSnapshot)
     @Volatile private var csrf: CachedCsrf? = null
     private val csrfMutex = Mutex()
+    private class AuthProbe(val session: SessionCookieSnapshot, val checkedAt: Long, val result: Result<Boolean>)
+    private val authRecoveryMutex = Mutex()
+    private var lastAuthProbe: AuthProbe? = null
     fun resetSession() { csrf = null }
     internal fun invalidateCookieRequests() { cookies.invalidate(); resetSession() }
     private fun requireSession(session: SessionCookieSnapshot?) {
@@ -90,6 +94,41 @@ class DiscourseClient(
         }
         return first.getOrThrow()
     }
+
+    private fun hasAuth(session: SessionCookieSnapshot): Boolean = session.header.split(';').any {
+        val pair = it.trim()
+        pair.startsWith("_t=") && pair.substringAfter('=').isNotBlank()
+    }
+
+    private suspend fun verifyReadSession(session: SessionCookieSnapshot): Boolean = authRecoveryMutex.withLock {
+        requireSession(session)
+        val current = cookies.snapshot(baseUrl.toString())
+        if (!hasAuth(current)) return@withLock false
+        lastAuthProbe?.takeIf {
+            cookies.isCurrent(it.session) && it.session.generation == current.generation &&
+                it.session.header == current.header && authRecoveryClock() - it.checkedAt in 0L until 30_000L
+        }?.let { return@withLock it.result.getOrThrow() }
+        val result = try {
+            val response = currentSession()
+            val valid = when {
+                !response.has("current_user") -> throw ApiFailure(FailureKind.SERVER, "服务器未返回有效的会话信息，请稍后重试")
+                response.isNull("current_user") -> false
+                else -> {
+                    val member = response.optJSONObject("current_user")
+                    if (member == null || member.optLong("id") <= 0 || (member.opt("username") as? String).isNullOrBlank())
+                        throw ApiFailure(FailureKind.SERVER, "服务器未返回有效的会话信息，请稍后重试")
+                    true
+                }
+            }
+            Result.success(valid)
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: ApiFailure) {
+            if (e.kind == FailureKind.SIGN_IN) Result.success(false) else Result.failure(e)
+        }
+        requireSession(session)
+        lastAuthProbe = AuthProbe(cookies.snapshot(baseUrl.toString()), authRecoveryClock(), result)
+        result.getOrThrow()
+    }
     suspend fun getArray(path: String): JSONArray = request("GET", path, arrayResponse = true).getJSONArray("items")
     internal suspend fun getCollection(path: String): JSONObject = request("GET", path, collectionResponse = true)
     internal suspend fun siteSettingsHtml(): String = request("GET", "/latest", htmlResponse = true).getString("html")
@@ -114,7 +153,8 @@ class DiscourseClient(
 
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(), body: RequestBody? = null, token: String? = null,
         redirects: Int = 0, arrayResponse: Boolean = false, htmlResponse: Boolean = false, collectionResponse: Boolean = false,
-        allowNonJsonResponse: Boolean = false, verificationAttempt: Int = 0, sessionBoundary: SessionCookieSnapshot? = null): JSONObject {
+        allowNonJsonResponse: Boolean = false, verificationAttempt: Int = 0, sessionBoundary: SessionCookieSnapshot? = null,
+        authAttempt: Int = 0): JSONObject {
         requireSession(sessionBoundary)
         val url = resolve(path).newBuilder().apply { query.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
         cooldown.remainingSeconds(url).takeIf { it > 0 }?.let { throw rateLimitFailure(it) }
@@ -146,7 +186,7 @@ class DiscourseClient(
                     resolve(target.toString())
                     if (target.encodedPath.trimEnd('/') == "/404") throw ApiFailure(FailureKind.NOT_FOUND, "内容不存在或暂无权限")
                     it.close()
-                    return request("GET", target.toString(), redirects = redirects + 1, arrayResponse = arrayResponse, htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = verificationAttempt, sessionBoundary = session)
+                    return request("GET", target.toString(), redirects = redirects + 1, arrayResponse = arrayResponse, htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = verificationAttempt, sessionBoundary = session, authAttempt = authAttempt)
                 }
             }
             val text = it.body?.string().orEmpty()
@@ -156,14 +196,25 @@ class DiscourseClient(
                 ?: json?.text("error")?.takeIf(String::isNotBlank)?.take(500)
             val notFound = it.code == 404 || url.encodedPath.trimEnd('/') == "/404" || json?.stringField("error_type") == "not_found"
             when {
-                it.code == 401 || (it.code == 403 && json?.text("error_type") == "not_logged_in") -> throw ApiFailure(FailureKind.SIGN_IN, "请先登录 Linux.do")
+                it.code == 401 || (it.code == 403 && json?.text("error_type") == "not_logged_in") -> {
+                    val endpoint = url.encodedPath.trimEnd('/').removeSuffix(".json")
+                    if (method == "GET" && authAttempt == 0 && endpoint != "/session" && !endpoint.startsWith("/session/") && hasAuth(session)) {
+                        it.close()
+                        if (verifyReadSession(session)) {
+                            return request("GET", url.toString(), redirects = redirects, arrayResponse = arrayResponse,
+                                htmlResponse = htmlResponse, collectionResponse = collectionResponse,
+                                verificationAttempt = verificationAttempt, sessionBoundary = session, authAttempt = 1)
+                        }
+                    }
+                    throw ApiFailure(FailureKind.SIGN_IN, "请先登录 Linux.do")
+                }
                 it.code == 429 -> throw rateLimitFailure(cooldown.record(it, text), reason)
                 isCloudflareChallenge(it, text) -> {
                     if (method == "GET" && verificationAttempt == 0) {
                         it.close()
                         delay(600)
                         return request("GET", url.toString(), redirects = redirects, arrayResponse = arrayResponse,
-                            htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = 1, sessionBoundary = session)
+                            htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = 1, sessionBoundary = session, authAttempt = authAttempt)
                     }
                     throw ApiFailure(FailureKind.VERIFICATION, CloudflareVerificationMessage)
                 }

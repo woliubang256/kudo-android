@@ -54,7 +54,9 @@ CSRF 成功响应必须包含非空字符串 `csrf`，缺失、null、空白和�
 
 [DoH 与 ECH 接入](../feature/2026-10-12-doh-network.md)提供可选的统一 DNS／TLS 策略，保留本篇的同源、凭据隔离和写请求不重放契约；WebView 仍使用系统网络。
 
-Discourse 的 JSON 403 若携带 `error_type: not_logged_in`，按未登录处理，展示登录入口；其余 JSON 403 保持权限错误。不按中文错误文案猜测类型，避免翻译变化和权限不足被混淆。真机访客搜索会触发此边界。
+Discourse 的 401 和携带 `error_type: not_logged_in` 的 JSON 403 是认证信号；其余 JSON 403 保持权限错误，不按中文文案猜测类型。有 `_t` 的普通 GET 遇到认证信号时，先只读复核 `/session/current.json`；仅严格有效的用户响应允许将当前 GET 重试一次。会话端点、无凭据访客、已明确删除的凭据和所有写请求不进入这条恢复路径，重试再失败就结束。复核的网络、验证、限流和格式异常保持各自分类，不能转成重新登录提示。
+
+同凭据、同代次的自动复核采用互斥合并，并将成功、访客或异常结果在内存缓存 30 秒，避免并发认证信号和短时间连点重复请求；Cookie 变化或会话代次变化使旧结果不可复用。复核前后与重试均检查起始代次，退出或换号不能继续原账号的读取；不存储候选旧 Cookie，不扩大既有同源和写入边界。
 
 ## Alternatives considered
 
@@ -86,6 +88,8 @@ Debug / AndroidTest 构建及 Lint 通过（`artifacts/session-final-tests-build
 Cloudflare challenge is detected from the challenge response header and common challenge-page markers limited to HTML responses, including successful HTML responses that are not JSON. Markers inside normal JSON are not treated as a challenge, and a non-HTML 403 keeps its permission-error meaning. The client reports an explicit manual-verification message instead of treating the page as empty content; the WebView remains the recovery path because completing a browser challenge does not guarantee that every OkHttp request will pass.
 
 ## Verification
+
+2026-11-10：`CsrfResponseTest` 先复现成功响应缺字段被归为登录失效，再覆盖 null、空白、错误类型、不缓存和手动重试，共 3 项通过；`ApiSessionRecoveryTest` 先复现普通认证信号未经复核直接失败，再覆盖有效/失效/异常会话、四路并发合并、30 秒冷却及到期、换凭据、换号、取消、续期 Cookie 和重定向/过盾的重试上限，共 16 项通过。相关 8 类 JVM 回归共 66 项通过。证据为 `artifacts/csrf-response-repro.txt`、`artifacts/api-session-recovery-repro.txt` 与 `artifacts/api-session-recovery-tests.txt`；CSRF 换号用例改用同步栅栏，避免用固定正文延迟猜测调度时机。所有写入使用本地夹具，没有向社区重放写操作。
 
 2026-10-09 其他回应被误认为爱心及短按发错撤销请求的两项测试先失败，输出 artifacts/topic-reaction-repro.txt。修复后关注/回应契约 9 项、正文解析 10 项、头像模型 7 项全部通过，输出 topic-contract-fixed.txt。覆盖服务端计数、当前回应、不可撤销、合法路径段、失败不重试、关注成功确认、深链作者和首楼完整头像。线上字段、表情图片仅做只读核查，写操作使用 MockWebServer。
 
