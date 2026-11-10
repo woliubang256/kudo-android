@@ -4,17 +4,23 @@ import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import com.kudo.android.media.NativeDownloadManager
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import kotlin.coroutines.resume
 
-class AndroidSessionCookies : SessionCookies {
-    private val manager get() = CookieManager.getInstance()
-    override fun get(url: String): String = manager.getCookie(url).orEmpty()
-    override fun set(url: String, cookie: String) { manager.setCookie(url, cookie); manager.flush() }
-    suspend fun clear() = suspendCancellableCoroutine { continuation ->
-        manager.removeAllCookies { manager.flush(); if (continuation.isActive) continuation.resume(Unit) }
-    }
+private val androidSessionCookies by lazy {
+    SessionCookieStore(object : CookieStorage {
+        private val manager get() = CookieManager.getInstance()
+        override fun get(url: String): String = manager.getCookie(url).orEmpty()
+        // With no callback, Chromium completes these operations synchronously on its cookie thread.
+        override fun set(url: String, cookie: String) { manager.setCookie(url, cookie) }
+        override fun clear() { manager.removeAllCookies(null) }
+        override fun flush() { manager.flush() }
+    })
+}
+
+class AndroidSessionCookies : SessionCookies by androidSessionCookies {
+    suspend fun clear() = withContext(Dispatchers.IO) { androidSessionCookies.clear() }
 }
 
 class AppContainer(context: Context) {
