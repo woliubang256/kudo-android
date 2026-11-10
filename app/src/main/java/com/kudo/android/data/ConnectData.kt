@@ -60,8 +60,9 @@ class ConnectRepository(private val cookies: SessionCookies, private val userAge
     route: (OkHttpClient) -> Call.Factory = { it }) {
     private val calls = route(http)
     suspend fun load(): TrustReport {
+        val session = cookies.snapshot(endpoint.toString())
         val request = Request.Builder().url(endpoint).header("User-Agent", userAgent).header("Accept", "text/html")
-            .apply { cookies.get(endpoint.toString()).takeIf(String::isNotBlank)?.let { header("Cookie", it) } }.build()
+            .apply { session.header.takeIf(String::isNotBlank)?.let { header("Cookie", it) } }.build()
         val call = calls.newCall(request)
         val response = suspendCancellableCoroutine<Response> { continuation ->
             continuation.invokeOnCancellation { call.cancel() }
@@ -69,11 +70,20 @@ class ConnectRepository(private val cookies: SessionCookies, private val userAge
                 override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(
                     if (e is com.kudo.android.network.RequestCoolingDown) e.apiFailure()
                     else ApiFailure(FailureKind.NETWORK, "无法连接等级页面，请稍后重试")) }
-                override fun onResponse(call: Call, response: Response) { continuation.resume(response) { _, value, _ -> value.close() } }
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        if (!cookies.receive(endpoint.toString(), response.headers("Set-Cookie"), session))
+                            throw ApiFailure(FailureKind.NETWORK, "会话已切换，请重新加载")
+                    } catch (e: Exception) {
+                        response.close()
+                        if (continuation.isActive) continuation.resumeWithException(e)
+                        return
+                    }
+                    continuation.resume(response) { _, value, _ -> value.close() }
+                }
             })
         }
         response.use {
-            it.headers("Set-Cookie").forEach { cookie -> cookies.set(endpoint.toString(), cookie) }
             val source = it.body?.source() ?: throw ApiFailure(FailureKind.SERVER, "等级页面没有返回数据")
             if (source.request(2L * 1024 * 1024 + 1)) throw ApiFailure(FailureKind.SERVER, "等级页面返回的数据过大")
             val html = source.readUtf8()

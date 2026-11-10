@@ -2,12 +2,47 @@ package com.kudo.android
 
 import com.kudo.android.data.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import okhttp3.*
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
 class ConnectDataTest {
+    @Test fun receivedCookiesSurviveCancellationBeforeConnectResponseDelivery() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val saved = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val cookies = object : SessionCookies {
+                override fun get(url: String) = "connect=old"
+                override fun set(url: String, cookie: String) { saved += cookie }
+            }
+            val waiting = Job()
+            val delivered = java.util.concurrent.CountDownLatch(1)
+            server.enqueue(MockResponse().addHeader("Set-Cookie", "connect=renewed; Path=/; HttpOnly").setBody("<html></html>"))
+            val repository = ConnectRepository(cookies, "fixture", server.url("/"), route = { base ->
+                Call.Factory { request ->
+                    val delegate = base.newCall(request)
+                    object : Call by delegate {
+                        override fun enqueue(responseCallback: Callback) = delegate.enqueue(object : Callback {
+                            override fun onFailure(call: Call, e: java.io.IOException) = responseCallback.onFailure(call, e)
+                            override fun onResponse(call: Call, response: Response) {
+                                waiting.cancel()
+                                try { responseCallback.onResponse(call, response) } finally { delivered.countDown() }
+                            }
+                        })
+                    }
+                }
+            })
+            val task = launch(waiting + Dispatchers.IO) { repository.load() }
+            try {
+                assertTrue(withContext(Dispatchers.IO) { delivered.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+                task.join()
+                assertEquals(listOf("connect=renewed; Path=/; HttpOnly"), saved)
+            } finally { waiting.cancel(); task.cancelAndJoin() }
+        }
+    }
     @Test fun parsesServerConditionsWithoutHardcodedThresholds() {
         val report = parseTrustReport("""<div class="card"><h2 class="card-title">等级评估</h2><div class="badge">进行中</div>
             <div class="card-subtitle">最近 100 天</div>

@@ -30,6 +30,8 @@ AndroidSessionCookies 与官网 WebView 共用 CookieManager。CSRF 通过互斥
 
 会话续期的响应 Cookie 在网络回调交付协程之前保存，保留服务器原始 Set-Cookie 属性；页面退出取消协程不能丢掉已经收到的续期。接收发生在响应头到达后，不等待正文读取成功，不重放任何写请求。
 
+Connect 等级请求也在回调接收自己的来源 Cookie，并沿用同一存储代次；仍只发送到 connect.linux.do，不跟随认证跳转，不把独立服务的认证失败当作主站登出。
+
 图片网络拦截器对每一跳按 scheme、host、port 核验主站来源，并在跟随重定向前保存该跳的 Set-Cookie。跨站响应不参与社区 Cookie 写入，主站凭据也不发送到非默认端口；测试通过注入本地来源验证相同边界。
 
 文件下载采用相同的逐跳接收规则，先保存主站下载/重定向响应，再读取后续跳转的 Cookie；CDN 响应不能覆盖社区会话。`createDownloadHttpClient` 统一生产和夹具使用的下载网络策略，DoH 只包裹该客户端，不替换认证拦截器。
