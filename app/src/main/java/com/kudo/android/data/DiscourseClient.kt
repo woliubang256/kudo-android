@@ -103,7 +103,9 @@ class DiscourseClient(
                 cookies.get(url.toString()).takeIf(String::isNotBlank)?.let { header("Cookie", it) }
                 token?.let { header("X-CSRF-Token", it); header("Origin", baseUrl.toString().trimEnd('/')) }
             }.build()
-        val response = try { calls.newCall(request).await() } catch (e: IOException) {
+        val response = try { calls.newCall(request).await { received ->
+            received.headers("Set-Cookie").forEach { cookie -> cookies.set(url.toString(), cookie) }
+        } } catch (e: IOException) {
             if (e is com.kudo.android.network.RequestCoolingDown) throw e.apiFailure()
             throw ApiFailure(FailureKind.NETWORK, if (method == "GET") {
                 if (e.message.orEmpty().contains("DoH:")) com.kudo.android.network.dohErrorMessage(e)
@@ -111,7 +113,6 @@ class DiscourseClient(
             } else "请求结果尚未确认，请刷新确认后再操作，以免重复提交")
         }
         response.use {
-            it.headers("Set-Cookie").forEach { cookie -> cookies.set(url.toString(), cookie) }
             if (method == "GET" && it.code in setOf(301, 302, 303, 307, 308) && redirects < 3) {
                 val target = it.header("Location")?.let(url::resolve)
                 if (target != null) {
@@ -162,10 +163,17 @@ class DiscourseClient(
         "${reason ?: "请求较频繁"}\n请在 ${seconds} 秒后重试", seconds)
 }
 
-private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
+private suspend fun Call.await(received: (Response) -> Unit): Response = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel() }
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(e) }
-        override fun onResponse(call: Call, response: Response) { continuation.resume(response) { _, value, _ -> value.close() } }
+        override fun onResponse(call: Call, response: Response) {
+            try { received(response) } catch (e: Exception) {
+                response.close()
+                if (continuation.isActive) continuation.resumeWithException(e)
+                return
+            }
+            continuation.resume(response) { _, value, _ -> value.close() }
+        }
     })
 }

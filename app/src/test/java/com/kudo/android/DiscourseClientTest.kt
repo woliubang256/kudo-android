@@ -2,6 +2,8 @@ package com.kudo.android
 
 import com.kudo.android.data.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import okhttp3.*
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -14,6 +16,38 @@ class DiscourseClientTest {
     private lateinit var client: DiscourseClient
     @Before fun setup() { server = MockWebServer(); server.start(); client = DiscourseClient(NoCookies, server.url("/")) }
     @After fun close() { server.shutdown() }
+
+    @Test fun receivedRenewalIsSavedEvenWhenTheWaitingCoroutineWasCancelled() = runBlocking {
+        val saved = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val cookies = object : SessionCookies {
+            override fun get(url: String) = "_t=old"
+            override fun set(url: String, cookie: String) { saved += cookie }
+        }
+        val waiting = Job()
+        val delivered = java.util.concurrent.CountDownLatch(1)
+        val responseCookie = "_t=renewed; Path=/; HttpOnly; Max-Age=3600; SameSite=Lax"
+        server.enqueue(MockResponse().addHeader("Set-Cookie", responseCookie).setBody("{}"))
+        val api = DiscourseClient(cookies, server.url("/"), route = { base ->
+            Call.Factory { request ->
+                val delegate = base.newCall(request)
+                object : Call by delegate {
+                    override fun enqueue(callback: Callback) = delegate.enqueue(object : Callback {
+                        override fun onFailure(call: Call, e: java.io.IOException) = callback.onFailure(call, e)
+                        override fun onResponse(call: Call, response: Response) {
+                            waiting.cancel()
+                            try { callback.onResponse(call, response) } finally { delivered.countDown() }
+                        }
+                    })
+                }
+            }
+        })
+        val task = launch(waiting + Dispatchers.IO) { api.get("/session/current.json") }
+        try {
+            assertTrue(withContext(Dispatchers.IO) { delivered.await(5, java.util.concurrent.TimeUnit.SECONDS) })
+            task.join()
+            assertEquals(listOf(responseCookie), saved)
+        } finally { waiting.cancel(); task.cancelAndJoin() }
+    }
 
     @Test fun serverPaginationCannotSendSessionToAnotherOrigin() {
         listOf("https://attacker.example/latest.json", "//attacker.example/latest.json", "http://user:secret@localhost:${server.port}/").forEach {

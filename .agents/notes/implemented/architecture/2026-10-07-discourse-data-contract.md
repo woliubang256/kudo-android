@@ -28,6 +28,8 @@ L 站回应使用 PUT /discourse-reactions/posts/{post_id}/custom-reactions/{rea
 
 AndroidSessionCookies 与官网 WebView 共用 CookieManager。CSRF 通过互斥刷新；失败的写请求不自动重发。401、验证页、权限拒绝、429、服务端错误和网络错误分型。图片仅向 HTTPS linux.do 附加 Cookie，跨站图片不携带账号凭据。备份禁用，设置和草稿在应用私有目录；退出清除账号草稿。
 
+会话续期的响应 Cookie 在网络回调交付协程之前保存，保留服务器原始 Set-Cookie 属性；页面退出取消协程不能丢掉已经收到的续期。接收发生在响应头到达后，不等待正文读取成功，不重放任何写请求。
+
 [主站共享冷却](../bug-fix/2026-10-14-request-rate-cooldown.md)补齐 429 后的跨功能保护：按来源保存服务端等待截止时间，冷却中的新调用在本地返回剩余秒数。会话检查不清除此状态；写请求不排队、不自动重放。
 
 [DoH 与 ECH 接入](../feature/2026-10-12-doh-network.md)提供可选的统一 DNS／TLS 策略，保留本篇的同源、凭据隔离和写请求不重放契约；WebView 仍使用系统网络。
@@ -37,10 +39,13 @@ Discourse 的 JSON 403 若携带 `error_type: not_logged_in`，按未登录处�
 ## Alternatives considered
 
 - 使用 User API Key 执行所有接口：接口层简单，但 FluxDO 记录了 linux.do 的 scope 和限流限制，不能假定 write scope 可用。
+- 在协程读取响应时顺带保存 Cookie：代码集中且容易跟踪，但协程取消可能先于调度恢复，导致已经收到的续期响应被关闭而未保存；将保存提前到网络回调。
 - 按页码猜测所有接口分页：实现一致，但 topic post_stream 不是普通页码，且服务端可能改变列表游标；使用服务端返回的链接和楼层 id。
 - 所有重定向一律报错：边界最简单，但会让正常分类规范地址无法加载；只读、同源、最多三跳保留边界，写操作仍禁止重放。
 
 ## Consequences
+
+2026-11-10：`receivedRenewalIsSavedEvenWhenTheWaitingCoroutineWasCancelled` 在旧实现稳定复现续期 Cookie 丢失（`artifacts/session-cookie-cancellation-repro.txt`）；修复后 DiscourseClientTest 定向回归通过（`artifacts/session-cookie-cancellation-fixed.txt`）。这是本地服务器的接收时序复现，不能据此断言已复现用户的生产会话失效。
 
 通知类型14是custom。[解决通知](../bug-fix/2026-10-10-solved-notifications.md)结合专用message识别；data.title中的插件翻译键不能遮蔽topic_title，保留原始类型、楼层及独立解决状态供原生界面使用。
 
