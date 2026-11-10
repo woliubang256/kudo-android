@@ -40,7 +40,7 @@ class GuestNotificationsUiTest {
             val request = chain.request()
             if (request.method != "GET") writes.incrementAndGet()
             val body = when (request.url.encodedPath) {
-                "/session/current.json" -> if (signedIn.get()) """{"current_user":{"id":42,"username":"fixture"}}""" else "{}"
+                "/session/current.json" -> if (signedIn.get()) """{"current_user":{"id":42,"username":"fixture"}}""" else """{"current_user":null}"""
                 "/notifications" -> """{"notifications":[{"id":1,"topic_id":7,"post_number":2,"notification_type":2,"read":false,"data":{"title":"账号通知夹具","display_username":"fixture"}}]}"""
                 else -> error("Unexpected fixture request: ${request.url.encodedPath}")
             }
