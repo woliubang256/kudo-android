@@ -18,6 +18,7 @@ import android.provider.MediaStore
 import com.kudo.android.MainActivity
 import com.kudo.android.R
 import com.kudo.android.data.SessionCookies
+import com.kudo.android.data.SessionCookieSnapshot
 import com.kudo.android.data.isCloudflareChallenge
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -311,10 +312,12 @@ private fun decodeFilename(value: String): String = runCatching { URLDecoder.dec
 
 /** Re-evaluated on every redirect hop, so community credentials never follow a CDN redirect. */
 internal fun downloadRequest(request: Request, cookies: SessionCookies, userAgent: String,
-    cookieOrigin: HttpUrl = "https://linux.do/".toHttpUrl()): Request {
+    cookieOrigin: HttpUrl = "https://linux.do/".toHttpUrl(), session: SessionCookieSnapshot? = null): Request {
     val builder = request.newBuilder().removeHeader("Cookie").header("User-Agent", userAgent)
     if (request.url.scheme == cookieOrigin.scheme && request.url.host == cookieOrigin.host && request.url.port == cookieOrigin.port) {
-        cookies.get(request.url.toString()).takeIf(String::isNotBlank)?.let { builder.header("Cookie", it) }
+        val sent = session ?: cookies.snapshot(request.url.toString())
+        builder.tag(SessionCookieSnapshot::class.java, request.tag(SessionCookieSnapshot::class.java) ?: sent)
+        sent.header.takeIf(String::isNotBlank)?.let { builder.header("Cookie", it) }
     }
     return builder.build()
 }
@@ -322,11 +325,23 @@ internal fun downloadRequest(request: Request, cookies: SessionCookies, userAgen
 internal fun createDownloadHttpClient(cookies: SessionCookies, userAgent: String,
     cookieOrigin: HttpUrl = "https://linux.do/".toHttpUrl()): OkHttpClient = OkHttpClient.Builder()
     .followRedirects(true).followSslRedirects(true)
+    .addInterceptor { chain ->
+        val request = chain.request()
+        val boundary = request.tag(SessionCookieSnapshot::class.java) ?: cookies.snapshot(cookieOrigin.toString())
+        chain.proceed(request.newBuilder().tag(SessionCookieSnapshot::class.java, boundary).build())
+    }
     .addNetworkInterceptor { chain ->
-        val request = downloadRequest(chain.request(), cookies, userAgent, cookieOrigin)
+        val source = chain.request()
+        val sameOrigin = source.url.scheme == cookieOrigin.scheme && source.url.host == cookieOrigin.host && source.url.port == cookieOrigin.port
+        val session = if (sameOrigin) cookies.snapshot(source.url.toString()) else null
+        if (sameOrigin && !cookies.isCurrent(source.tag(SessionCookieSnapshot::class.java)!!))
+            throw IOException("会话已切换，请重新加载")
+        val request = downloadRequest(source, cookies, userAgent, cookieOrigin, session)
         val response = chain.proceed(request)
-        if (request.url.scheme == cookieOrigin.scheme && request.url.host == cookieOrigin.host && request.url.port == cookieOrigin.port)
-            response.headers("Set-Cookie").forEach { cookies.set(request.url.toString(), it) }
+        try {
+            if (session != null && !cookies.receive(request.url.toString(), response.headers("Set-Cookie"), session))
+                throw IOException("会话已切换，请重新加载")
+        } catch (e: Exception) { response.close(); throw e }
         response
     }.build()
 

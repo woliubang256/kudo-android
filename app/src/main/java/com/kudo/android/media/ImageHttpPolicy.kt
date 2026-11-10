@@ -1,6 +1,7 @@
 package com.kudo.android.media
 
 import com.kudo.android.data.SessionCookies
+import com.kudo.android.data.SessionCookieSnapshot
 import com.kudo.android.network.RequestCooldown
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,17 +26,28 @@ internal fun createImageHttpClient(cooldown: RequestCooldown, cookies: SessionCo
     .dispatcher(Dispatcher().apply { maxRequests = parallelism; maxRequestsPerHost = parallelism })
     .retryOnConnectionFailure(false)
     .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS).callTimeout(45, TimeUnit.SECONDS)
+    .addInterceptor { chain ->
+        val request = chain.request()
+        val boundary = request.tag(SessionCookieSnapshot::class.java) ?: cookies.snapshot(cookieOrigin.toString())
+        chain.proceed(request.newBuilder().tag(SessionCookieSnapshot::class.java, boundary).build())
+    }
     .addInterceptor(ImageRequestPolicy(cooldown, parallelism, retryDelayMillis))
     .addNetworkInterceptor { chain ->
         val request = chain.request()
         checkCooldown(cooldown, request)
         val builder = request.newBuilder().removeHeader("Cookie")
         val sameOrigin = request.url.scheme == cookieOrigin.scheme && request.url.host == cookieOrigin.host && request.url.port == cookieOrigin.port
+        val boundary = request.tag(SessionCookieSnapshot::class.java)!!
+        val session = if (sameOrigin) cookies.snapshot(request.url.toString()) else null
         if (sameOrigin) {
-            builder.header("Cookie", cookies.get(request.url.toString())).header("User-Agent", userAgent)
+            if (!cookies.isCurrent(boundary)) throw IOException("会话已切换，请重新加载")
+            builder.header("Cookie", session!!.header).header("User-Agent", userAgent)
         }
         val response = chain.proceed(builder.build())
-        if (sameOrigin) response.headers("Set-Cookie").forEach { cookies.set(request.url.toString(), it) }
+        try {
+            if (session != null && !cookies.receive(request.url.toString(), response.headers("Set-Cookie"), session))
+                throw IOException("会话已切换，请重新加载")
+        } catch (e: Exception) { response.close(); throw e }
         if (response.code == 429) cooldown.record(response)
         // OkHttp can replay a GET on 503 Retry-After:0 even with connection retries disabled.
         if (response.code == 503 && response.header("Retry-After")?.trim() == "0")

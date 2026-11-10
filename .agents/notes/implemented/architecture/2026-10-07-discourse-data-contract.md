@@ -38,6 +38,8 @@ AndroidSessionCookies 与官网 WebView 共用 CookieManager。CSRF 通过互斥
 
 AndroidSessionCookies 的多个包装实例共用同一存储锁和代次；无 callback 的 CookieManager 写入完成后按响应批量 flush。全量退出清理在 IO 线程持有同一锁执行，先推进代次、清理，再 flush。真机持久化夹具仅写入保留的 `.invalid` 来源，跨独立 instrumentation 进程核对持久 Cookie，不清空或读取真实社区凭据。
 
+图片与下载为整个调用保存会话边界，每跳另取实际发送快照，防止重定向途中换号后改用新账号凭据继续旧调用。响应按该跳发送快照批量接收；失效代次的响应关闭后失败，不继续读取或重放。单纯 `_t` 续期不推进代次，下一跳仍可使用已接受的新 Cookie。
+
 [主站共享冷却](../bug-fix/2026-10-14-request-rate-cooldown.md)补齐 429 后的跨功能保护：按来源保存服务端等待截止时间，冷却中的新调用在本地返回剩余秒数。会话检查不清除此状态；写请求不排队、不自动重放。
 
 [DoH 与 ECH 接入](../feature/2026-10-12-doh-network.md)提供可选的统一 DNS／TLS 策略，保留本篇的同源、凭据隔离和写请求不重放契约；WebView 仍使用系统网络。
