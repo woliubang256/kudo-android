@@ -22,7 +22,11 @@ AccountViewModel 通过 /session/current.json 确认用户，LoginScreen 提供 
 
 冷启动首次确认账号属于会话发现，不推进 Cookie 代次，避免把并行加载的首页、图片与站点资料当作旧账号请求中断。只有已有会话结论后的身份变化才推进；显式退出和网页登录边界始终推进。
 
-`/session/current.json` 的未登录结论只在同代次已出现不同且非空的 `_t` 时，用当前凭据只读复核一次；不恢复旧 token，不重放写入，不为无凭据或服务端已删除的当前 token 尝试自动登录。该会话端点的 404 表示无用户，其他端点的 404 保持原分类。网络、过盾和格式异常保留已确认账号及错误状态，第二次仍未登录则正常失效。FluxDO 的已授权 User API Key 换发机制需要独立授权体系，本次未引入。
+`/session/current.json` 的未登录结论只在同代次已出现不同且非空的 `_t` 时，用当前凭据只读复核一次；不恢复旧 token，不重放写入，不为无凭据或服务端已删除的当前 token 尝试自动登录。该会话端点的 404 表示无用户，其他端点的 404 保持原分类。网络、过盾和格式异常保留已确认账号及错误状态，第二次仍未登录则正常失效。
+
+参考 [FluxDO 的会话复核实现](https://github.com/Lingyan000/fluxdo/blob/bc5a04b0fc09bde915415e2ab345bc24c8c8146c/lib/services/discourse/_auth.dart)区分认证信号与服务器确认、隔离会话代次并先验证候选凭据；本项目继续使用共享 CookieManager，不照搬其原生 CookieJar 与 WebView 双存储协调，也不加入旧 `_t` 回填。其网络异常复核在累计信号达到阈值时仍可能升级登出，本项目保持网络、过盾和格式异常不清除已确认账号的边界。
+
+[FluxDO 的 User API Key 服务](https://github.com/Lingyan000/fluxdo/blob/bc5a04b0fc09bde915415e2ab345bc24c8c8146c/lib/services/user_api_key_service.dart)记录 linux.do 不允许申请 `write`，当前常量只申请 `one_time_password`；[登录流程](https://github.com/Lingyan000/fluxdo/blob/bc5a04b0fc09bde915415e2ab345bc24c8c8146c/lib/services/user_api_key_login_flow.dart)在登录收口后撤销并清除这种 Key。Discourse 的标准 scope 映射中 `one_time_password` 没有路由权限，只能使初次授权随附一次性 OTP，不能单凭该 Key 调用 `POST /user-api-key/otp` 长期恢复 Cookie。保留通用 `selfHeal` 代码不证明 linux.do 上实际启用了这条恢复路径；本项目不为此引入独立授权体系。站点权限限制来自该固定版本的 FluxDO 记录，未用真实授权独立验证 linux.do 当前生产配置。
 
 网页登录切换账号或会话过期也推进账号代次，取消通知与收藏任务，清空旧数据、错误和分页游标；已读失败事件也核验代次。changingAccountDiscardsOldNotificationResponses 先在延迟通知返回后复现跨账号写回（artifacts/account-switch-repro.txt），再验证新账号不接收旧通知。
 
@@ -59,6 +63,7 @@ EditorViewModel 按用户 id、话题和回复楼层隔离持久草稿。上传�
 - 在原生表单收集密码：交互可以统一，但需要自行处理 MFA、OAuth 和站点验证变化；采用官网流程。
 - 仅凭本地 Cookie 判定登录：速度快，但不能区分服务器已撤销的会话；以 current_user 响应为准。
 - 每次未登录都盲目重试或恢复旧 token：可以掩盖短时竞态，但也会重试真实撤销、放大网络请求或重新带回失效凭据；只验证并发到达的新凭据一次，保留真实退出语义。
+- 接入 User API Key 作为会话恢复凭据：在站点允许相应权限时，可以在 Cookie 真正失效后换取 OTP，无需重新输入密码；但 FluxDO 记录的 linux.do 权限不支持长期换发，初次授权登录不能替代持续恢复，因此本次不增加 RSA、授权回调和第二类持久凭据。
 - 所有发给同一作者的私信共用既有草稿键，可以少一个来源维度，但预填帖子会覆盖或混入未发送的普通私信；帖子来源使用独立键，同一来源重开则恢复已有草稿。
 
 ## Consequences
