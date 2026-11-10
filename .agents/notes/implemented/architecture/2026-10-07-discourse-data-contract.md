@@ -73,6 +73,8 @@ Discourse 的 401 和携带 `error_type: not_logged_in` 的 JSON 403 是认证�
 
 响应有 Cookie 变更时会同步等待一次批量落盘，原生网络路径在后台线程执行；串行保护可能增加并发响应的等待，但避免彼此交错并减少逐 Cookie flush。共享 WebView 库仍受系统 WebView 与服务端会话策略约束，不能延长服务端已撤销的登录，也不能保证 VPN 出口变化不触发站点风控。
 
+自动会话复核会在认证信号后增加只读检查及最多一次原读取重试，真正失效的提示可能稍晚。相同 Cookie 下的复核异常最多复用 30 秒；新 Cookie 或会话代次变化立即使旧结果不可复用，原请求直接成功时也不受该异常缓存影响。
+
 最终 88 项关联 JVM 用例通过（`artifacts/session-final-tests-build.txt`），覆盖图片/下载逐跳续期与来源隔离、接收时取消、跨账号代次、旧 CSRF 缓存回写和有界会话复核；不以保留本地用户资料代替真实认证。
 
 RMX2202 / Android 13 的 16 项常规真机用例通过（`artifacts/session-final-device.txt`，runner 另报告两项默认跳过的分阶段用例）。网页登录错误中文可读，WebView 与原生共享 Cookie，循环回环请求模拟系统路由的 VPN / 代理状态变化后仍发送已续期凭据；没有切换手机实际 VPN 或请求生产登录接口。`seed` 与 `verify` 分别在不同 PID 完成持久 Cookie 写入、重启读取及清理（`artifacts/session-final-device-seed.txt`、`artifacts/session-final-device-cold-start.txt`），保留 Secure / HttpOnly / 有效期及实际子域隔离；CookieManagerCompat 回读的 Domain 字段不能单独证明 host-only，故直接核对对子域不可见。
@@ -90,6 +92,8 @@ Cloudflare challenge is detected from the challenge response header and common c
 ## Verification
 
 2026-11-10：`CsrfResponseTest` 先复现成功响应缺字段被归为登录失效，再覆盖 null、空白、错误类型、不缓存和手动重试，共 3 项通过；`ApiSessionRecoveryTest` 先复现普通认证信号未经复核直接失败，再覆盖有效/失效/异常会话、四路并发合并、30 秒冷却及到期、换凭据、换号、取消、续期 Cookie 和重定向/过盾的重试上限，共 16 项通过。相关 8 类 JVM 回归共 66 项通过。证据为 `artifacts/csrf-response-repro.txt`、`artifacts/api-session-recovery-repro.txt` 与 `artifacts/api-session-recovery-tests.txt`；CSRF 换号用例改用同步栅栏，避免用固定正文延迟猜测调度时机。所有写入使用本地夹具，没有向社区重放写操作。
+
+本轮 RMX2202 / Android 13 的 15 项常规真机回归通过（`artifacts/api-session-recovery-device-fixed.txt`，runner 报告 17 项，包含 2 项按设计跳过的冷启动分阶段用例）。新增用例覆盖共享 CookieManager 下的读取恢复、续期 Cookie、明确删除凭据、复核异常冷却与 CSRF 不写入；复核路由用例用注入时钟跨过 30 秒冷却，再检查模拟 VPN / 代理状态变化，不切换手机真实 VPN。通知访客夹具返回显式 `current_user: null`，缺字段仍表示服务端异常。`CsrfErrorUiTest` 验证真实错误分类提供重新加载入口且不跳登录，截图 `artifacts/csrf-error-device.png` 的中文已检查。Debug / AndroidTest 构建及 Lint 通过（`artifacts/api-session-recovery-device-build.txt`、`artifacts/api-session-recovery-device-rebuild.txt`），开发版同签名覆盖安装保持 0.3.9-dev / 3010 和原 `firstInstallTime`，没有清理真实账号数据。本轮不重复已通过的跨进程持久化分阶段检查，真实 VPN 下的长期掉登录仍需观察。
 
 2026-10-09 其他回应被误认为爱心及短按发错撤销请求的两项测试先失败，输出 artifacts/topic-reaction-repro.txt。修复后关注/回应契约 9 项、正文解析 10 项、头像模型 7 项全部通过，输出 topic-contract-fixed.txt。覆盖服务端计数、当前回应、不可撤销、合法路径段、失败不重试、关注成功确认、深链作者和首楼完整头像。线上字段、表情图片仅做只读核查，写操作使用 MockWebServer。
 

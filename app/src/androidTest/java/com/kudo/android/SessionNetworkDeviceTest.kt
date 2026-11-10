@@ -77,6 +77,62 @@ class SessionNetworkDeviceTest {
         }
     }
 
+    @Test fun authenticationReadsRecoverWithTheRenewedCookieAcrossRouteChanges() = runBlocking {
+        var now = 0L
+        val api = DiscourseClient(cookies, origin, http = http, route = network::client, authRecoveryClock = { now })
+        val states = listOf(NetworkSnapshot(1), NetworkSnapshot(2, vpn = true),
+            NetworkSnapshot(3, proxy = true), NetworkSnapshot(4))
+        for ((index, state) in states.withIndex()) {
+            now = index * 30_000L
+            snapshot.set(state)
+            server.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
+            server.enqueue(MockResponse().setBody("""{"current_user":{"id":7,"username":"fixture"}}""")
+                .addHeader("Set-Cookie", "_t=fixture-${index + 1}; Path=/; HttpOnly; Max-Age=3600"))
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            assertTrue(api.get("/private-fixture.json").getBoolean("ok"))
+            assertEquals("/private-fixture.json", server.takeRequest(3, TimeUnit.SECONDS)!!.path)
+            assertEquals("/session/current.json", server.takeRequest(3, TimeUnit.SECONDS)!!.path)
+            val retry = server.takeRequest(3, TimeUnit.SECONDS)!!
+            assertEquals("/private-fixture.json", retry.path)
+            assertEquals("_t=fixture-${index + 1}", retry.getHeader("Cookie"))
+            assertEquals("_t=fixture-${index + 1}", AndroidSessionCookies().get(origin.toString()))
+        }
+        assertEquals(12, server.requestCount)
+    }
+
+    @Test fun aRevokedCookieStopsWithoutAProbeOrReadReplay() = runBlocking {
+        val api = DiscourseClient(cookies, origin, http = http, route = network::client)
+        server.enqueue(MockResponse().setResponseCode(401).setBody("{}")
+            .addHeader("Set-Cookie", "_t=; Path=/; Max-Age=0"))
+        val failure = runCatching { api.get("/private-fixture.json") }.exceptionOrNull()
+        assertEquals(FailureKind.SIGN_IN, (failure as? ApiFailure)?.kind)
+        assertEquals(1, server.requestCount)
+        assertEquals("", AndroidSessionCookies().get(origin.toString()))
+    }
+
+    @Test fun anInconclusiveProbePreservesCookiesAndItsErrorDuringCooldown() = runBlocking {
+        val api = DiscourseClient(cookies, origin, http = http, route = network::client)
+        server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error_type":"not_logged_in"}"""))
+        server.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
+        server.enqueue(MockResponse().setResponseCode(401).setBody("{}"))
+        repeat(2) {
+            val failure = runCatching { api.get("/private-fixture.json") }.exceptionOrNull()
+            assertEquals(FailureKind.SERVER, (failure as? ApiFailure)?.kind)
+        }
+        assertEquals(3, server.requestCount)
+        assertEquals("_t=fixture-0", AndroidSessionCookies().get(origin.toString()))
+    }
+
+    @Test fun malformedCsrfNeverSubmitsOrClaimsThatLoginExpired() = runBlocking {
+        val api = DiscourseClient(cookies, origin, http = http, route = network::client)
+        server.enqueue(MockResponse().setBody("{}"))
+        val failure = runCatching { api.write("POST", "/posts.json", mapOf("raw" to "fixture")) }.exceptionOrNull()
+        assertEquals(FailureKind.SERVER, (failure as? ApiFailure)?.kind)
+        assertEquals(1, server.requestCount)
+        assertEquals("/session/csrf", server.takeRequest(3, TimeUnit.SECONDS)!!.path)
+        assertEquals("_t=fixture-0", AndroidSessionCookies().get(origin.toString()))
+    }
+
     @Test fun receivedRenewalPersistsEvenWhenTheAndroidCoroutineIsCancelled() = runBlocking {
         val waiting = Job()
         val delivered = CountDownLatch(1)
