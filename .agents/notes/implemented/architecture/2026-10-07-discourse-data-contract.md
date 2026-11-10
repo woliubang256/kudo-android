@@ -44,6 +44,8 @@ AndroidSessionCookies 的多个包装实例共用同一存储锁和代次；无 
 
 API 的 CSRF 获取、只读重定向与一次过盾重试也绑定起始代次；读取正文前后再次核验，旧账号的延迟正文不能作为新会话返回，旧 CSRF 不能缓存到新代次或触发后续写入。会话失效只会终止旧调用，不自动重放写操作。
 
+CSRF 缓存本身也携带签发请求的代次，并以 volatile 发布：即使退出 reset 与旧协程的缓存赋值交错，新代次也不会复用旧缓存；下次真正写入前重新获取 CSRF。仅检查赋值前代次无法覆盖检查与赋值之间的并发窗口，`aLateCsrfCacheWriteAfterResetIsNeverReusedByAnotherAccount` 用可控检查栅栏复现并守住该边界。
+
 [主站共享冷却](../bug-fix/2026-10-14-request-rate-cooldown.md)补齐 429 后的跨功能保护：按来源保存服务端等待截止时间，冷却中的新调用在本地返回剩余秒数。会话检查不清除此状态；写请求不排队、不自动重放。
 
 [DoH 与 ECH 接入](../feature/2026-10-12-doh-network.md)提供可选的统一 DNS／TLS 策略，保留本篇的同源、凭据隔离和写请求不重放契约；WebView 仍使用系统网络。
@@ -62,6 +64,10 @@ Discourse 的 JSON 403 若携带 `error_type: not_logged_in`，按未登录处�
 ## Consequences
 
 2026-11-10：`receivedRenewalIsSavedEvenWhenTheWaitingCoroutineWasCancelled` 在旧实现稳定复现续期 Cookie 丢失（`artifacts/session-cookie-cancellation-repro.txt`）；修复后 DiscourseClientTest 定向回归通过（`artifacts/session-cookie-cancellation-fixed.txt`）。这是本地服务器的接收时序复现，不能据此断言已复现用户的生产会话失效。
+
+响应有 Cookie 变更时会同步等待一次批量落盘，原生网络路径在后台线程执行；串行保护可能增加并发响应的等待，但避免彼此交错并减少逐 Cookie flush。共享 WebView 库仍受系统 WebView 与服务端会话策略约束，不能延长服务端已撤销的登录，也不能保证 VPN 出口变化不触发站点风控。
+
+最终 88 项关联 JVM 用例通过（`artifacts/session-final-tests-build.txt`），覆盖图片/下载逐跳续期与来源隔离、接收时取消、跨账号代次、旧 CSRF 缓存回写和有界会话复核；不以保留本地用户资料代替真实认证。
 
 通知类型14是custom。[解决通知](../bug-fix/2026-10-10-solved-notifications.md)结合专用message识别；data.title中的插件翻译键不能遮蔽topic_title，保留原始类型、楼层及独立解决状态供原生界面使用。
 

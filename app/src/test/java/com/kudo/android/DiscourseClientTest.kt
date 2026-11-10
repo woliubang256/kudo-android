@@ -17,6 +17,45 @@ class DiscourseClientTest {
     @Before fun setup() { server = MockWebServer(); server.start(); client = DiscourseClient(NoCookies, server.url("/")) }
     @After fun close() { server.shutdown() }
 
+    @Test fun aLateCsrfCacheWriteAfterResetIsNeverReusedByAnotherAccount() = runBlocking {
+        val generation = java.util.concurrent.atomic.AtomicLong()
+        val firstWrite = java.util.concurrent.atomic.AtomicReference<SessionCookieSnapshot?>()
+        val checks = java.util.concurrent.atomic.AtomicInteger()
+        val checkedBeforeCacheWrite = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val cookies = object : SessionCookies {
+            override fun get(url: String) = "_t=fixture"
+            override fun set(url: String, cookie: String) {}
+            override fun snapshot(url: String) = SessionCookieSnapshot(get(url), generation.get()).also { firstWrite.compareAndSet(null, it) }
+            override fun invalidate() { generation.incrementAndGet() }
+            override fun isCurrent(snapshot: SessionCookieSnapshot): Boolean {
+                val valid = snapshot.generation == generation.get()
+                if (snapshot === firstWrite.get() && checks.incrementAndGet() == 2) {
+                    checkedBeforeCacheWrite.countDown()
+                    check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                }
+                return valid
+            }
+        }
+        val api = DiscourseClient(cookies, server.url("/"))
+        server.enqueue(MockResponse().setBody("""{"csrf":"old-csrf"}"""))
+        val oldWrite = async(Dispatchers.IO) { runCatching { api.write("POST", "/posts.json") } }
+        try {
+            assertTrue(withContext(Dispatchers.IO) { checkedBeforeCacheWrite.await(3, java.util.concurrent.TimeUnit.SECONDS) })
+            api.invalidateCookieRequests()
+            release.countDown()
+            assertTrue(oldWrite.await().isFailure)
+            assertEquals(1, server.requestCount)
+            server.enqueue(MockResponse().setBody("""{"csrf":"new-csrf"}"""))
+            server.enqueue(MockResponse().setBody("{}"))
+            api.write("POST", "/posts.json")
+            assertEquals(3, server.requestCount)
+            assertEquals("/session/csrf", server.takeRequest().path)
+            assertEquals("/session/csrf", server.takeRequest().path)
+            assertEquals("new-csrf", server.takeRequest().getHeader("X-CSRF-Token"))
+        } finally { release.countDown(); oldWrite.cancelAndJoin() }
+    }
+
     @Test fun changingAccountDuringCsrfLoadingCannotSubmitInTheNewAccount() = runBlocking {
         val cookies = SessionCookieStore(object : CookieStorage {
             override fun get(url: String) = "_t=fixture"

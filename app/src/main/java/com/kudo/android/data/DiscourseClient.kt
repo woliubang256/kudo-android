@@ -56,7 +56,8 @@ class DiscourseClient(
     val cooldown: com.kudo.android.network.RequestCooldown = com.kudo.android.network.RequestCooldown(),
 ) {
     private val calls = route(http)
-    private var csrf: String? = null
+    private class CachedCsrf(val value: String, val session: SessionCookieSnapshot)
+    @Volatile private var csrf: CachedCsrf? = null
     private val csrfMutex = Mutex()
     fun resetSession() { csrf = null }
     internal fun invalidateCookieRequests() { cookies.invalidate(); resetSession() }
@@ -102,8 +103,10 @@ class DiscourseClient(
         val session = cookies.snapshot(baseUrl.toString())
         val token = csrfMutex.withLock {
             requireSession(session)
-            csrf ?: get("/session/csrf").optString("csrf").takeIf { it.isNotBlank() && it != "null" }
-                ?.also { requireSession(session); csrf = it } ?: throw ApiFailure(FailureKind.SIGN_IN, "登录状态已失效，请重新登录")
+            csrf?.takeIf { cookies.isCurrent(it.session) }?.value
+                ?: get("/session/csrf").optString("csrf").takeIf { it.isNotBlank() && it != "null" }
+                    ?.also { requireSession(session); csrf = CachedCsrf(it, session) }
+                ?: throw ApiFailure(FailureKind.SIGN_IN, "登录状态已失效，请重新登录")
         }
         return request(method, path, body = body ?: FormBody.Builder().apply { fields.forEach { (key, value) -> add(key, value) } }.build(),
             token = token, allowNonJsonResponse = allowNonJsonResponse, sessionBoundary = session)
