@@ -59,6 +59,10 @@ class DiscourseClient(
     private var csrf: String? = null
     private val csrfMutex = Mutex()
     fun resetSession() { csrf = null }
+    internal fun invalidateCookieRequests() { cookies.invalidate(); resetSession() }
+    private fun requireSession(session: SessionCookieSnapshot?) {
+        if (session != null && !cookies.isCurrent(session)) throw ApiFailure(FailureKind.NETWORK, "会话已切换，请重新加载")
+    }
 
     fun resolve(path: String): HttpUrl {
         val url = baseUrl.resolve(path) ?: throw IllegalArgumentException("无效的社区地址")
@@ -77,20 +81,24 @@ class DiscourseClient(
         ?: throw ApiFailure(FailureKind.SIGN_IN, "推送会话暂不可用")
     suspend fun write(method: String, path: String, fields: Map<String, String> = emptyMap(), body: RequestBody? = null,
         allowNonJsonResponse: Boolean = false): JSONObject {
+        val session = cookies.snapshot(baseUrl.toString())
         val token = csrfMutex.withLock {
+            requireSession(session)
             csrf ?: get("/session/csrf").optString("csrf").takeIf { it.isNotBlank() && it != "null" }
-                ?.also { csrf = it } ?: throw ApiFailure(FailureKind.SIGN_IN, "登录状态已失效，请重新登录")
+                ?.also { requireSession(session); csrf = it } ?: throw ApiFailure(FailureKind.SIGN_IN, "登录状态已失效，请重新登录")
         }
         return request(method, path, body = body ?: FormBody.Builder().apply { fields.forEach { (key, value) -> add(key, value) } }.build(),
-            token = token, allowNonJsonResponse = allowNonJsonResponse)
+            token = token, allowNonJsonResponse = allowNonJsonResponse, sessionBoundary = session)
     }
 
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(), body: RequestBody? = null, token: String? = null,
         redirects: Int = 0, arrayResponse: Boolean = false, htmlResponse: Boolean = false, collectionResponse: Boolean = false,
-        allowNonJsonResponse: Boolean = false, verificationAttempt: Int = 0): JSONObject {
+        allowNonJsonResponse: Boolean = false, verificationAttempt: Int = 0, sessionBoundary: SessionCookieSnapshot? = null): JSONObject {
+        requireSession(sessionBoundary)
         val url = resolve(path).newBuilder().apply { query.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
         cooldown.remainingSeconds(url).takeIf { it > 0 }?.let { throw rateLimitFailure(it) }
         val session = cookies.snapshot(url.toString())
+        requireSession(sessionBoundary)
         val request = Request.Builder().url(url).method(method, body)
             .header("Accept", if (htmlResponse) "text/html" else "application/json")
             .header("User-Agent", userAgent()).header("Referer", baseUrl.toString())
@@ -110,16 +118,18 @@ class DiscourseClient(
             } else "请求结果尚未确认，请刷新确认后再操作，以免重复提交")
         }
         response.use {
+            requireSession(session)
             if (method == "GET" && it.code in setOf(301, 302, 303, 307, 308) && redirects < 3) {
                 val target = it.header("Location")?.let(url::resolve)
                 if (target != null) {
                     resolve(target.toString())
                     if (target.encodedPath.trimEnd('/') == "/404") throw ApiFailure(FailureKind.NOT_FOUND, "内容不存在或暂无权限")
                     it.close()
-                    return request("GET", target.toString(), redirects = redirects + 1, arrayResponse = arrayResponse, htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = verificationAttempt)
+                    return request("GET", target.toString(), redirects = redirects + 1, arrayResponse = arrayResponse, htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = verificationAttempt, sessionBoundary = session)
                 }
             }
             val text = it.body?.string().orEmpty()
+            requireSession(session)
             val json = runCatching { JSONObject(text) }.getOrNull()
             val reason = json?.optJSONArray("errors")?.strings()?.joinToString("\n")?.take(500)
                 ?: json?.text("error")?.takeIf(String::isNotBlank)?.take(500)
@@ -132,7 +142,7 @@ class DiscourseClient(
                         it.close()
                         delay(600)
                         return request("GET", url.toString(), redirects = redirects, arrayResponse = arrayResponse,
-                            htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = 1)
+                            htmlResponse = htmlResponse, collectionResponse = collectionResponse, verificationAttempt = 1, sessionBoundary = session)
                     }
                     throw ApiFailure(FailureKind.VERIFICATION, CloudflareVerificationMessage)
                 }

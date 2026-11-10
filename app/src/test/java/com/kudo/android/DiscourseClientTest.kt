@@ -17,6 +17,28 @@ class DiscourseClientTest {
     @Before fun setup() { server = MockWebServer(); server.start(); client = DiscourseClient(NoCookies, server.url("/")) }
     @After fun close() { server.shutdown() }
 
+    @Test fun changingAccountDuringCsrfLoadingCannotSubmitInTheNewAccount() = runBlocking {
+        val cookies = SessionCookieStore(object : CookieStorage {
+            override fun get(url: String) = "_t=fixture"
+            override fun set(url: String, cookie: String) {}
+            override fun clear() {}
+            override fun flush() {}
+        })
+        val readingBody = java.util.concurrent.CountDownLatch(1)
+        val http = OkHttpClient.Builder().eventListener(object : EventListener() {
+            override fun responseBodyStart(call: Call) { readingBody.countDown() }
+        }).build()
+        val api = DiscourseClient(cookies, server.url("/"), http = http)
+        server.enqueue(MockResponse().setBody("""{"csrf":"old-account-csrf"}""").setBodyDelay(500, java.util.concurrent.TimeUnit.MILLISECONDS))
+        server.enqueue(MockResponse().setBody("{}"))
+        val task = async(Dispatchers.IO) { runCatching { api.write("POST", "/posts.json", mapOf("raw" to "fixture")) } }
+        assertNotNull(withContext(Dispatchers.IO) { server.takeRequest(3, java.util.concurrent.TimeUnit.SECONDS) })
+        assertTrue(withContext(Dispatchers.IO) { readingBody.await(3, java.util.concurrent.TimeUnit.SECONDS) })
+        cookies.invalidate()
+        assertTrue(task.await().isFailure)
+        assertEquals("A request started in an earlier account must not post as the new account", 1, server.requestCount)
+    }
+
     @Test fun anOldResponseCannotReplaceTheSessionEstablishedByTheWebView() = runBlocking {
         var value = "_t=old"
         val cookies = object : SessionCookies {
