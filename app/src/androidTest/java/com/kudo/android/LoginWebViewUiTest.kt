@@ -13,6 +13,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import androidx.test.platform.app.InstrumentationRegistry
@@ -106,6 +108,9 @@ class LoginWebViewUiTest {
         compose.waitUntil(10_000) { sessionResets == 2 }
         Thread.sleep(100)
         assertEquals("A single tap must not reset the session twice", 2, sessionResets)
+        val error = "服务器未返回有效的会话信息，请稍后重试"
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(error).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(error).assertIsDisplayed()
     }
 
     private fun legacySettings(enabled: Boolean): DisplaySettings {

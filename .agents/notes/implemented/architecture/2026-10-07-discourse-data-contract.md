@@ -6,6 +6,8 @@ Status: implemented
 
 话题列表、详情和写操作具有不同的响应和认证边界。只读取首批楼层会截断长帖，盲目重试写请求会重复发帖，错误地跟随分页地址则可能泄露会话。
 
+0.3.9 的会话反馈表现为未重启时网页登录仍似已登录、原生刷新失败，重启后必须重新登录。版本差异没有直接修改登录代码；本次确认的是本地夹具可复现的续期接收与并发回写缺口，尚未复现反馈者在真实 VPN 出口下完整的长期失效过程。
+
 ## Decision
 
 data 包分开模型解析、DiscourseClient 和 CommunityRepository。分页使用 more_topics_url，帖子使用 post_stream.stream 按 20 个 id 补齐；JSONObject 显式处理缺失或 null 字段。请求层只允许 baseUrl 同 scheme、host、port 的地址，禁用 OkHttp 自动重定向和失败重试。只读 GET 可显式跟随最多三次同源重定向，每次重新验证来源；写操作和跨源重定向绝不重放。
@@ -56,7 +58,7 @@ Discourse 的 JSON 403 若携带 `error_type: not_logged_in`，按未登录处�
 
 - 使用 User API Key 执行所有接口：接口层简单，但 FluxDO 记录了 linux.do 的 scope 和限流限制，不能假定 write scope 可用。
 - 在协程读取响应时顺带保存 Cookie：代码集中且容易跟踪，但协程取消可能先于调度恢复，导致已经收到的续期响应被关闭而未保存；将保存提前到网络回调。
-- 独立持久 CookieJar 作为原生权威：便于完全控制落盘和元数据，FluxDO 采用此架构；但 Android 现有网页与原生已经共享 CookieManager，双存储会引入属性和同步冲突，先补全共享库的响应入口与代次边界。
+- 独立持久 CookieJar 作为原生权威：便于完全控制落盘和元数据，[FluxDO 的 Cookie 架构](https://github.com/Lingyan000/fluxdo/blob/bc5a04b0fc09bde915415e2ab345bc24c8c8146c/docs/cookie-sync-status.md)采用此机制；但 Android 现有网页与原生已经共享 CookieManager，双存储会引入属性和同步冲突，先补全共享库的响应入口与代次边界。
 - 把会话 Cookie 强制改为长期有效：冷启动时看似不会消失，但无法延长服务端有效期，也破坏过期和退出语义；严格保留站点签发属性。
 - 按页码猜测所有接口分页：实现一致，但 topic post_stream 不是普通页码，且服务端可能改变列表游标；使用服务端返回的链接和楼层 id。
 - 所有重定向一律报错：边界最简单，但会让正常分类规范地址无法加载；只读、同源、最多三跳保留边界，写操作仍禁止重放。
@@ -68,6 +70,10 @@ Discourse 的 JSON 403 若携带 `error_type: not_logged_in`，按未登录处�
 响应有 Cookie 变更时会同步等待一次批量落盘，原生网络路径在后台线程执行；串行保护可能增加并发响应的等待，但避免彼此交错并减少逐 Cookie flush。共享 WebView 库仍受系统 WebView 与服务端会话策略约束，不能延长服务端已撤销的登录，也不能保证 VPN 出口变化不触发站点风控。
 
 最终 88 项关联 JVM 用例通过（`artifacts/session-final-tests-build.txt`），覆盖图片/下载逐跳续期与来源隔离、接收时取消、跨账号代次、旧 CSRF 缓存回写和有界会话复核；不以保留本地用户资料代替真实认证。
+
+RMX2202 / Android 13 的 16 项常规真机用例通过（`artifacts/session-final-device.txt`，runner 另报告两项默认跳过的分阶段用例）。网页登录错误中文可读，WebView 与原生共享 Cookie，循环回环请求模拟系统路由的 VPN / 代理状态变化后仍发送已续期凭据；没有切换手机实际 VPN 或请求生产登录接口。`seed` 与 `verify` 分别在不同 PID 完成持久 Cookie 写入、重启读取及清理（`artifacts/session-final-device-seed.txt`、`artifacts/session-final-device-cold-start.txt`），保留 Secure / HttpOnly / 有效期及实际子域隔离；CookieManagerCompat 回读的 Domain 字段不能单独证明 host-only，故直接核对对子域不可见。
+
+Debug / AndroidTest 构建及 Lint 通过（`artifacts/session-final-tests-build.txt`、`artifacts/session-final-lint.txt`）。开发版以原签名和显式 0.3.9-dev / 3010 覆盖安装，`firstInstallTime` 仍为 2026-10-23 14:55:34，未卸载、清理用户数据或更改正式版；测试只清理自身的假域名 Cookie 与独立偏好。
 
 通知类型14是custom。[解决通知](../bug-fix/2026-10-10-solved-notifications.md)结合专用message识别；data.title中的插件翻译键不能遮蔽topic_title，保留原始类型、楼层及独立解决状态供原生界面使用。
 
