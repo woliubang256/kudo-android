@@ -60,7 +60,7 @@ class CommunityRepository(val client: DiscourseClient) {
     }
     suspend fun tagIcons() = client.tagIcons()
     suspend fun currentUser(): Member? {
-        val response = client.get("/session/current.json")
+        val response = client.currentSession()
         if (!response.has("current_user")) throw ApiFailure(FailureKind.SERVER, "服务器未返回有效的会话信息，请稍后重试")
         if (response.isNull("current_user")) return null
         val member = response.optJSONObject("current_user")

@@ -24,6 +24,12 @@ private fun authToken(header: String): String? = header.split(';').firstNotNullO
     if (pair.substringBefore('=') == "_t" && '=' in pair) pair.substringAfter('=') else null
 }
 
+internal fun SessionCookies.hasUpdatedAuth(url: String, previous: SessionCookieSnapshot): Boolean {
+    val current = snapshot(url)
+    return isCurrent(previous) && current.generation == previous.generation &&
+        authToken(current.header).let { !it.isNullOrBlank() && it != authToken(previous.header) }
+}
+
 private fun sessionResponseCookies(headers: List<String>, sent: String, current: String): List<String> {
     if (authToken(sent) == authToken(current)) return headers
     return headers.filterNot { it.substringBefore('=').trim() in setOf("_t", "_forum_session") }

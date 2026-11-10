@@ -71,6 +71,24 @@ class DiscourseClient(
     }
 
     suspend fun get(path: String, query: Map<String, String> = emptyMap()): JSONObject = request("GET", path, query)
+    internal suspend fun currentSession(): JSONObject {
+        val before = cookies.snapshot(baseUrl.toString())
+        suspend fun probe(): JSONObject = try { get("/session/current.json") } catch (e: ApiFailure) {
+            if (e.kind == FailureKind.NOT_FOUND) JSONObject().put("current_user", JSONObject.NULL) else throw e
+        }
+        val first = try { Result.success(probe()) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: ApiFailure) { Result.failure(e) }
+        requireSession(before)
+        val loggedOut = (first.exceptionOrNull() as? ApiFailure)?.kind == FailureKind.SIGN_IN ||
+            first.getOrNull()?.let { it.has("current_user") && it.isNull("current_user") } == true
+        if (loggedOut && cookies.hasUpdatedAuth(baseUrl.toString(), before)) {
+            resetSession()
+            // A fresh credential already exists. Verify it once; never replay a write or restore an old token.
+            return probe()
+        }
+        return first.getOrThrow()
+    }
     suspend fun getArray(path: String): JSONArray = request("GET", path, arrayResponse = true).getJSONArray("items")
     internal suspend fun getCollection(path: String): JSONObject = request("GET", path, collectionResponse = true)
     internal suspend fun siteSettingsHtml(): String = request("GET", "/latest", htmlResponse = true).getString("html")
