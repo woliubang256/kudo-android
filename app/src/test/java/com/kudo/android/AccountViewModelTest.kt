@@ -22,10 +22,12 @@ class AccountViewModelTest {
                 override fun flush() {}
                 override fun clear() {}
             })
+            val startup = cookies.snapshot(server.url("/").toString())
             server.enqueue(MockResponse().setBody("""{"current_user":{"id":7,"username":"former"}}"""))
             val vm = AccountViewModel(CommunityRepository(DiscourseClient(cookies, server.url("/"))), {}, {})
             try {
                 runCurrent(); vm.viewModelScope.coroutineContext.job.children.toList().joinAll()
+                assertTrue("Initial session discovery must keep parallel startup requests valid", cookies.isCurrent(startup))
                 val first = cookies.snapshot(server.url("/").toString())
                 server.enqueue(MockResponse().setBody("""{"current_user":{"id":8,"username":"current"}}"""))
                 assertTrue(vm.checkSession())

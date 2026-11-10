@@ -55,7 +55,7 @@ class AccountViewModel(
     private fun acceptSession(member: Member?) {
         val changed = user?.id != member?.id || user?.username != member?.username
         if (changed) {
-            repository.client.invalidateCookieRequests()
+            if (sessionReady) repository.client.invalidateCookieRequests()
             sessionEpoch++
             noticeJob?.cancel(); savedJob?.cancel()
             notices = emptyList(); saved = emptyList()
