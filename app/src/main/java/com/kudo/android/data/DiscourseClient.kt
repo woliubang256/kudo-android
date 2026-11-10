@@ -104,9 +104,9 @@ class DiscourseClient(
         val token = csrfMutex.withLock {
             requireSession(session)
             csrf?.takeIf { cookies.isCurrent(it.session) }?.value
-                ?: get("/session/csrf").optString("csrf").takeIf { it.isNotBlank() && it != "null" }
+                ?: (get("/session/csrf").opt("csrf") as? String)?.takeIf { it.isNotBlank() && it != "null" }
                     ?.also { requireSession(session); csrf = CachedCsrf(it, session) }
-                ?: throw ApiFailure(FailureKind.SIGN_IN, "登录状态已失效，请重新登录")
+                ?: throw ApiFailure(FailureKind.SERVER, "服务器未返回有效的安全令牌，请稍后重试")
         }
         return request(method, path, body = body ?: FormBody.Builder().apply { fields.forEach { (key, value) -> add(key, value) } }.build(),
             token = token, allowNonJsonResponse = allowNonJsonResponse, sessionBoundary = session)
