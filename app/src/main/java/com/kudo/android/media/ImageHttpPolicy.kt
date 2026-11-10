@@ -3,6 +3,7 @@ package com.kudo.android.media
 import com.kudo.android.data.SessionCookies
 import com.kudo.android.network.RequestCooldown
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okio.BufferedSource
 import okio.ForwardingSource
 import okio.buffer
@@ -19,7 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SSLException
 
 internal fun createImageHttpClient(cooldown: RequestCooldown, cookies: SessionCookies, userAgent: String,
-    parallelism: Int = 4, retryDelayMillis: Long = 300): OkHttpClient = OkHttpClient.Builder()
+    parallelism: Int = 4, retryDelayMillis: Long = 300,
+    cookieOrigin: HttpUrl = "https://linux.do/".toHttpUrl()): OkHttpClient = OkHttpClient.Builder()
     .dispatcher(Dispatcher().apply { maxRequests = parallelism; maxRequestsPerHost = parallelism })
     .retryOnConnectionFailure(false)
     .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS).callTimeout(45, TimeUnit.SECONDS)
@@ -28,10 +30,12 @@ internal fun createImageHttpClient(cooldown: RequestCooldown, cookies: SessionCo
         val request = chain.request()
         checkCooldown(cooldown, request)
         val builder = request.newBuilder().removeHeader("Cookie")
-        if (request.url.isHttps && request.url.host == "linux.do") {
+        val sameOrigin = request.url.scheme == cookieOrigin.scheme && request.url.host == cookieOrigin.host && request.url.port == cookieOrigin.port
+        if (sameOrigin) {
             builder.header("Cookie", cookies.get(request.url.toString())).header("User-Agent", userAgent)
         }
         val response = chain.proceed(builder.build())
+        if (sameOrigin) response.headers("Set-Cookie").forEach { cookies.set(request.url.toString(), it) }
         if (response.code == 429) cooldown.record(response)
         // OkHttp can replay a GET on 503 Retry-After:0 even with connection retries disabled.
         if (response.code == 503 && response.header("Retry-After")?.trim() == "0")

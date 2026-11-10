@@ -22,6 +22,45 @@ class ImageHttpPolicyTest {
     private fun http(gate: RequestCooldown = RequestCooldown(), parallelism: Int = 4) =
         createImageHttpClient(gate, NoCookies, "fixture", parallelism, retryDelayMillis = 0)
 
+    @Test fun imageRenewalsAreSavedBeforeFollowingEachRedirect() {
+        MockWebServer().use { server ->
+            server.start()
+            var value = "_t=old"
+            val saved = mutableListOf<String>()
+            val cookies = object : SessionCookies {
+                override fun get(url: String) = value
+                override fun set(url: String, cookie: String) { saved += cookie; value = cookie.substringBefore(';') }
+            }
+            val first = "_t=renewed; Path=/; HttpOnly; Max-Age=3600; SameSite=Lax"
+            val second = "_t=final; Path=/; HttpOnly; Max-Age=3600; SameSite=Lax"
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/final.png").addHeader("Set-Cookie", first))
+            server.enqueue(MockResponse().setBody("image").addHeader("Set-Cookie", second))
+            val http = createImageHttpClient(RequestCooldown(), cookies, "fixture", cookieOrigin = server.url("/"))
+            http.newCall(image(server)).execute().use { assertEquals("image", it.body!!.string()) }
+            assertEquals(listOf(first, second), saved)
+            assertEquals("_t=old", server.takeRequest().getHeader("Cookie"))
+            assertEquals("_t=renewed", server.takeRequest().getHeader("Cookie"))
+        }
+    }
+
+    @Test fun foreignImageResponsesCannotOverwriteTheCommunitySession() {
+        MockWebServer().use { server -> MockWebServer().use { other ->
+            server.start(); other.start()
+            val saved = mutableListOf<String>()
+            val cookies = object : SessionCookies {
+                override fun get(url: String) = "_t=valid"
+                override fun set(url: String, cookie: String) { saved += cookie }
+            }
+            server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", other.url("/image.png")))
+            other.enqueue(MockResponse().setBody("image").addHeader("Set-Cookie", "_t=foreign; Domain=linux.do; Path=/"))
+            val http = createImageHttpClient(RequestCooldown(), cookies, "fixture", cookieOrigin = server.url("/"))
+            http.newCall(image(server)).execute().use { assertEquals("image", it.body!!.string()) }
+            assertEquals("_t=valid", server.takeRequest().getHeader("Cookie"))
+            assertNull(other.takeRequest().getHeader("Cookie"))
+            assertTrue(saved.isEmpty())
+        } }
+    }
+
     @Test fun apiRateLimitPreventsImageRequestsUntilCooldownExpires() = runBlocking {
         MockWebServer().use { server ->
             server.start()
