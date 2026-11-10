@@ -59,7 +59,15 @@ class CommunityRepository(val client: DiscourseClient) {
         return categories
     }
     suspend fun tagIcons() = client.tagIcons()
-    suspend fun currentUser(): Member? = client.get("/session/current.json").optJSONObject("current_user")?.let { DiscourseParser.member(it, avatarDetailsLoaded = true) }
+    suspend fun currentUser(): Member? {
+        val response = client.get("/session/current.json")
+        if (!response.has("current_user")) throw ApiFailure(FailureKind.SERVER, "服务器未返回有效的会话信息，请稍后重试")
+        if (response.isNull("current_user")) return null
+        val member = response.optJSONObject("current_user")
+            ?.takeIf { it.optLong("id") > 0 && (it.opt("username") as? String)?.isNotBlank() == true }
+            ?: throw ApiFailure(FailureKind.SERVER, "服务器未返回有效的会话信息，请稍后重试")
+        return DiscourseParser.member(member, avatarDetailsLoaded = true)
+    }
     suspend fun user(username: String): Member {
         val path = client.baseUrl.newBuilder().addPathSegment("u").addPathSegment("$username.json").build().toString()
         return DiscourseParser.member(client.get(path).getJSONObject("user"), avatarDetailsLoaded = true)

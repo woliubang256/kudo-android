@@ -18,6 +18,8 @@ AccountViewModel 通过 /session/current.json 确认用户，LoginScreen 提供 
 
 会话验证也绑定账号代次：退出后较早的 current_user 响应不能恢复旧用户；清理期间禁止新的会话验证。AccountViewModelTest 先复现延迟响应导致退出后重新登录的问题，再验证修复。
 
+原生 Cookie 写入同时采用[请求与存储代次](../architecture/2026-10-07-discourse-data-contract.md)：接受不同账号、退出登录以及网页登录进入、完成与离开时使旧请求失效。退出在远端清理之前推进 Cookie 代次，不等待网络完成才保护本地状态。会话接口必须包含明确的 `current_user`；仅显式 null 表示访客，缺字段、错误类型或无有效身份按服务端异常保留已有账号，不能误当成登出。
+
 网页登录切换账号或会话过期也推进账号代次，取消通知与收藏任务，清空旧数据、错误和分页游标；已读失败事件也核验代次。changingAccountDiscardsOldNotificationResponses 先在延迟通知返回后复现跨账号写回（artifacts/account-switch-repro.txt），再验证新账号不接收旧通知。
 
 设置页持久化主题、材质和字号，并解释兼容材质。个人主页显示实际账号资料。

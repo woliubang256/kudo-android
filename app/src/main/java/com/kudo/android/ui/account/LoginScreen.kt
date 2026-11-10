@@ -26,12 +26,16 @@ fun LoginScreen(vm: AccountViewModel, back: () -> Unit, verified: () -> Unit,
     var loading by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf<String?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
-    DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.destroy(); webView = null } }
+    DisposableEffect(Unit) {
+        vm.webSessionBoundary()
+        onDispose { vm.webSessionBoundary(); webView?.stopLoading(); webView?.destroy(); webView = null }
+    }
     WebPageScaffold(header = {
         PageTopBar("登录与网页验证", back) {
             TopBarTextButton(if (vm.checkingSession) "检查中…" else "完成登录", {
                 scope.launch {
                     CookieManager.getInstance().flush()
+                    vm.webSessionBoundary()
                     if (vm.checkSession()) verified()
                     else message = vm.sessionError?.message ?: "尚未检测到登录；若已完成验证，可以返回浏览话题。"
                 }

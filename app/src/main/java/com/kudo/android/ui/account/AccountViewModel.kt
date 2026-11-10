@@ -55,6 +55,7 @@ class AccountViewModel(
     private fun acceptSession(member: Member?) {
         val changed = user?.id != member?.id || user?.username != member?.username
         if (changed) {
+            repository.client.invalidateCookieRequests()
             sessionEpoch++
             noticeJob?.cancel(); savedJob?.cancel()
             notices = emptyList(); saved = emptyList()
@@ -132,6 +133,7 @@ class AccountViewModel(
             false
         } finally { if (epoch == sessionEpoch) { checkingSession = false; sessionReady = true } }
     }
+    fun webSessionBoundary() { repository.client.invalidateCookieRequests() }
     fun loadCategories() {
         if (categoriesLoading) return
         categoriesLoading = true; categoryError = null
@@ -235,6 +237,7 @@ class AccountViewModel(
     }
     fun logout() {
         val name = user?.username
+        repository.client.invalidateCookieRequests()
         sessionEpoch++
         notificationJob?.cancel(); countJob?.cancel(); noticeJob?.cancel(); savedJob?.cancel()
         notificationJob = null; countJob = null
