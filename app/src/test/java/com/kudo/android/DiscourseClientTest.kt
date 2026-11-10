@@ -17,6 +17,31 @@ class DiscourseClientTest {
     @Before fun setup() { server = MockWebServer(); server.start(); client = DiscourseClient(NoCookies, server.url("/")) }
     @After fun close() { server.shutdown() }
 
+    @Test fun anOldResponseCannotReplaceTheSessionEstablishedByTheWebView() = runBlocking {
+        var value = "_t=old"
+        val cookies = object : SessionCookies {
+            override fun get(url: String) = value
+            override fun set(url: String, cookie: String) { value = cookie.substringBefore(';') }
+        }
+        server.enqueue(MockResponse().addHeader("Set-Cookie", "_t=stale; Path=/; HttpOnly").setBody("{}"))
+        val api = DiscourseClient(cookies, server.url("/"), route = { base ->
+            Call.Factory { request ->
+                val delegate = base.newCall(request)
+                object : Call by delegate {
+                    override fun enqueue(callback: Callback) = delegate.enqueue(object : Callback {
+                        override fun onFailure(call: Call, e: java.io.IOException) = callback.onFailure(call, e)
+                        override fun onResponse(call: Call, response: Response) {
+                            value = "_t=web-login"
+                            callback.onResponse(call, response)
+                        }
+                    })
+                }
+            }
+        })
+        api.get("/session/current.json")
+        assertEquals("_t=web-login", value)
+    }
+
     @Test fun receivedRenewalIsSavedEvenWhenTheWaitingCoroutineWasCancelled() = runBlocking {
         val saved = java.util.concurrent.CopyOnWriteArrayList<String>()
         val cookies = object : SessionCookies {

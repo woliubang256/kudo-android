@@ -45,11 +45,6 @@ internal fun isCloudflareChallenge(response: Response, body: String): Boolean {
     return bootstrap || (platform && (page.title().equals("Just a moment...", ignoreCase = true) || page.getElementById("challenge-form") != null))
 }
 
-interface SessionCookies {
-    fun get(url: String): String
-    fun set(url: String, cookie: String)
-}
-
 class DiscourseClient(
     private val cookies: SessionCookies,
     val baseUrl: HttpUrl = "https://linux.do/".toHttpUrl(),
@@ -95,16 +90,18 @@ class DiscourseClient(
         allowNonJsonResponse: Boolean = false, verificationAttempt: Int = 0): JSONObject {
         val url = resolve(path).newBuilder().apply { query.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
         cooldown.remainingSeconds(url).takeIf { it > 0 }?.let { throw rateLimitFailure(it) }
+        val session = cookies.snapshot(url.toString())
         val request = Request.Builder().url(url).method(method, body)
             .header("Accept", if (htmlResponse) "text/html" else "application/json")
             .header("User-Agent", userAgent()).header("Referer", baseUrl.toString())
             .apply {
                 if (!htmlResponse) header("X-Requested-With", "XMLHttpRequest")
-                cookies.get(url.toString()).takeIf(String::isNotBlank)?.let { header("Cookie", it) }
+                session.header.takeIf(String::isNotBlank)?.let { header("Cookie", it) }
                 token?.let { header("X-CSRF-Token", it); header("Origin", baseUrl.toString().trimEnd('/')) }
             }.build()
         val response = try { calls.newCall(request).await { received ->
-            received.headers("Set-Cookie").forEach { cookie -> cookies.set(url.toString(), cookie) }
+            if (!cookies.receive(url.toString(), received.headers("Set-Cookie"), session))
+                throw IOException("会话已切换，请重新加载")
         } } catch (e: IOException) {
             if (e is com.kudo.android.network.RequestCoolingDown) throw e.apiFailure()
             throw ApiFailure(FailureKind.NETWORK, if (method == "GET") {

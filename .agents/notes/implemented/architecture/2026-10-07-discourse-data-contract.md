@@ -34,6 +34,8 @@ AndroidSessionCookies 与官网 WebView 共用 CookieManager。CSRF 通过互斥
 
 文件下载采用相同的逐跳接收规则，先保存主站下载/重定向响应，再读取后续跳转的 Cookie；CDN 响应不能覆盖社区会话。`createDownloadHttpClient` 统一生产和夹具使用的下载网络策略，DoH 只包裹该客户端，不替换认证拦截器。
 
+`SessionCookieStore` 串行读取、批量写入和 flush，Android 仍以进程共享的 WebView CookieManager 为唯一存储，不建立第二份持久 CookieJar。请求快照只在内存持有发送时的 Cookie 和会话代次；退出清理或网页登录边界推进代次，旧代次响应不能写回。相同代次下，若 `_t` 已被网页或另一响应更新，旧请求不能再覆盖或删除 `_t` / `_forum_session`，其他 Cookie 保留各自正常更新。快照不输出凭据，原始属性和到期时间不改写，服务端明确删除当前会话仍然生效。
+
 [主站共享冷却](../bug-fix/2026-10-14-request-rate-cooldown.md)补齐 429 后的跨功能保护：按来源保存服务端等待截止时间，冷却中的新调用在本地返回剩余秒数。会话检查不清除此状态；写请求不排队、不自动重放。
 
 [DoH 与 ECH 接入](../feature/2026-10-12-doh-network.md)提供可选的统一 DNS／TLS 策略，保留本篇的同源、凭据隔离和写请求不重放契约；WebView 仍使用系统网络。
@@ -44,6 +46,8 @@ Discourse 的 JSON 403 若携带 `error_type: not_logged_in`，按未登录处�
 
 - 使用 User API Key 执行所有接口：接口层简单，但 FluxDO 记录了 linux.do 的 scope 和限流限制，不能假定 write scope 可用。
 - 在协程读取响应时顺带保存 Cookie：代码集中且容易跟踪，但协程取消可能先于调度恢复，导致已经收到的续期响应被关闭而未保存；将保存提前到网络回调。
+- 独立持久 CookieJar 作为原生权威：便于完全控制落盘和元数据，FluxDO 采用此架构；但 Android 现有网页与原生已经共享 CookieManager，双存储会引入属性和同步冲突，先补全共享库的响应入口与代次边界。
+- 把会话 Cookie 强制改为长期有效：冷启动时看似不会消失，但无法延长服务端有效期，也破坏过期和退出语义；严格保留站点签发属性。
 - 按页码猜测所有接口分页：实现一致，但 topic post_stream 不是普通页码，且服务端可能改变列表游标；使用服务端返回的链接和楼层 id。
 - 所有重定向一律报错：边界最简单，但会让正常分类规范地址无法加载；只读、同源、最多三跳保留边界，写操作仍禁止重放。
 
