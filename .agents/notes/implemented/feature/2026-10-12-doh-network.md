@@ -44,6 +44,20 @@ Android 适配单元为 `network/DohTransport.kt` 与 `NativeDoh.kt`。原始 So
 
 运行策略位于 `network/DohNetwork.kt`：用户选择与有效状态分离，Android 可观察 VPN 或系统 HTTP 代理时暂停。监听包含 VPN 的网络请求、默认网络变化与 Activity 恢复，每次创建请求前复查；配置/网络变化关闭原生 Socket 并清理连接池，旧代回调不能覆盖新状态。主站实际 ECH 握手才显示已连接；检测仅发送无凭据 GET，可取消并随网络切换停止。配置与策略 6 项 JVM 测试通过。
 
+### 路由清理的线程与所有权
+
+[Issue #7](https://github.com/woliubang256/kudo-android/issues/7) 的完整堆栈指出主线程 `refreshTask` 经 `DohNetwork.refresh` 清理 OkHttp 连接池，Conscrypt 关闭 HTTPS 空闲连接时发送 TLS 关闭通知而触发 `NetworkOnMainThreadException`。前台恢复、设置修改也直接调用同一入口，不能只移动网络回调。
+
+路由状态与代号在锁内同步更新，旧客户端和传输对象从当前代摘除；可能阻塞或发送 TLS 数据的关闭、连接池回收在独立 IO 清理任务中执行，不持有路由锁。每代系统通道和原生通道使用各自拥有的连接池，不沿用传入客户端的池，保留客户端的 Cookie、拦截器、超时与调度器。节点变化同样摘除旧客户端；关闭网络组件后停止接收新任务，但已提交的清理必须完成，不能随配置监听 scope 一起取消。
+
+把整个刷新延后到后台最省改动，但主线程创建请求时可能仍读取旧配置；因此只异步释放资源。仅将 `evictAll` 放进后台任务可以消除主线程 TLS 写入，但沿用共享池会让旧任务回收新代连接；因此按代隔离池。吞掉 `NetworkOnMainThreadException` 或放宽 StrictMode 能避免崩溃，却留下未完成清理及主线程阻塞，不采用。
+
+新增测试先使用本地受信任 HTTPS 服务和真实 Android 主线程 StrictMode 复现，覆盖网络刷新、关闭后的清理、旧清理阻塞时新代继续请求及连接复用，并回归 VPN 自动切换。所有请求限定本机回环，不触碰社区账号或用户网络设置。代价是各客户端按代分配默认连接池，以及短时间并存旧清理资源；活动请求沿用既有取消语义，不重放业务请求。
+
+2026-11-10 在 RMX2202 / Android 13 上，旧实现的主线程 TLS 用例先失败，得到与 issue 相同的 `ConscryptEngineSocket.close → ConnectionPool.evictAll → DohNetwork.refresh:115` 异常链；系统通道关闭回收用例也先失败（`artifacts/issue-7-repro-device.txt`）。回归夹具使用 UUID 隔离偏好与本地证书；两个主线程用例走生产默认 IO dispatcher，竞态用例单独注入串行 dispatcher 以确定旧清理已经完成，避免用延时猜测后台任务是否结束。
+
+修复后 `DohNetworkCleanupDeviceTest` 3项通过（`artifacts/issue-7-cleanup-final-device.txt`）；`DohTransportDeviceTest`、`DohSettingsUiTest` 和 `RequestSchedulerDeviceTest` 的14项真机回归通过，线上生产探针未启用并按预期跳过1项（`artifacts/issue-7-network-regression-device.txt`），包括 VPN/系统代理暂停与恢复、开关持久化、HTTP/2并发、连接复用、取消、证书拒绝与上传不重放。DoH/节点设置28项 JVM 用例、Debug/AndroidTest构建及 `lintDebug` 通过（`artifacts/issue-7-green-build.txt`、`artifacts/issue-7-lint.txt`）。覆盖前核对开发签名和真机版本 `0.3.8-dev / 3009`，仅同签名 `adb install -r` / `-r -t`，未卸载、清数据、修改系统网络或发布版本。
+
 Discourse、Connect、MessageBus 通过构造参数注入 `(OkHttpClient) -> Call.Factory`，保留原客户端的 Cookie、来源、重定向和超时约束；默认是原客户端，既有测试和调用保持兼容。主站 GET 显示固定的 DoH 错误说明，写失败仍提示结果未知且禁止自动重放。
 
 写请求再由 `DohRequestPolicy` 标记一次性 body；关闭连接重试并不能阻止 OkHttp 对 `503 Retry-After:0` 的 HTTP follow-up。MockWebServer 先复现 POST 被发送两次，修复后原样返回 503，服务端只收一次；GET/HEAD 保留既有语义，上传仍流式写入。

@@ -17,6 +17,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Call
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.Closeable
@@ -43,10 +44,13 @@ internal data class NetworkSnapshot(val id: Long = 0, val vpn: Boolean = false, 
 
 /** Shares routing policy, never cookie jars or authenticated interceptors. */
 class DohNetwork internal constructor(context: Context, val settings: DohSettings,
+    cleanupDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val snapshotOverride: (() -> NetworkSnapshot)? = null) : Closeable {
     private val app = context.applicationContext
     private val connectivity = app.getSystemService(ConnectivityManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val cleanupJob = SupervisorJob()
+    private val cleanupScope = CoroutineScope(cleanupJob + cleanupDispatcher)
     private val handler = Handler(Looper.getMainLooper())
     private val lock = Any()
     private var closed = false
@@ -110,12 +114,26 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
             if (routeKey != null && routeKey?.second != snapshot) skipCachedWinner = true
             routeKey = key
             generation++
-            transport?.close(); transport = null
-            checks.toList().forEach { it.close() }; checks.clear()
-            clients.forEach { (base, routed) -> base.connectionPool.evictAll(); routed.connectionPool.evictAll() }
-            clients.clear()
+            retireRoute()
             current.value = DohNetworkState(configuration.enabled, snapshot.vpn, snapshot.proxy,
                 vpnAutoSwitch = configuration.vpnAutoSwitch)
+        }
+    }
+    /** Called under the route lock; cleanup owns detached resources and never holds that lock. */
+    private fun retireRoute() {
+        val retired = checks.toList() + listOfNotNull(transport)
+        transport = null
+        checks.clear()
+        release(retired, detachClientPools())
+    }
+    private fun detachClientPools(): List<ConnectionPool> =
+        clients.values.map { it.connectionPool }.distinct().also { clients.clear() }
+
+    private fun release(transports: List<DohTransport> = emptyList(), pools: List<ConnectionPool>) {
+        if (transports.isEmpty() && pools.isEmpty()) return
+        cleanupScope.launch {
+            transports.forEach { it.close() }
+            pools.forEach { it.evictAll() }
         }
     }
     /** Called under lock; callbacks run after native operations, never under the transport lock. */
@@ -129,7 +147,7 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
                 synchronized(lock) {
                     if (!closed && epoch == generation) {
                         val edge = decodeEdgeSelectionState(raw)
-                        if (current.value.edge.ip != edge.ip) clients.values.forEach { it.connectionPool.evictAll() }
+                        if (current.value.edge.ip != edge.ip) release(pools = detachClientPools())
                         current.value = current.value.copy(edge = edge)
                         settings.saveSelection(raw)
                     }
@@ -170,7 +188,10 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
             refresh() // Also covers startup/foreground races before the first request.
             val selected = synchronized(lock) {
                 if (closed) throw IOException("DoH: profile_closed")
-                if (!current.value.effective) base else clients.getOrPut(base) {
+                clients.getOrPut(base) {
+                    // The pool belongs to this route generation, including when DoH is paused/off.
+                    val builder = base.newBuilder().connectionPool(ConnectionPool())
+                    if (!current.value.effective) return@getOrPut builder.build()
                     val epoch = generation
                     val native = transport ?: try {
                         nativeTransport()
@@ -178,7 +199,7 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
                         current.value = current.value.copy(error = "原生网络组件不可用")
                         throw IOException("DoH: native_unavailable", e)
                     }
-                    native.configure(base.newBuilder()).addInterceptor { chain ->
+                    native.configure(builder).addInterceptor { chain ->
                         try { chain.proceed(chain.request()) } catch (e: IOException) {
                             if (e !is RequestCoolingDown && !chain.call().isCanceled()) synchronized(lock) {
                                 if (epoch == generation) current.value = current.value.copy(error = dohErrorMessage(e), echAccepted = false)
@@ -227,9 +248,9 @@ class DohNetwork internal constructor(context: Context, val settings: DohSetting
             if (closed) return
             closed = true
             generation++
-            transport?.close(); transport = null
-            checks.toList().forEach { it.close() }; checks.clear()
-            clients.values.forEach { it.connectionPool.evictAll() }; clients.clear()
+            retireRoute()
+            // Complete after submitted work drains; cancelling the settings scope must not cancel cleanup.
+            cleanupJob.complete()
         }
         scope.cancel(); handler.removeCallbacks(refreshTask)
         if (snapshotOverride == null) {
