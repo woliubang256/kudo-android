@@ -33,12 +33,8 @@ class AppContainer(context: Context) {
         cooldown = requestSettings.scheduler.cooldown)
     val repository = CommunityRepository(client)
     val connect = ConnectRepository(cookies, userAgent, route = ::scheduledClient)
-    internal val downloads = NativeDownloadManager(context.applicationContext, network.client(OkHttpClient.Builder()
-        .followRedirects(true).followSslRedirects(true)
-        .addNetworkInterceptor { chain ->
-            val request = chain.request()
-            chain.proceed(com.kudo.android.media.downloadRequest(request, cookies, userAgent))
-        }.build()), cookies, userAgent, keepAlive = {
+    internal val downloads = NativeDownloadManager(context.applicationContext,
+        network.client(com.kudo.android.media.createDownloadHttpClient(cookies, userAgent)), cookies, userAgent, keepAlive = {
             context.startForegroundService(android.content.Intent(context, com.kudo.android.media.DownloadService::class.java))
         })
     val imageHttpClient: okhttp3.Call.Factory = scheduledClient(

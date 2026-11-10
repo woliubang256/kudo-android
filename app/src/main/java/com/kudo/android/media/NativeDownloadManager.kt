@@ -35,6 +35,9 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.OkHttpClient
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import androidx.core.content.FileProvider
 import org.json.JSONArray
@@ -307,13 +310,25 @@ internal fun filenameFromContentDisposition(value: String): String? {
 private fun decodeFilename(value: String): String = runCatching { URLDecoder.decode(value.replace("+", "%2B"), Charsets.UTF_8.name()) }.getOrDefault(value)
 
 /** Re-evaluated on every redirect hop, so community credentials never follow a CDN redirect. */
-internal fun downloadRequest(request: Request, cookies: SessionCookies, userAgent: String): Request {
+internal fun downloadRequest(request: Request, cookies: SessionCookies, userAgent: String,
+    cookieOrigin: HttpUrl = "https://linux.do/".toHttpUrl()): Request {
     val builder = request.newBuilder().removeHeader("Cookie").header("User-Agent", userAgent)
-    if (request.url.isHttps && request.url.host == "linux.do" && request.url.port == 443) {
+    if (request.url.scheme == cookieOrigin.scheme && request.url.host == cookieOrigin.host && request.url.port == cookieOrigin.port) {
         cookies.get(request.url.toString()).takeIf(String::isNotBlank)?.let { builder.header("Cookie", it) }
     }
     return builder.build()
 }
+
+internal fun createDownloadHttpClient(cookies: SessionCookies, userAgent: String,
+    cookieOrigin: HttpUrl = "https://linux.do/".toHttpUrl()): OkHttpClient = OkHttpClient.Builder()
+    .followRedirects(true).followSslRedirects(true)
+    .addNetworkInterceptor { chain ->
+        val request = downloadRequest(chain.request(), cookies, userAgent, cookieOrigin)
+        val response = chain.proceed(request)
+        if (request.url.scheme == cookieOrigin.scheme && request.url.host == cookieOrigin.host && request.url.port == cookieOrigin.port)
+            response.headers("Set-Cookie").forEach { cookies.set(request.url.toString(), it) }
+        response
+    }.build()
 
 internal fun sanitizeDownloadFilename(value: String): String = value
     .substringAfterLast('/')

@@ -32,6 +32,8 @@ AndroidSessionCookies 与官网 WebView 共用 CookieManager。CSRF 通过互斥
 
 图片网络拦截器对每一跳按 scheme、host、port 核验主站来源，并在跟随重定向前保存该跳的 Set-Cookie。跨站响应不参与社区 Cookie 写入，主站凭据也不发送到非默认端口；测试通过注入本地来源验证相同边界。
 
+文件下载采用相同的逐跳接收规则，先保存主站下载/重定向响应，再读取后续跳转的 Cookie；CDN 响应不能覆盖社区会话。`createDownloadHttpClient` 统一生产和夹具使用的下载网络策略，DoH 只包裹该客户端，不替换认证拦截器。
+
 [主站共享冷却](../bug-fix/2026-10-14-request-rate-cooldown.md)补齐 429 后的跨功能保护：按来源保存服务端等待截止时间，冷却中的新调用在本地返回剩余秒数。会话检查不清除此状态；写请求不排队、不自动重放。
 
 [DoH 与 ECH 接入](../feature/2026-10-12-doh-network.md)提供可选的统一 DNS／TLS 策略，保留本篇的同源、凭据隔离和写请求不重放契约；WebView 仍使用系统网络。
