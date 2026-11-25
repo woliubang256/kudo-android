@@ -93,7 +93,7 @@ class TopicTransitionUiTest {
                     val nav = rememberNavController()
                     val transitions = remember(nav) { TopicTransitions(nav) }
                     SideEffect { navigation = nav; controller = transitions }
-                    TopicTransitionHost(transitions) {
+                    TopicTransitionHost(transitions, cardSnapshotsEnabled = true) {
                         NavHost(nav, "list", Modifier.fillMaxSize()) {
                             topicListComposable("list") {
                                 LazyColumn(Modifier.fillMaxSize().background(Color.Black)) {
