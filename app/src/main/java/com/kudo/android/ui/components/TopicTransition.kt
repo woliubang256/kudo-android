@@ -1,5 +1,6 @@
 package com.kudo.android.ui.components
 
+import android.os.Build
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterExitState
@@ -124,15 +125,22 @@ internal class TopicTransitions(private val nav: NavHostController) {
 
 private class TopicTransitionSource(val entryId: String)
 private val LocalTopicTransitions = staticCompositionLocalOf<TopicTransitions?> { null }
+private val LocalTopicCardSnapshots = staticCompositionLocalOf { true }
 private val LocalTopicTransitionSource = staticCompositionLocalOf<TopicTransitionSource?> { null }
 private val LocalTopicContentReady = staticCompositionLocalOf<MutableState<Boolean>?> { null }
 private val LocalTopicEntered = staticCompositionLocalOf<State<Boolean>?> { null }
 private val LocalTopicPreview = staticCompositionLocalOf<Topic?> { null }
 
 @Composable
-internal fun TopicTransitionHost(transitions: TopicTransitions, avatars: AvatarTransitions? = null, content: @Composable () -> Unit) {
+internal fun TopicTransitionHost(
+    transitions: TopicTransitions, avatars: AvatarTransitions? = null,
+    cardSnapshotsEnabled: Boolean = !shouldBypassTopicSnapshot(
+        Build.MANUFACTURER, Build.DEVICE, Build.VERSION.SDK_INT, Build.VERSION.INCREMENTAL,
+    ),
+    content: @Composable () -> Unit,
+) {
     DisposableEffect(transitions) { onDispose { transitions.clear() } }
-    CompositionLocalProvider(LocalTopicTransitions provides transitions) {
+    CompositionLocalProvider(LocalTopicTransitions provides transitions, LocalTopicCardSnapshots provides cardSnapshotsEnabled) {
         AvatarTransitionHost(avatars) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) { content() }
         }
@@ -216,11 +224,15 @@ internal fun topicTransitionAnchor(topicId: Int, radius: Dp, preview: Topic? = n
     val transitions = LocalTopicTransitions.current
     val source = LocalTopicTransitionSource.current
     if (transitions == null || source == null) return TopicTransitionAnchor(Modifier, onClick)
+    val scope = rememberCoroutineScope()
+    if (!LocalTopicCardSnapshots.current) return TopicTransitionAnchor(Modifier) {
+        // 保留原有串行点击和导航生命周期检查，跳过图层分配及离屏截图。
+        scope.launch { transitions.fromCard(topicId, source.entryId, capture = { null }, open = onClick) }
+    }
     val instance = rememberSaveable { UUID.randomUUID().toString() }
     val key = "${source.entryId}:$topicId:$instance"
     val anchor = remember(key) { TopicCardAnchor() }
     val layer = rememberGraphicsLayer()
-    val scope = rememberCoroutineScope()
     val surface = MaterialTheme.colorScheme.surface
     DisposableEffect(transitions, key) {
         transitions.anchors[key] = anchor
