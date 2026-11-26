@@ -6,11 +6,55 @@ import okhttp3.Response
 import okhttp3.Protocol
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody
+import okio.Buffer
+import okio.Source
+import okio.Timeout
+import okio.buffer
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.Executors
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class RequestCooldownTest {
+    @Test fun readingASlowRateLimitBodyDoesNotBlockOtherRequestsCheckingCooldown() {
+        val gate = RequestCooldown({ 0 })
+        val reading = CountDownLatch(1)
+        val releaseRead = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+        val source = object : Source {
+            private var sent = false
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                if (sent) return -1
+                reading.countDown()
+                check(releaseRead.await(5, TimeUnit.SECONDS))
+                sent = true
+                return sink.writeUtf8("""{"wait_seconds":30}""").size
+            }
+            override fun timeout() = Timeout.NONE
+            override fun close() {}
+        }.buffer()
+        val body = object : ResponseBody() {
+            override fun contentType() = null
+            override fun contentLength() = -1L
+            override fun source() = source
+        }
+        val slow = response().newBuilder().body(body).build()
+        val recording = executor.submit<Int> { slow.use { gate.record(it) } }
+        try {
+            assertTrue("The response body must be in flight", reading.await(2, TimeUnit.SECONDS))
+            val query = executor.submit<Int> { gate.remainingSeconds(url) }
+            assertEquals("A response body read must not hold the shared cooldown monitor", 0,
+                query.get(1, TimeUnit.SECONDS))
+        } finally {
+            releaseRead.countDown()
+            try { assertEquals(30, recording.get(2, TimeUnit.SECONDS)) }
+            finally { executor.shutdownNow() }
+        }
+        assertEquals(30, gate.remainingSeconds(url))
+    }
+
     private val url = "https://linux.do/latest.json".toHttpUrl()
     private fun response(retry: String? = null, body: String = "{}", date: String? = null) = Response.Builder()
         .request(Request.Builder().url(url).build()).protocol(Protocol.HTTP_2).code(429).message("limited")

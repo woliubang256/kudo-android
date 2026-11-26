@@ -21,7 +21,6 @@ class RequestCooldown(
         return ((remaining + 999) / 1000).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 
-    @Synchronized
     fun record(response: Response, body: String? = null): Int {
         require(response.code == 429)
         val json = runCatching { JSONObject(body ?: response.peekBody(16_384).string()) }.getOrNull()
@@ -33,11 +32,14 @@ class RequestCooldown(
             ((retryAt - reference).coerceAtLeast(0) + 999).div(1000).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         }
         val delay = listOfNotNull(headerDelay, jsonDelay).maxOrNull()?.coerceAtLeast(1) ?: 15
-        val now = nowMillis()
-        deadlines.entries.removeAll { it.value <= now }
-        val key = origin(response.request.url)
-        deadlines[key] = maxOf(deadlines[key] ?: now, now + delay.toLong() * 1000)
-        return remainingSeconds(response.request.url)
+        // Response reads may release scheduler permits; keep I/O outside the cooldown monitor.
+        return synchronized(this) {
+            val now = nowMillis()
+            deadlines.entries.removeAll { it.value <= now }
+            val key = origin(response.request.url)
+            deadlines[key] = maxOf(deadlines[key] ?: now, now + delay.toLong() * 1000)
+            remainingSeconds(response.request.url)
+        }
     }
 
     private fun seconds(value: String?): Int? = value?.trim()?.toLongOrNull()?.takeIf { it >= 0 }
